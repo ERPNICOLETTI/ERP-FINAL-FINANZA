@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Nicoletti - Lo de Karlota</title>
+    <!-- SEO meta tags -->
+    <meta name="description" content="Sistema Integral de Finanzas para Joaquín, Jorgelina y Lo de Karlota">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">
+                     <i class="fa-solid fa-cube"></i>
+                </div>
+                <h2>ERP Nicoletti</h2>
+            </div>
+            
+            <nav class="nav-menu">
+                <div class="nav-section">PRINCIPAL</div>
+                <a href="#" class="nav-item active"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+                <a href="#" class="nav-item"><i class="fa-solid fa-money-bill-transfer"></i> Transacciones</a>
+                
+                <div class="nav-section">ENTIDADES</div>
+                <a href="#" class="nav-item entity-karlota"><i class="fa-solid fa-shop"></i> Lo de Karlota</a>
+                <a href="#" class="nav-item entity-joaquin"><i class="fa-solid fa-user"></i> Joaquín</a>
+                <a href="#" class="nav-item entity-jorgelina"><i class="fa-solid fa-user"></i> Jorgelina</a>
+                
+                <div class="nav-section">AJUSTES</div>
+                <a href="#" class="nav-item"><i class="fa-solid fa-sliders"></i> Configuración</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="search-bar">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Buscar transacciones, facturas...">
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn-icon"><i class="fa-solid fa-bell"></i></button>
+                    <div class="user-profile">
+                        <img src="https://ui-avatars.com/api/?name=JN&background=3b82f6&color=fff" alt="User">
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h1>Resumen Financiero</h1>
+                        <p class="subtitle">Consolidado general de cuentas y negocio</p>
+                    </div>
+                    <button class="btn-primary" id="btn-new-transaction">
+                        <i class="fa-solid fa-plus"></i> Nueva Transacción
+                    </button>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon bg-karlota">
+                                <i class="fa-solid fa-shop"></i>
+                            </div>
+                            <span class="stat-badge karlota-text">Lo de Karlota</span>
+                        </div>
+                        <h3 class="stat-value">$1,250,000</h3>
+                        <p class="stat-label">Ingresos del Mes</p>
+                        <div class="stat-trend positive">
+                            <i class="fa-solid fa-arrow-trend-up"></i> +12.5% vs mes anterior
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon bg-joaquin">
+                                <i class="fa-solid fa-wallet"></i>
+                            </div>
+                            <span class="stat-badge joaquin-text">Joaquín</span>
+                        </div>
+                        <h3 class="stat-value">$450,000</h3>
+                        <p class="stat-label">Saldo Disponible</p>
+                        <div class="stat-trend neutral">
+                            <i class="fa-solid fa-minus"></i> Estable
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon bg-jorgelina">
+                                <i class="fa-solid fa-wallet"></i>
+                            </div>
+                            <span class="stat-badge jorgelina-text">Jorgelina</span>
+                        </div>
+                        <h3 class="stat-value">$420,000</h3>
+                        <p class="stat-label">Saldo Disponible</p>
+                        <div class="stat-trend positive">
+                            <i class="fa-solid fa-arrow-trend-up"></i> +5.2%
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-grid">
+                    <!-- Chart Section -->
+                    <div class="chart-container glass-panel">
+                        <div class="panel-header">
+                            <h3>Flujo de Caja - Lo de Karlota</h3>
+                        </div>
+                        <div class="canvas-wrapper">
+                            <canvas id="mainChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="transactions-container glass-panel">
+                        <div class="panel-header">
+                            <h3>Últimos Movimientos</h3>
+                            <button class="btn-text">Ver todos</button>
+                        </div>
+                        <div class="transaction-list" id="transactionList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for New Transaction -->
+    <div class="modal-overlay" id="transactionModal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h2>Registrar Movimiento</h2>
+                <button class="btn-icon" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="transactionForm">
+                    <div class="form-group">
+                        <label>Entidad</label>
+                        <select id="t-entity" class="form-control">
+                            <option value="karlota">Lo de Karlota</option>
+                            <option value="joaquin">Joaquín (Personal)</option>
+                            <option value="jorgelina">Jorgelina (Personal)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select id="t-type" class="form-control">
+                            <option value="ingreso">Ingreso (+)</option>
+                            <option value="egreso">Egreso (-)</option>
+                            <option value="transferencia">Transferencia a Socio</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Monto</label>
+                        <input type="number" id="t-amount" class="form-control" placeholder="$ 0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <input type="text" id="t-desc" class="form-control" placeholder="Ej: Venta mercadería, Alquiler..." required>
+                    </div>
+                    <button type="submit" class="btn-primary w-100">Guardar Transacción</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
