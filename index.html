@@ -7,6 +7,7 @@
     <title>ERP Nicoletti - Lo de Karlota</title>
     <!-- SEO meta tags -->
     <meta name="description" content="Sistema Integral de Finanzas para Joaquín, Jorgelina y Lo de Karlota">
+    <meta name="color-scheme" content="light">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
@@ -74,7 +75,7 @@
                             </div>
                             <span class="stat-badge karlota-text">Lo de Karlota</span>
                         </div>
-                        <h3 class="stat-value">$1,250,000</h3>
+                        <h3 class="stat-value" id="balance-karlota">$0</h3>
                         <p class="stat-label">Ingresos del Mes</p>
                         <div class="stat-trend positive">
                             <i class="fa-solid fa-arrow-trend-up"></i> +12.5% vs mes anterior
@@ -88,7 +89,7 @@
                             </div>
                             <span class="stat-badge joaquin-text">Joaquín</span>
                         </div>
-                        <h3 class="stat-value">$450,000</h3>
+                        <h3 class="stat-value" id="balance-joaquin">$0</h3>
                         <p class="stat-label">Saldo Disponible</p>
                         <div class="stat-trend neutral">
                             <i class="fa-solid fa-minus"></i> Estable
@@ -102,7 +103,7 @@
                             </div>
                             <span class="stat-badge jorgelina-text">Jorgelina</span>
                         </div>
-                        <h3 class="stat-value">$420,000</h3>
+                        <h3 class="stat-value" id="balance-jorgelina">$0</h3>
                         <p class="stat-label">Saldo Disponible</p>
                         <div class="stat-trend positive">
                             <i class="fa-solid fa-arrow-trend-up"></i> +5.2%
@@ -168,6 +169,14 @@
                             <option value="transferencia">Transferencia a Socio</option>
                         </select>
                     </div>
+                    <div class="form-group" id="group-destino" style="display: none;">
+                        <label>Entidad Destino</label>
+                        <select id="t-entity-destino" class="form-control">
+                            <option value="karlota">Lo de Karlota</option>
+                            <option value="joaquin">Joaquín (Personal)</option>
+                            <option value="jorgelina">Jorgelina (Personal)</option>
+                        </select>
+                    </div>
                     <div class="form-group">
                         <label>Categoría</label>
                         <select id="t-category" class="form-control">
@@ -180,9 +189,9 @@
                         <input type="number" id="t-amount" class="form-control" placeholder="$ 0.00" required>
                     </div>
                     <div class="form-group">
-                        <label>Descripción</label>
+                        <label>Descripción (Opcional)</label>
                         <input type="text" id="t-desc" class="form-control"
-                            placeholder="Ej: Venta mercadería, Alquiler..." required>
+                            placeholder="Ej: Venta mercadería, Alquiler...">
                     </div>
                     <button type="submit" class="btn-primary w-100">Guardar Transacción</button>
                 </form>
@@ -190,6 +199,7 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="js/app.js"></script>
 </body>
 
