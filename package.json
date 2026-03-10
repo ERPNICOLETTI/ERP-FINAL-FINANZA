@@ -9,6 +9,8 @@
   "author": "Matias Nicoletti",
   "license": "ISC",
   "dependencies": {
-    "electron": "^40.8.0"
+    "electron": "^40.8.0",
+    "sqlite3": "^5.1.7",
+    "xlsx": "^0.18.5"
   }
 }

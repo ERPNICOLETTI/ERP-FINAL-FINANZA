@@ -3,43 +3,47 @@
  * Desarrollador: Senior Frontend
  */
 
+const { ipcRenderer } = require('electron');
+const XLSX = require('xlsx');
+
 // --- ESTADO GLOBAL Y PERSISTENCIA ---
 let transactions = [];
-const STORAGE_KEY = 'erp_transactions';
+
+const CUENTAS_LIQUIDEZ = ['Banco Galicia', 'Banco Hipotecario', 'Efectivo / Caja'];
+const CUENTAS_DEUDA = ['VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja', 'VISA Hipotecario', 'Préstamo Chubut', 'Préstamo Hipotecario', 'Cheques Emitidos'];
 
 /**
- * Carga las transacciones desde LocalStorage
+ * Carga las transacciones desde SQLite vía IPC
  */
-function loadTransactions() {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-}
-
-/**
- * Guarda las transacciones en LocalStorage
- */
-function saveTransactions(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+async function loadTransactions() {
+    try {
+        return await ipcRenderer.invoke('get-transactions');
+    } catch (err) {
+        console.error('Error loading transactions', err);
+        return [];
+    }
 }
 
 // --- UTILIDADES ---
 const formatMoney = (val) => new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
-    minimumFractionDigits: 0
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
 }).format(val);
 
 /**
  * Inicialización de la App
  */
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Cargar datos persistidos
-    transactions = loadTransactions();
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Cargar datos persistidos desde DB
+    transactions = await loadTransactions();
 
     // 2. Inicializar componentes visuales
     initChart();
     renderTransactions();
     calculateBalances();
+    renderSemaforo();
     setupModals();
 
     // GSAP Initial Stagger Animation
@@ -59,33 +63,102 @@ document.addEventListener('DOMContentLoaded', () => {
         stagger: 0.2,
         ease: "power3.out"
     });
+
+    const dolarBlueInput = document.getElementById('dolar-blue');
+    if (dolarBlueInput) {
+        dolarBlueInput.addEventListener('input', () => {
+            calculateBalances();
+        });
+    }
+
+    const btnImport = document.getElementById('btn-import-csv');
+    const csvUpload = document.getElementById('csv-upload');
+    if (btnImport && csvUpload) {
+        btnImport.addEventListener('click', () => csvUpload.click());
+        csvUpload.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                parseCSV(e.target.files[0]);
+            }
+        });
+    }
+
+    // Initialize with today's date if possible
+    const tDateInput = document.getElementById('t-date');
+    if (tDateInput) tDateInput.value = new Date().toISOString().split('T')[0];
 });
 
 // --- LÓGICA DE NEGOCIO (FRONTERAS DE PATRIMONIO) ---
+
+/**
+ * Animar números con GSAP
+ */
+function animateValue(id, start, end) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const obj = { val: start };
+    gsap.to(obj, {
+        val: end,
+        duration: 1.5,
+        ease: "power2.out",
+        onUpdate: function () {
+            // Se quita el Math.floor para que conserve y anime los centavos
+            el.textContent = formatMoney(obj.val);
+        }
+    });
+}
 
 /**
  * Calcula y actualiza los saldos en las tarjetas de estadísticas
  * Aplica lógica de ingresos (+) y egresos (-) por entidad.
  */
 function calculateBalances() {
-    const balances = {
-        karlota: 0,
-        joaquin: 0,
-        jorgelina: 0
-    };
+    let liquidezTotal = 0;
+    let deudaTotal = 0;
+    let breakdownLiquidez = {};
+    let breakdownDeuda = {};
+
+    // Inicializar todas a 0 para que siempre figuren en cartelera, aunque no tengan movimientos aún
+    CUENTAS_LIQUIDEZ.forEach(acc => breakdownLiquidez[acc] = 0);
+    CUENTAS_DEUDA.forEach(acc => breakdownDeuda[acc] = 0);
+
+    const dolarBlueInput = document.getElementById('dolar-blue');
+    const dolarRate = dolarBlueInput ? parseFloat(dolarBlueInput.value) || 1200 : 1200;
 
     transactions.forEach(t => {
-        // En un sistema real, los montos ya vendrían con su signo desde el guardado,
-        // pero aseguramos la lógica de "Fronteras de Patrimonio" aquí.
-        if (balances.hasOwnProperty(t.entity)) {
-            balances[t.entity] += t.amount;
+        let value = t.amount;
+        if (t.currency === 'USD') value *= dolarRate;
+
+        let accountStr = t.account || '';
+
+        if (CUENTAS_LIQUIDEZ.some(c => accountStr.includes(c))) {
+            liquidezTotal += value;
+            const key = CUENTAS_LIQUIDEZ.find(c => accountStr.includes(c));
+            breakdownLiquidez[key] = (breakdownLiquidez[key] || 0) + value;
+        } else if (CUENTAS_DEUDA.some(c => accountStr.includes(c))) {
+            deudaTotal += value;
+            const key = CUENTAS_DEUDA.find(c => accountStr.includes(c));
+            breakdownDeuda[key] = (breakdownDeuda[key] || 0) + value;
         }
     });
 
-    // Actualizar el DOM con los resultados calculados
-    document.getElementById('balance-karlota').textContent = formatMoney(balances.karlota);
-    document.getElementById('balance-joaquin').textContent = formatMoney(balances.joaquin);
-    document.getElementById('balance-jorgelina').textContent = formatMoney(balances.jorgelina);
+    const saldoNeto = liquidezTotal + deudaTotal;
+
+    animateValue('macro-liquidez', 0, liquidezTotal);
+    animateValue('macro-deuda', 0, deudaTotal);
+    animateValue('macro-neto', 0, saldoNeto);
+
+    // Update breakdowns
+    const liqBreak = document.getElementById('liquidez-breakdown');
+    if (liqBreak) {
+        liqBreak.innerHTML = Object.entries(breakdownLiquidez)
+            .map(([k, v]) => `<div class="account-line" onclick="openLedger('${k}')"><span>${k}</span><span style="font-weight:600;">${formatMoney(v)}</span></div>`).join('');
+    }
+
+    const deuBreak = document.getElementById('deuda-breakdown');
+    if (deuBreak) {
+        deuBreak.innerHTML = Object.entries(breakdownDeuda)
+            .map(([k, v]) => `<div class="account-line" onclick="openLedger('${k}')"><span>${k}</span><span style="font-weight:600; color:var(--color-danger);">${formatMoney(v)}</span></div>`).join('');
+    }
 }
 
 // --- COMPONENTES DE UI ---
@@ -100,10 +173,10 @@ function setupModals() {
     const typeSelect = document.getElementById('t-type');
     const categorySelect = document.getElementById('t-category');
 
-    const accountsData = {
-        joaquin: ['CA$ Hipotecario', 'USD Hipotecario', 'CA$ Credicoop', 'MercadoPago', 'Billetera (Efectivo)'],
-        jorgelina: ['CA$ Chubut', 'CC$ Chubut', 'CA$ Galicia', 'USD Galicia', 'CC Galicia', 'MercadoPago', 'Naranja', 'Billetera (Efectivo)'],
-        karlota: ['CA$ Chubut', 'CC$ Chubut', 'CA$ Galicia', 'USD Galicia', 'CC Galicia', 'MercadoPago', 'Naranja', 'Billetera (Efectivo)']
+    window.accountsData = {
+        joaquin: ['Banco Hipotecario', 'VISA Hipotecario', 'Préstamo Hipotecario'],
+        jorgelina: ['Banco Galicia', 'VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja'],
+        karlota: ['Banco Galicia', 'Efectivo / Caja', 'Préstamo Chubut', 'Cheques Emitidos']
     };
 
     const incomeCategories = {
@@ -119,8 +192,10 @@ function setupModals() {
     };
 
     function updateAccounts() {
+        // Renderiza SIEMPRE todas las cuentas de la entidad, sin importar si es ingreso o egreso
         const entity = entitySelect.value;
-        const accounts = accountsData[entity] || [];
+        const accounts = window.accountsData[entity] || [];
+
         accountSelect.innerHTML = '<option value="" disabled selected>Selecciona una cuenta</option>';
         accounts.forEach(acc => {
             const opt = document.createElement('option');
@@ -159,16 +234,16 @@ function setupModals() {
         modalOverlay.style.display = 'flex';
         gsap.to(modalOverlay, { opacity: 1, duration: 0.3, ease: "power2.out" });
         gsap.fromTo(".modal",
-            { scale: 0.8, opacity: 0, y: 30 },
+            { scale: 0.7, opacity: 0, y: 30 },
             { scale: 1, opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.5)" }
         );
     });
 
     btnClose.addEventListener('click', closeAndClear);
-    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeAndClear(); });
+    // Prevents accidental closing when clicking outside or dragging the mouse out of the modal
+    // modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeAndClear(); });
 
-    // --- MANEJO DEL FORMULARIO (FLUJO DE DATOS) ---
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const entity = entitySelect.value;
@@ -177,7 +252,10 @@ function setupModals() {
         let desc = document.getElementById('t-desc').value.trim();
         const account = accountSelect.options[accountSelect.selectedIndex]?.text || '';
         const category = categorySelect.options[categorySelect.selectedIndex]?.text || '';
+        const currency = document.getElementById('t-currency').value || 'ARS';
+        let dateStr = document.getElementById('t-date').value;
 
+        if (!dateStr) dateStr = new Date().toISOString().split('T')[0];
         if (!desc) desc = category;
 
         const entityDestino = document.getElementById('t-entity-destino').value;
@@ -187,35 +265,36 @@ function setupModals() {
             return;
         }
 
-        const dateStr = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-
         if (type === 'transferencia') {
             const transferId = Date.now();
-            transactions.unshift({
+            await ipcRenderer.invoke('add-transaction', {
                 id: transferId,
                 groupId: transferId,
                 entity, account, category, type: 'egreso', amount: -amountValue,
                 desc: `Transferencia a ${document.getElementById('t-entity-destino').options[document.getElementById('t-entity-destino').selectedIndex].text} - ${desc}`,
-                date: dateStr
+                date: dateStr,
+                currency
             });
-            transactions.unshift({
+            await ipcRenderer.invoke('add-transaction', {
                 id: transferId + 1,
                 groupId: transferId,
                 entity: entityDestino, account: '', category: 'Transferencia recibida', type: 'ingreso', amount: amountValue,
                 desc: `Transferencia de ${entitySelect.options[entitySelect.selectedIndex].text} - ${desc}`,
-                date: dateStr
+                date: dateStr,
+                currency
             });
         } else {
             const amount = type === 'egreso' ? -amountValue : amountValue;
-            transactions.unshift({
-                id: Date.now(), entity, account, category, type, amount, desc, date: dateStr
+            await ipcRenderer.invoke('add-transaction', {
+                id: Date.now(), entity, account, category, type, amount, desc, date: dateStr, currency
             });
         }
 
-        saveTransactions(transactions);
+        transactions = await loadTransactions();
         renderTransactions();
         calculateBalances();
         updateChart(transactions);
+        renderSemaforo();
         closeAndClear();
     });
 
@@ -227,21 +306,47 @@ function setupModals() {
             }
         });
     }
+
+    window.openTransactionPreFilled = function (accountName, type) {
+        // Encontramos que entidad es dueña de esta cuenta buscandola
+        let entityOwner = 'karlota';
+        for (const [ent, accs] of Object.entries(window.accountsData)) {
+            if (accs.includes(accountName)) {
+                entityOwner = ent;
+                break;
+            }
+        }
+
+        // Simula click para abrir el modal nativamente
+        btnNew.click();
+
+        setTimeout(() => {
+            entitySelect.value = entityOwner;
+            entitySelect.dispatchEvent(new Event('change'));
+
+            setTimeout(() => {
+                typeSelect.value = type;
+                typeSelect.dispatchEvent(new Event('change'));
+
+                const targetVal = accountName.toLowerCase().replace(/\s+/g, '-');
+                accountSelect.value = targetVal;
+            }, 50);
+        }, 50);
+    };
 }
 
-window.deleteTransaction = function (id) {
+window.deleteTransaction = async function (id) {
     if (confirm('¿Estás seguro de eliminar este movimiento?')) {
         const tx = transactions.find(t => t.id === id);
         if (!tx) return;
-        if (tx.groupId) {
-            transactions = transactions.filter(t => t.groupId !== tx.groupId);
-        } else {
-            transactions = transactions.filter(t => t.id !== id);
-        }
-        saveTransactions(transactions);
+
+        await ipcRenderer.invoke('delete-transaction', id, tx.groupId || null);
+
+        transactions = await loadTransactions();
         renderTransactions();
         calculateBalances();
         updateChart(transactions);
+        renderSemaforo();
     }
 };
 
@@ -307,7 +412,8 @@ function initChart() {
         data: {
             labels: [], datasets: [
                 { label: 'Ingresos Totales', data: [], borderColor: '#10b981', backgroundColor: gradientInc, borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#10b981', pointBorderColor: '#fff', pointRadius: 4 },
-                { label: 'Egresos Totales', data: [], borderColor: '#ef4444', backgroundColor: gradientExp, borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#ef4444', pointBorderColor: '#fff', pointRadius: 4 }
+                { label: 'Egresos Totales', data: [], borderColor: '#ef4444', backgroundColor: gradientExp, borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#ef4444', pointBorderColor: '#fff', pointRadius: 4 },
+                { label: 'Proyección de Caja', data: [], borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5, 5], tension: 0.4, pointRadius: 0 }
             ]
         },
         options: {
@@ -321,26 +427,272 @@ function initChart() {
 function updateChart(txs) {
     if (!mainChartInstance) return;
 
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
-    }).reverse();
+    // Last 7 days + Next 14 days (21 days total)
+    const daysArr = Array.from({ length: 21 }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - 7 + i);
+        return {
+            dateStr: d.toISOString().split('T')[0],
+            label: d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
+            isFuture: i > 7
+        };
+    });
 
-    const dataInc = new Array(7).fill(0);
-    const dataExp = new Array(7).fill(0);
+    const labels = daysArr.map(d => d.label);
+    const dataInc = new Array(21).fill(0);
+    const dataExp = new Array(21).fill(0);
+    const dataProj = new Array(21).fill(null);
+
+    const dolarBlueInput = document.getElementById('dolar-blue');
+    const dolarRate = dolarBlueInput ? parseFloat(dolarBlueInput.value) || 1200 : 1200;
 
     txs.forEach(t => {
         if (t.entity !== 'karlota') return;
-        const txDate = t.date.split(',')[0];
-        const dayIndex = last7Days.findIndex(d => txDate.startsWith(d));
+
+        let txDateIso = t.date;
+        let dayIndex = -1;
+
+        // Soporte retroactivo a formatos viejos
+        if (txDateIso.includes(',')) {
+            const txDate = t.date.split(',')[0];
+            dayIndex = daysArr.findIndex(d => d.label.startsWith(txDate));
+        } else {
+            dayIndex = daysArr.findIndex(d => d.dateStr === txDateIso);
+        }
+
         if (dayIndex !== -1) {
-            if (t.type === 'ingreso') dataInc[dayIndex] += t.amount;
-            else if (t.type === 'egreso') dataExp[dayIndex] += Math.abs(t.amount);
+            let value = Math.abs(t.amount);
+            if (t.currency === 'USD') value *= dolarRate;
+
+            if (t.type === 'ingreso') dataInc[dayIndex] += value;
+            else if (t.type === 'egreso') dataExp[dayIndex] += value;
         }
     });
 
-    mainChartInstance.data.labels = last7Days;
+    // Proyección de liquidez
+    let currBalance = 0;
+    txs.forEach(t => {
+        if (t.entity === 'karlota' && t.date <= new Date().toISOString().split('T')[0]) {
+            let val = t.amount;
+            if (t.currency === 'USD') val *= dolarRate;
+            currBalance += val;
+        }
+    });
+
+    // Hoy = index 7
+    dataProj[7] = currBalance;
+    for (let i = 8; i < 21; i++) {
+        const netChange = dataInc[i] - dataExp[i];
+        dataProj[i] = dataProj[i - 1] + netChange;
+    }
+
+    mainChartInstance.data.labels = labels;
     mainChartInstance.data.datasets[0].data = dataInc;
     mainChartInstance.data.datasets[1].data = dataExp;
+    mainChartInstance.data.datasets[2].data = dataProj;
     mainChartInstance.update();
 }
+
+function renderSemaforo() {
+    const list = document.getElementById('semaforoList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const today = new Date().toISOString().split('T')[0];
+    const dolarBlueInput = document.getElementById('dolar-blue');
+    const dolarRate = dolarBlueInput ? parseFloat(dolarBlueInput.value) || 1200 : 1200;
+
+    const futurePayables = transactions.filter(t => t.type === 'egreso' && t.date > today);
+
+    futurePayables.sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
+        const diffTime = new Date(t.date).setHours(0, 0, 0, 0) - new Date(today).setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        let colorClass = 'var(--color-success)';
+        let borderLeft = '4px solid var(--color-success)';
+
+        if (diffDays <= 7) {
+            colorClass = 'var(--color-danger)';
+            borderLeft = '4px solid var(--color-danger)';
+        } else if (diffDays <= 15) {
+            colorClass = '#f59e0b';
+            borderLeft = '4px solid #f59e0b';
+        }
+
+        let displayAmount = Math.abs(t.amount);
+        if (t.currency === 'USD') displayAmount *= dolarRate;
+
+        list.innerHTML += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 12px 10px; font-weight: 600; color: ${colorClass}; border-left: ${borderLeft};">${new Date(t.date).toLocaleDateString('es-AR')}</td>
+                <td>${t.desc}</td>
+                <td><span class="stat-badge" style="background: rgba(0,0,0,0.05); color: var(--text-main);">${t.entity}</span></td>
+                <td style="text-align: right; font-weight: 600;">$${formatMoney(displayAmount)}</td>
+            </tr>
+        `;
+    });
+
+    if (futurePayables.length === 0) {
+        list.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--text-muted);">No hay vencimientos próximos</td></tr>';
+    }
+}
+
+async function parseCSV(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const data = e.target.result;
+
+        try {
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            // Convertir a un array de arrays (celdas)
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                if (!row || row.length < 4) continue;
+
+                // La fecha en Galicia viene usualmente en row[0] como String "DD/MM/YYYY"
+                let dateStr = String(row[0] || '').trim();
+
+                // Validar si es una fila de transaccion mirando la fecha
+                if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                    // Concepto (suelen venir con saltos de linea)
+                    let desc = String(row[1] || '').replace(/\n/g, ' ').trim();
+
+                    // Galicia: row[2] son débitos (egresos, formato: -X.XXX,XX o vacío)
+                    // Galicia: row[3] son créditos (ingresos, formato: X.XXX,XX o vacío)
+                    let debitStr = String(row[2] || '0').replace(/\./g, '').replace(',', '.');
+                    let creditStr = String(row[3] || '0').replace(/\./g, '').replace(',', '.');
+
+                    let amountRaw = 0;
+                    let type = 'egreso';
+
+                    let creditAmount = parseFloat(creditStr);
+                    if (!isNaN(creditAmount) && creditAmount > 0) {
+                        amountRaw = creditAmount;
+                        type = 'ingreso';
+                    } else {
+                        let debitAmount = parseFloat(debitStr);
+                        if (!isNaN(debitAmount) && debitAmount !== 0) {
+                            amountRaw = Math.abs(debitAmount);
+                            type = 'egreso';
+                        }
+                    }
+
+                    if (amountRaw === 0) continue;
+
+                    // Formatear a ISO "YYYY-MM-DD"
+                    const [d, m, y] = dateStr.split('/');
+                    const dateISO = `${y}-${m}-${d}`;
+
+                    await ipcRenderer.invoke('add-transaction', {
+                        id: Date.now() + i, // Evita colisiones
+                        entity: 'karlota',
+                        account: 'Banco Galicia',
+                        category: 'Importación Banco',
+                        type: type,
+                        amount: amountRaw,
+                        desc: desc,
+                        date: dateISO,
+                        currency: 'ARS'
+                    });
+                }
+            }
+
+            transactions = await loadTransactions();
+            renderTransactions();
+            calculateBalances();
+            updateChart(transactions);
+            renderSemaforo();
+            alert('Extracto Bancario procesado y conciliado con éxito.');
+        } catch (error) {
+            console.error("Error procesando Excel", error);
+            alert("Error al parsear el archivo. Asegúrate que sea un extracto válido.");
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// --- LOGICA DE LIBRO MAYOR (LEDGER) ---
+window.openLedger = function (accountName) {
+    const ledgerModal = document.getElementById('ledgerModal');
+    if (!ledgerModal) return;
+
+    document.getElementById('ledger-account-name').textContent = accountName;
+
+    let balance = 0;
+    const accountTxs = transactions.filter(t => (t.account || '').toLowerCase().includes(accountName.toLowerCase()));
+
+    const dolarRate = parseFloat(document.getElementById('dolar-blue')?.value || 1200);
+
+    accountTxs.forEach(t => {
+        let val = t.amount;
+        if (t.currency === 'USD') val *= dolarRate;
+        balance += val;
+    });
+
+    const balanceEl = document.getElementById('ledger-balance');
+    balanceEl.textContent = formatMoney(balance);
+    balanceEl.style.color = balance < 0 ? 'var(--color-danger)' : (balance > 0 ? 'var(--color-success)' : 'inherit');
+
+    const list = document.getElementById('ledgerTransactionList');
+    list.innerHTML = '';
+
+    if (accountTxs.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No hay movimientos.</div>';
+    } else {
+        const sorted = [...accountTxs].sort((a, b) => new Date(b.date) - new Date(a.date));
+        sorted.forEach(t => {
+            const isPositive = t.amount > 0;
+            const amountClass = isPositive ? 'text-positive' : 'text-negative';
+            const item = document.createElement('div');
+            item.className = 'transaction-item';
+            item.innerHTML = `
+                <div class="transaction-info">
+                    <div class="transaction-icon" style="background:${isPositive ? 'var(--color-success)' : 'var(--color-danger)'}; color:white;">
+                        <i class="fa-solid ${isPositive ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                    </div>
+                    <div>
+                        <h4>${t.desc || t.category}</h4>
+                        <p>${t.date.split('-').reverse().join('/')}</p>
+                    </div>
+                </div>
+                <div class="transaction-amount">
+                    <div class="${amountClass}">${isPositive ? '+' : ''}${formatMoney(t.amount)} ${t.currency}</div>
+                </div>
+            `;
+            list.appendChild(item);
+        });
+    }
+
+    document.getElementById('btn-ledger-egreso').onclick = () => {
+        closeLedger();
+        if (window.openTransactionPreFilled) window.openTransactionPreFilled(accountName, 'egreso');
+    };
+
+    document.getElementById('btn-ledger-ingreso').onclick = () => {
+        closeLedger();
+        if (window.openTransactionPreFilled) window.openTransactionPreFilled(accountName, 'ingreso');
+    };
+
+    ledgerModal.style.display = 'flex';
+    gsap.to(ledgerModal, { opacity: 1, duration: 0.3 });
+    gsap.fromTo(ledgerModal.querySelector('.modal'),
+        { scale: 0.9, opacity: 0, y: 20 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.5)" }
+    );
+};
+
+function closeLedger() {
+    const m = document.getElementById('ledgerModal');
+    if (m) {
+        gsap.to(m, { opacity: 0, duration: 0.2, onComplete: () => m.style.display = 'none' });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnCloseLedger = document.getElementById('closeLedgerModal');
+    if (btnCloseLedger) btnCloseLedger.addEventListener('click', closeLedger);
+});

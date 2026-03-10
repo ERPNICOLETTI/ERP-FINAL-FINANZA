@@ -46,11 +46,6 @@ body {
     color: var(--text-main);
     overflow-x: hidden;
     min-height: 100vh;
-    background-image:
-        none 0px, transparent 50%),
-        none 0px, transparent 50%),
-        none 0px, transparent 50%);
-    background-attachment: fixed;
 }
 
 h1,
@@ -65,8 +60,6 @@ h6 {
 /* Glassmorphism Utilities */
 .glass-panel {
     background: var(--bg-panel);
-    
-    -webkit-
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);
 }
@@ -107,7 +100,7 @@ h6 {
     justify-content: center;
     font-size: 20px;
     color: white;
-    
+
 }
 
 .brand h2 {
@@ -195,7 +188,7 @@ h6 {
     padding: 0 40px;
     border-bottom: 1px solid var(--border-color);
     background: rgba(241, 245, 249, 0.8);
-    
+
     position: sticky;
     top: 0;
     z-index: 90;
@@ -306,12 +299,12 @@ h6 {
     display: flex;
     align-items: center;
     gap: 8px;
-    
+
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    
+
 }
 
 /* Stats Cards */
@@ -329,13 +322,13 @@ h6 {
     padding: 24px;
     position: relative;
     overflow: hidden;
-    
+
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .stat-card:hover {
     transform: translateY(-5px);
-    
+
     border-color: rgba(0, 0, 0, 0.15);
 }
 
@@ -541,7 +534,7 @@ h6 {
     width: 100vw;
     height: 100vh;
     background: rgba(0, 0, 0, 0.6);
-    
+
     z-index: 1000;
     display: none;
     align-items: center;
@@ -557,7 +550,7 @@ h6 {
     overflow-y: auto;
     background: #ffffff;
     border-radius: var(--border-radius-lg);
-    
+
 }
 
 .modal-header {
@@ -604,7 +597,7 @@ select.form-control {
 .form-control:focus {
     outline: none;
     border-color: var(--color-joaquin);
-    
+
 }
 
 .w-100 {
@@ -643,4 +636,52 @@ select.form-control {
     .page-header h1 {
         font-size: 22px;
     }
+}
+
+/* Custom Responsive Additions */
+#macro-panels {
+    grid-template-columns: 1fr 1fr;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    #macro-panels {
+        grid-template-columns: 1fr;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .header-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .header-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Account Ledger Lines */
+.account-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.account-line:hover {
+    background-color: rgba(0, 0, 0, 0.05);
 }
