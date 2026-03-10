@@ -1,10 +1,10 @@
 /**
  * ERP Nicoletti - Lógica de Negocio y Persistencia
- * Desarrollador: Senior Frontend
+ * Archivo adaptado para FLASK (Backend en Python)
  */
 
-const { ipcRenderer } = require('electron');
-const XLSX = require('xlsx');
+// Ya no usamos ipcRenderer ni XLSX (ahora todo va al backend Python)
+// Las dependencias de NodeJS se corren en backend ahora (o se manejan por HTML)
 
 // --- ESTADO GLOBAL Y PERSISTENCIA ---
 let transactions = [];
@@ -13,11 +13,12 @@ const CUENTAS_LIQUIDEZ = ['Banco Galicia', 'Banco Hipotecario', 'Efectivo / Caja
 const CUENTAS_DEUDA = ['VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja', 'VISA Hipotecario', 'Préstamo Chubut', 'Préstamo Hipotecario', 'Cheques Emitidos'];
 
 /**
- * Carga las transacciones desde SQLite vía IPC
+ * Carga las transacciones desde Flask (API Rest)
  */
 async function loadTransactions() {
     try {
-        return await ipcRenderer.invoke('get-transactions');
+        const response = await fetch('/api/transactions');
+        return await response.json();
     } catch (err) {
         console.error('Error loading transactions', err);
         return [];
@@ -267,26 +268,33 @@ function setupModals() {
 
         if (type === 'transferencia') {
             const transferId = Date.now();
-            await ipcRenderer.invoke('add-transaction', {
-                id: transferId,
-                groupId: transferId,
-                entity, account, category, type: 'egreso', amount: -amountValue,
-                desc: `Transferencia a ${document.getElementById('t-entity-destino').options[document.getElementById('t-entity-destino').selectedIndex].text} - ${desc}`,
-                date: dateStr,
-                currency
+            await fetch('/api/transactions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: transferId, groupId: transferId,
+                    entity, account, category, type: 'egreso', amount: -amountValue,
+                    desc: `Transferencia a ${document.getElementById('t-entity-destino').options[document.getElementById('t-entity-destino').selectedIndex].text} - ${desc}`,
+                    date: dateStr, currency
+                })
             });
-            await ipcRenderer.invoke('add-transaction', {
-                id: transferId + 1,
-                groupId: transferId,
-                entity: entityDestino, account: '', category: 'Transferencia recibida', type: 'ingreso', amount: amountValue,
-                desc: `Transferencia de ${entitySelect.options[entitySelect.selectedIndex].text} - ${desc}`,
-                date: dateStr,
-                currency
+
+            await fetch('/api/transactions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: transferId + 1, groupId: transferId,
+                    entity: entityDestino, account: '', category: 'Transferencia recibida', type: 'ingreso', amount: amountValue,
+                    desc: `Transferencia de ${entitySelect.options[entitySelect.selectedIndex].text} - ${desc}`,
+                    date: dateStr, currency
+                })
             });
+
         } else {
             const amount = type === 'egreso' ? -amountValue : amountValue;
-            await ipcRenderer.invoke('add-transaction', {
-                id: Date.now(), entity, account, category, type, amount, desc, date: dateStr, currency
+            await fetch('/api/transactions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: Date.now(), entity, account, category, type, amount, desc, date: dateStr, currency
+                })
             });
         }
 
@@ -340,7 +348,8 @@ window.deleteTransaction = async function (id) {
         const tx = transactions.find(t => t.id === id);
         if (!tx) return;
 
-        await ipcRenderer.invoke('delete-transaction', id, tx.groupId || null);
+        const url = `/api/transactions/${id}${tx.groupId ? '?groupId=' + tx.groupId : ''}`;
+        await fetch(url, { method: 'DELETE' });
 
         transactions = await loadTransactions();
         renderTransactions();
@@ -587,16 +596,20 @@ async function parseCSV(file) {
                     const [d, m, y] = dateStr.split('/');
                     const dateISO = `${y}-${m}-${d}`;
 
-                    await ipcRenderer.invoke('add-transaction', {
-                        id: Date.now() + i, // Evita colisiones
-                        entity: 'karlota',
-                        account: 'Banco Galicia',
-                        category: 'Importación Banco',
-                        type: type,
-                        amount: amountRaw,
-                        desc: desc,
-                        date: dateISO,
-                        currency: 'ARS'
+                    // Envío vía Flask APi
+                    await fetch('/api/transactions', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: Date.now() + i, // Evita colisiones
+                            entity: 'karlota',
+                            account: 'Banco Galicia',
+                            category: 'Importación Banco',
+                            type: type,
+                            amount: amountRaw,
+                            desc: desc,
+                            date: dateISO,
+                            currency: 'ARS'
+                        })
                     });
                 }
             }
