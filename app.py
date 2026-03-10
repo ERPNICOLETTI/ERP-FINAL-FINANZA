@@ -97,5 +97,5 @@ def delete_transaction(id):
 
 if __name__ == '__main__':
     init_db()
-    # Ejecuta el servidor Flask en el puerto 5000
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Ejecuta el servidor Flask en el puerto 5001
+    app.run(debug=True, host='0.0.0.0', port=5001)

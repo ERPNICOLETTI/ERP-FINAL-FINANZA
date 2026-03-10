@@ -193,9 +193,15 @@ function setupModals() {
     };
 
     function updateAccounts() {
-        // Renderiza SIEMPRE todas las cuentas de la entidad, sin importar si es ingreso o egreso
         const entity = entitySelect.value;
-        const accounts = window.accountsData[entity] || [];
+        const type = typeSelect.value;
+        let accounts = window.accountsData[entity] || [];
+
+        // Filtramos cuentas de deuda (Tarjetas, Préstamos, Cheques) si la operación es un INGRESO
+        if (type === 'ingreso') {
+            const debtKeywords = ['VISA', 'MASTER', 'Patagonia 365', 'Tarjeta Naranja', 'Préstamo', 'Cheques'];
+            accounts = accounts.filter(acc => !debtKeywords.some(kw => acc.includes(kw)));
+        }
 
         accountSelect.innerHTML = '<option value="" disabled selected>Selecciona una cuenta</option>';
         accounts.forEach(acc => {
@@ -225,6 +231,7 @@ function setupModals() {
 
     entitySelect.addEventListener('change', () => { updateAccounts(); updateCategories(); });
     typeSelect.addEventListener('change', () => {
+        updateAccounts();
         updateCategories();
         document.getElementById('group-destino').style.display = typeSelect.value === 'transferencia' ? 'block' : 'none';
     });

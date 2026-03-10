@@ -68,6 +68,9 @@ h6 {
 .app-container {
     display: flex;
     min-height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
+    overflow-x: hidden;
 }
 
 /* Sidebar */
@@ -177,6 +180,8 @@ h6 {
     padding: 0;
     display: flex;
     flex-direction: column;
+    min-width: 0; /* Vital para que tablas y flex items gigantes no rompan la pantalla exterior */
+    width: 100%;
 }
 
 /* Topbar */
@@ -267,6 +272,7 @@ h6 {
     max-width: 1400px;
     width: 100%;
     margin: 0 auto;
+    overflow-x: hidden; /* Corta cordil de derrames */
 }
 
 .page-header {
@@ -309,20 +315,22 @@ h6 {
 
 /* Stats Cards */
 .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    display: flex;
     gap: 24px;
     margin-bottom: 32px;
+    align-items: stretch;
 }
 
 .stat-card {
+    flex: 1;
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);
     padding: 24px;
     position: relative;
     overflow: hidden;
-
+    display: flex;
+    flex-direction: column;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -604,14 +612,19 @@ select.form-control {
     width: 100%;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .content-grid {
-        grid-template-columns: 1fr;
+/* Responsive Base */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1200px) {
+    .stats-grid {
+        flex-direction: column;
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .sidebar {
         transform: translateX(-100%);
     }
@@ -620,40 +633,14 @@ select.form-control {
         margin-left: 0;
     }
 
-    .page-content {
-        padding: 20px;
+    .content-grid {
+        grid-template-columns: 1fr;
     }
 
     .topbar {
         padding: 0 20px;
     }
-
-    .search-bar {
-        width: 100%;
-        max-width: 200px;
-    }
-
-    .page-header h1 {
-        font-size: 22px;
-    }
-}
-
-/* Custom Responsive Additions */
-#macro-panels {
-    grid-template-columns: 1fr 1fr;
-}
-
-.header-actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
-
-@media (max-width: 768px) {
-    #macro-panels {
-        grid-template-columns: 1fr;
-    }
-
+    
     .page-header {
         flex-direction: column;
         align-items: flex-start;
@@ -665,10 +652,40 @@ select.form-control {
         flex-direction: column;
     }
 
-    .header-actions button {
+    .header-actions button, .header-actions input {
         width: 100%;
         justify-content: center;
     }
+}
+
+@media (max-width: 768px) {
+    .page-content {
+        padding: 12px;
+    }
+
+    .topbar-actions {
+        gap: 8px;
+    }
+
+    .search-bar {
+        display: none; /* Mejor ocultar la barra de buscar en móvil para ganar espacio rápido */
+    }
+
+    .page-header h1 {
+        font-size: 22px;
+    }
+    
+    .stat-value {
+        font-size: 24px;
+    }
+}
+
+/* Custom Responsive Additions Flexbox handles this automatically */
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
 }
 
 /* Account Ledger Lines */
