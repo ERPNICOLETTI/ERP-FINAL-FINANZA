@@ -184,7 +184,7 @@ function setupModals() {
     window.accountsData = {
         joaquin: ['Banco Hipotecario', 'VISA Hipotecario', 'Préstamo Hipotecario'],
         jorgelina: ['Banco Galicia', 'VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja'],
-        karlota: [
+        'Lo de Karlota': [
             'Caja de Ahorro Galicia', 'Cuenta Corriente Galicia', 
             'Caja de Ahorro Chubut', 'Cuenta Corriente Chubut', 
             'MercadoPago', 'Efectivo / Caja', 'Préstamo Chubut', 'Cheques Emitidos'
@@ -194,13 +194,13 @@ function setupModals() {
     const incomeCategories = {
         joaquin: ['Sueldo (💼)', 'Comisión (💰)', 'Alquiler (🏠)', 'Inversiones (📈)', 'Regalos (🎁)', 'Otros Ingresos'],
         jorgelina: ['Sueldo (💼)', 'Inversiones (📈)', 'Regalos (🎁)', 'Otros Ingresos'],
-        karlota: ['Ventas (🧾)', 'Transferencia recibida (💸)', 'Intereses (🏦)', 'Reembolsos (📦)', 'Aporte Extraordinario', 'Otros Ingresos']
+        'Lo de Karlota': ['Ventas (🧾)', 'Transferencia recibida (💸)', 'Intereses (🏦)', 'Reembolsos (📦)', 'Aporte Extraordinario', 'Otros Ingresos']
     };
 
     const expenseCategories = {
         joaquin: ['Comida (🍔)', 'Transporte (🚗)', 'Vivienda (🏠)', 'Servicios (💡)', 'Impuestos (🧾)', 'Salud (🏥)', 'Educación (🎓)', 'Ocio (🎮)', 'Compras (🛒)', 'Ropa (👕)', 'Tecnología (💻)', 'Deportes (🏋️)', 'Estética (💅)', 'Mascotas (🐶)', 'Pago Tarjeta (💳)', 'Otros (📦)'],
         jorgelina: ['Comida (🍔)', 'Transporte (🚗)', 'Vivienda (🏠)', 'Servicios (💡)', 'Impuestos (🧾)', 'Salud (🏥)', 'Educación (🎓)', 'Ocio (🎮)', 'Compras (🛒)', 'Ropa (👕)', 'Tecnología (💻)', 'Deportes (🏋️)', 'Estética (💅)', 'Mascotas (🐶)', 'Pago Tarjeta (💳)', 'Otros (📦)'],
-        karlota: ['Proveedores Insumos', 'Mercadería Local', 'Alquiler Local (🏠)', 'Sueldos (💸)', 'Impuestos (🧾)', 'Servicios (💡)', 'Mantenimiento (📦)', 'Sindicato - Comercio', 'Sindicato - Otros', 'Otros Egresos']
+        'Lo de Karlota': ['Proveedores Insumos', 'Mercadería Local', 'Alquiler Local (🏠)', 'Sueldos (💸)', 'Impuestos (🧾)', 'Servicios (💡)', 'Mantenimiento (📦)', 'Sindicato - Comercio', 'Sindicato - Otros', 'Otros Egresos']
     };
 
     function updateAccounts() {
@@ -337,7 +337,7 @@ function setupModals() {
 
     window.openTransactionPreFilled = function (accountName, type) {
         // Encontramos que entidad es dueña de esta cuenta buscandola
-        let entityOwner = 'karlota';
+        let entityOwner = 'Lo de Karlota';
         for (const [ent, accs] of Object.entries(window.accountsData)) {
             if (accs.includes(accountName)) {
                 entityOwner = ent;
@@ -392,7 +392,7 @@ function renderTransactions() {
 
     transactions.forEach(t => {
         let entityColor, entityIcon, entityName;
-        if (t.entity === 'karlota') { entityColor = 'var(--color-karlota)'; entityIcon = 'fa-shop'; entityName = 'Lo de Karlota'; }
+        if (t.entity === 'Lo de Karlota' || t.entity === 'karlota') { entityColor = 'var(--color-karlota)'; entityIcon = 'fa-shop'; entityName = 'Lo de Karlota'; }
         else if (t.entity === 'joaquin') { entityColor = 'var(--color-joaquin)'; entityIcon = 'fa-user'; entityName = 'Joaquín'; }
         else { entityColor = 'var(--color-jorgelina)'; entityIcon = 'fa-user'; entityName = 'Jorgelina'; }
 
@@ -477,7 +477,7 @@ function updateChart(txs) {
     const dolarRate = dolarBlueInput ? parseFloat(dolarBlueInput.value) || 1200 : 1200;
 
     txs.forEach(t => {
-        if (t.entity !== 'karlota') return;
+        if (t.entity !== 'Lo de Karlota' && t.entity !== 'karlota') return;
 
         let txDateIso = t.date;
         let dayIndex = -1;
@@ -598,7 +598,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         id: Date.now() + i,
-                        entity: 'karlota',
+                        entity: 'Lo de Karlota',
                         account: accountName,
                         category: 'Importación Automática',
                         type: item.type,
@@ -956,7 +956,7 @@ function renderAccounting() {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
-    const karlotaTxs = transactions.filter(t => t.entity === 'karlota');
+    const karlotaTxs = transactions.filter(t => t.entity === 'Lo de Karlota' || t.entity === 'karlota');
     
     // Categorías que consideramos impuestos
     const TAX_KEYWORDS = ['impuesto', 'iva', 'iibb', 'suss', 'sicore', 'tasa'];
@@ -1052,7 +1052,7 @@ function renderPayments() {
             const btnNew = document.getElementById('btn-new-transaction');
             btnNew.click();
             setTimeout(() => {
-                document.getElementById('t-entity').value = 'karlota';
+                document.getElementById('t-entity').value = 'Lo de Karlota';
                 document.getElementById('t-type').value = 'egreso';
                 document.getElementById('t-entity').dispatchEvent(new Event('change'));
                 setTimeout(() => {
