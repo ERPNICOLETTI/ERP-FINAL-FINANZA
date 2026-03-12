@@ -973,8 +973,8 @@ function checkFileIntegrity(rows, bankType, accountName = '') {
         }
     }
 
-    // 3. Date Pattern Check (Flexibilizado para detectar fecha en cualquier columna)
-    const datePattern = /^(\d{2}[/-]\d{2}[/-]\d{4})|(\d{4}-\d{2}-\d{2})$/;
+    // 3. Date Pattern Check (Flexibilizado para detectar fecha en cualquier columna, incluyendo formatos ISO con T)
+    const datePattern = /^(\d{2}[/-]\d{2}[/-]\d{4})|(\d{4}-\d{2}-\d{2}(T|\s|$))/;
     const hasDates = rows.some(row => 
         Array.isArray(row) && row.some(cell => String(cell || '').trim().match(datePattern))
     );
