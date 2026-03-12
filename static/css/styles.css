@@ -770,7 +770,7 @@ select.form-control {
 /* --- Loader Animation --- */
 @keyframes spin-loader {
     from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    to { transform: rotate(-360deg); }
 }
 
 .loader-clock i {
