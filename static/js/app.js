@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         csvUpload.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 parseCSV(e.target.files[0]);
+                e.target.value = ''; // Reset to allow re-upload
             }
         });
     }
@@ -804,6 +805,7 @@ function setupBankView(accountName) {
     fileUpload.onchange = (e) => {
         if (e.target.files.length > 0) {
             parseCSV(e.target.files[0], accountName);
+            e.target.value = ''; // Reset to allow re-upload
         }
     };
     
@@ -903,7 +905,7 @@ function renderBankDetails(accountName) {
 
 const BankSchemes = {
     galicia: ['fecha', 'movimiento', 'débito', 'crédito'],
-    chubut: ['fecha', 'concepto', 'importe'],
+    chubut: ['fecha', 'movimientos', 'importe'],
     mercadopago: ['fecha', 'detalle', 'monto']
 };
 
