@@ -407,6 +407,17 @@
         </div>
     </div>
 
+    <!-- Loader / Spinner Overlay -->
+    <div id="loader-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; gap: 20px;">
+        <div class="loader-clock">
+            <i class="fa-solid fa-clock-rotate-left" style="font-size: 64px; animation: spin-loader 2s linear infinite;"></i>
+        </div>
+        <div style="text-align: center;">
+            <h2 style="font-family: 'Outfit', sans-serif; margin-bottom: 8px;">Procesando Importación...</h2>
+            <p style="opacity: 0.8; font-size: 14px;">El monstruo está analizando tus movimientos, por favor esperá.</p>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

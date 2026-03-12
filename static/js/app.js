@@ -37,6 +37,25 @@ const formatMoney = (val) => new Intl.NumberFormat('es-AR', {
     maximumFractionDigits: 2
 }).format(val);
 
+function showLoader() {
+    const loader = document.getElementById('loader-overlay');
+    if (loader) {
+        loader.style.display = 'flex';
+        gsap.to(loader, { opacity: 1, duration: 0.3 });
+    }
+}
+
+function hideLoader() {
+    const loader = document.getElementById('loader-overlay');
+    if (loader) {
+        gsap.to(loader, {
+            opacity: 0, duration: 0.3, onComplete: () => {
+                loader.style.display = 'none';
+            }
+        });
+    }
+}
+
 /**
  * Inicialización de la App
  */
@@ -573,6 +592,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
         const data = e.target.result;
 
         try {
+            showLoader();
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
@@ -586,6 +606,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             try {
                 checkFileIntegrity(rows, parserType, accountName);
             } catch (err) {
+                hideLoader();
                 alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
                 return;
             }
@@ -598,11 +619,10 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
                 const item = parsedData[i];
 
                 // ANTI-DUPLICATE SHIELD (Escudo de Duplicados)
-                // Buscamos si ya existe el movimiento (misma cuenta, fecha, monto y descripción básica)
                 const isDuplicate = transactions.some(t => 
                     (t.account || '').toLowerCase() === accountName.toLowerCase() &&
                     t.date === item.date &&
-                    Math.abs(t.amount - item.amount) < 0.01 && // Tolerancia para flotantes
+                    Math.abs(t.amount - item.amount) < 0.01 && 
                     (t.desc || '').substring(0, 50).toLowerCase() === (item.desc || '').substring(0, 50).toLowerCase()
                 );
 
@@ -637,11 +657,13 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             renderPayments();
             renderBankDetails(accountName);
             
+            hideLoader();
             let resultMsg = `Procesado finalizado para ${accountName}.\n`;
             if (importedCount > 0) resultMsg += `✅ ${importedCount} movimientos nuevos cargados.\n`;
             if (skippedCount > 0) resultMsg += `🚫 ${skippedCount} movimientos omitidos por estar duplicados.`;
             alert(resultMsg);
         } catch (error) {
+            hideLoader();
             console.error("Error procesando Archivo", error);
             alert("Error al parsear el archivo. Asegúrate que el formato sea compatible.");
         }

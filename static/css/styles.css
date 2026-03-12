@@ -766,3 +766,14 @@ select.form-control {
     font-weight: 600;
     font-family: 'Outfit';
 }
+
+/* --- Loader Animation --- */
+@keyframes spin-loader {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.loader-clock i {
+    color: var(--color-karlota);
+    filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.5));
+}
