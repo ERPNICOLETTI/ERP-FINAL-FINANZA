@@ -34,12 +34,20 @@
                 <a href="#" class="nav-item" data-view="accounting"><i class="fa-solid fa-file-invoice-dollar"></i> Contabilidad e Impuestos</a>
                 <a href="#" class="nav-item" data-view="payments"><i class="fa-solid fa-wallet"></i> Pagos y Sindicatos</a>
 
-                <div class="nav-section">CUENTAS Y CONCILIACIÓN</div>
-                <a href="#" class="nav-item" data-view="bank-galicia" data-account="Caja de Ahorro Galicia"><i class="fa-solid fa-building-columns"></i> C.A. Galicia</a>
-                <a href="#" class="nav-item" data-view="bank-galicia" data-account="Cuenta Corriente Galicia"><i class="fa-solid fa-building-columns"></i> C.C. Galicia</a>
-                <a href="#" class="nav-item" data-view="bank-chubut" data-account="Caja de Ahorro Chubut"><i class="fa-solid fa-landmark"></i> C.A. Chubut</a>
-                <a href="#" class="nav-item" data-view="bank-chubut" data-account="Cuenta Corriente Chubut"><i class="fa-solid fa-landmark"></i> C.C. Chubut</a>
-                <a href="#" class="nav-item" data-view="bank-mp" data-account="MercadoPago"><i class="fa-solid fa-bolt"></i> MercadoPago</a>
+                <div class="nav-section">FINANZAS</div>
+                <a href="#" class="nav-item has-submenu" id="menu-accounts">
+                    <span><i class="fa-solid fa-building-columns"></i> Cuentas</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                </a>
+                <div class="nav-submenu" id="submenu-accounts">
+                    <a href="#" class="submenu-item" data-view="bank-galicia" data-account="Caja de Ahorro Galicia">C.A. Galicia</a>
+                    <a href="#" class="submenu-item" data-view="bank-galicia" data-account="Cuenta Corriente Galicia">C.C. Galicia</a>
+                    <a href="#" class="submenu-item" data-view="bank-chubut" data-account="Caja de Ahorro Chubut">C.A. Chubut</a>
+                    <a href="#" class="submenu-item" data-view="bank-chubut" data-account="Cuenta Corriente Chubut">C.C. Chubut</a>
+                    <a href="#" class="submenu-item" data-view="bank-mp" data-account="MercadoPago">MercadoPago</a>
+                </div>
+
+                <a href="#" class="nav-item" data-view="conciliation"><i class="fa-solid fa-scale-balanced"></i> Conciliación Payway</a>
 
                 <div class="nav-section">ENTIDADES</div>
                 <a href="#" class="nav-item entity-karlota" data-view="entity-karlota"><i class="fa-solid fa-shop"></i> Lo de Karlota</a>
@@ -292,6 +300,60 @@
                     </div>
                     <div id="bank-transactions-list" style="padding: 16px;">
                         <!-- JS populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conciliation View (Payway vs Banks) -->
+            <div id="view-conciliation" class="view-container">
+                <div class="page-header">
+                    <div>
+                        <h1>Conciliación Payway</h1>
+                        <p class="subtitle">Validación de cobros POSnet contra depósitos bancarios</p>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p class="stat-label">Pendiente de Acreditar</p>
+                        <h3 class="stat-value" id="conc-pending">$0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Acreditado (Mes)</p>
+                        <h3 class="stat-value" id="conc-cleared" style="color:var(--color-success)">$0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Comisiones Pagadas</p>
+                        <h3 class="stat-value" id="conc-fees" style="color:var(--color-danger)">$0</h3>
+                    </div>
+                </div>
+
+                <div class="content-grid">
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <h3>Cupones Payway (POSnet)</h3>
+                            <button class="btn-primary" id="btn-import-payway" style="padding: 8px 16px; font-size: 13px;">
+                                <i class="fa-solid fa-file-excel"></i> Importar Payway
+                            </button>
+                            <input type="file" id="payway-file-upload" style="display: none;" accept=".xlsx, .csv">
+                        </div>
+                        <div id="payway-list" style="padding: 16px; max-height: 500px; overflow-y: auto;">
+                            <!-- JS populated -->
+                            <p style="text-align:center; color:var(--text-muted); padding: 40px;">
+                                Importa un reporte de Payway para empezar la conciliación.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <h3>Acreditaciones en Banco</h3>
+                        </div>
+                        <div id="bank-matches-list" style="padding: 16px;">
+                            <p style="text-align:center; color:var(--text-muted); padding: 40px;">
+                                Selecciona un cupón para buscar su acreditación.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -776,13 +776,26 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- NAVEGACION Y MODULOS NUEVOS ---
 
 function setupNavigation() {
-    const navItems = document.querySelectorAll('.nav-item');
+    const navItems = document.querySelectorAll('.nav-item, .submenu-item');
     const views = document.querySelectorAll('.view-container');
+
+    // Submenu Toggle Logic
+    const menuAccounts = document.getElementById('menu-accounts');
+    const submenuAccounts = document.getElementById('submenu-accounts');
+
+    if (menuAccounts && submenuAccounts) {
+        menuAccounts.addEventListener('click', (e) => {
+            e.preventDefault();
+            submenuAccounts.classList.toggle('open');
+            menuAccounts.classList.toggle('open');
+        });
+    }
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetView = item.getAttribute('data-view');
+            const accountName = item.getAttribute('data-account');
 
             if (!targetView) return;
 
@@ -798,12 +811,15 @@ function setupNavigation() {
                 // Special handling for dynamic bank views
                 if (targetView.startsWith('bank-')) {
                     viewId = 'view-bank-generic';
-                    const accountName = item.getAttribute('data-account');
-                    setupBankView(accountName);
+                    if (accountName) {
+                        setupBankView(accountName);
+                    }
                 }
 
                 if (v.id === viewId) {
                     v.classList.add('active');
+                    // Animate view entry
+                    gsap.fromTo(v, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
                 }
             });
         });
