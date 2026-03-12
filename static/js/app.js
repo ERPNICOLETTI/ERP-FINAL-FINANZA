@@ -621,6 +621,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             let parserType = 'galicia';
             if (accountName.toLowerCase().includes('chubut')) parserType = 'chubut';
             if (accountName.toLowerCase().includes('mercado')) parserType = 'mercadopago';
+            if (accountName.toLowerCase().includes('payway')) parserType = 'payway';
 
             // SAFETY CHECK (Silent/Automatic)
             try {
@@ -632,6 +633,20 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             }
 
             const parsedData = BankParsers[parserType](rows);
+            
+            // Special Case: Payway Persistence
+            if (parserType === 'payway') {
+                await fetch('/api/payway', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(parsedData)
+                });
+                hideLoader();
+                alert(`✅ Reporte de Payway importado: ${parsedData.length} cupones procesados.`);
+                renderConciliation();
+                return;
+            }
+
             let importedCount = 0;
             let skippedCount = 0;
 
@@ -775,6 +790,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- NAVEGACION Y MODULOS NUEVOS ---
 
+// --- CONCILIACIÓN PAYWAY ---
+
+async function renderConciliation() {
+    const paywayList = document.getElementById('payway-list');
+    if (!paywayList) return;
+
+    try {
+        const response = await fetch('/api/payway');
+        const paywayRecords = await response.json();
+
+        if (paywayRecords.length === 0) {
+            paywayList.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding: 40px;">Importa un reporte de Payway para empezar la conciliación.</p>';
+            return;
+        }
+
+        paywayList.innerHTML = '';
+        
+        let pendingTotal = 0;
+        let clearedTotal = 0;
+
+        paywayRecords.forEach(pw => {
+            // Buscamos coincidencia en transacciones bancarias
+            // Payway liquida el lote entero o cupones individuales pero el banco recibe el NETO
+            // Por ahora buscamos coincidencias aproximadas por fecha y monto
+            const match = transactions.find(t => 
+                (t.account || '').toLowerCase().includes('galicia') && 
+                t.amount > 0 &&
+                Math.abs(t.amount - (pw.monto_bruto * 0.95)) < (pw.monto_bruto * 0.1) && // Aproximación (5% de arancel+impuestos)
+                Math.abs(new Date(t.date) - new Date(pw.presentacion_date)) < (5 * 24 * 60 * 60 * 1000) // 5 días de ventana
+            );
+
+            const isMatched = match !== undefined;
+            if (isMatched) clearedTotal += pw.monto_bruto;
+            else pendingTotal += pw.monto_bruto;
+
+            const item = document.createElement('div');
+            item.className = 'transaction-item';
+            item.style.padding = '12px';
+            item.style.cursor = 'pointer';
+            item.innerHTML = `
+                <div class="t-icon" style="background:${isMatched ? 'var(--color-success)' : 'rgba(0,0,0,0.05)'}; color:${isMatched ? 'white' : 'var(--text-muted)'}">
+                    <i class="fa-solid ${isMatched ? 'fa-check-double' : 'fa-hourglass-half'}"></i>
+                </div>
+                <div class="t-details">
+                    <div class="t-title">${pw.marca} - Lote ${pw.lote}</div>
+                    <div class="t-subtitle">Cupón: ${pw.cupon} &bull; ${new Date(pw.compra_date).toLocaleDateString()}</div>
+                </div>
+                <div style="text-align:right">
+                    <div class="t-amount">${formatMoney(pw.monto_bruto)}</div>
+                    <div style="font-size:11px; color:${isMatched ? 'var(--color-success)' : 'var(--color-danger)'}">
+                        ${isMatched ? 'Visto en Banco' : 'Pendiente'}
+                    </div>
+                </div>
+            `;
+            
+            if (isMatched) {
+                item.onclick = () => {
+                    const bankList = document.getElementById('bank-matches-list');
+                    bankList.innerHTML = `
+                        <div class="glass-panel" style="padding:16px; border-left:4px solid var(--color-success)">
+                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">COINCIDENCIA EN BANCO:</p>
+                            <div style="font-weight:600;">${match.desc}</div>
+                            <div style="font-size:14px; color:var(--color-success); font-weight:700;">${formatMoney(match.amount)}</div>
+                            <div style="font-size:12px; color:var(--text-muted);">${new Date(match.date).toLocaleDateString()}</div>
+                        </div>
+                    `;
+                };
+            }
+
+            paywayList.appendChild(item);
+        });
+
+        // Update cards
+        animateValue('conc-pending', 0, pendingTotal);
+        animateValue('conc-cleared', 0, clearedTotal);
+        animateValue('conc-fees', 0, (clearedTotal + pendingTotal) * 0.05); // Estimado 5%
+
+    } catch (err) {
+        console.error('Error rendering conciliation', err);
+    }
+}
+
 function setupNavigation() {
     const navItems = document.querySelectorAll('.nav-item, .submenu-item');
     const views = document.querySelectorAll('.view-container');
@@ -820,10 +917,27 @@ function setupNavigation() {
                     v.classList.add('active');
                     // Animate view entry
                     gsap.fromTo(v, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+                    
+                    if (targetView === 'conciliation') {
+                        renderConciliation();
+                    }
                 }
             });
         });
     });
+
+    // Payway Import Setup
+    const btnPayway = document.getElementById('btn-import-payway');
+    const paywayUpload = document.getElementById('payway-file-upload');
+    if (btnPayway && paywayUpload) {
+        btnPayway.onclick = () => paywayUpload.click();
+        paywayUpload.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                parseCSV(e.target.files[0], 'Payway');
+                e.target.value = '';
+            }
+        };
+    }
 }
 
 function setupBankView(accountName) {
@@ -941,7 +1055,8 @@ function renderBankDetails(accountName) {
 const BankSchemes = {
     galicia: ['fecha', 'movimiento', 'débito', 'crédito'],
     chubut: ['fecha', 'movimientos', 'importe'],
-    mercadopago: ['fecha', 'detalle', 'monto']
+    mercadopago: ['fecha', 'detalle', 'monto'],
+    payway: ['compra', 'presentacion', 'lote', 'monto_bruto']
 };
 
 function checkFileIntegrity(rows, bankType, accountName = '') {
@@ -963,6 +1078,13 @@ function checkFileIntegrity(rows, bankType, accountName = '') {
         if (missingSettlement.length === 0) {
             missing = [];
         }
+    }
+
+    // Special handling for Payway
+    if (bankType === 'payway' && missing.length > 0) {
+        const altPayway = ['compra', 'monto_bruto', 'lote'];
+        const missingAlt = altPayway.filter(word => !allCells.some(cell => cell.includes(word)));
+        if (missingAlt.length === 0) missing = [];
     }
 
     if (missing.length > 0) {
@@ -1142,6 +1264,59 @@ const BankParsers = {
                         desc: desc,
                         amount: amount,
                         type: amount > 0 ? 'ingreso' : 'egreso'
+                    });
+                }
+            }
+        });
+        return parsed;
+    },
+    payway: (rows) => {
+        const parsed = [];
+        let startParsing = false;
+        let colMap = {};
+
+        rows.forEach(row => {
+            if (!row || row.length < 5) return;
+            const rowStr = row.join(' ').toUpperCase();
+            
+            // Header detection
+            if (rowStr.includes('COMPRA') && rowStr.includes('MONTO_BRUTO')) {
+                row.forEach((cell, idx) => {
+                    const c = String(cell || '').toUpperCase();
+                    if (c.includes('COMPRA')) colMap.compra = idx;
+                    if (c.includes('PRESENTACION')) colMap.presentacion = idx;
+                    if (c.includes('LOTE')) colMap.lote = idx;
+                    if (c.includes('CUPON')) colMap.cupon = idx;
+                    if (c.includes('MARCA')) colMap.marca = idx;
+                    if (c.includes('MONTO_BRUTO')) colMap.bruto = idx;
+                });
+                startParsing = true;
+                return;
+            }
+
+            if (startParsing) {
+                let compra = String(row[colMap.compra] || '');
+                let presentacion = String(row[colMap.presentacion] || '');
+                let lote = parseInt(row[colMap.lote]);
+                let cupon = String(row[colMap.cupon] || '');
+                let marca = String(row[colMap.marca] || '');
+                let bruto = parseSmartNumber(row[colMap.bruto]);
+
+                if (compra && !isNaN(bruto)) {
+                    // Convert dates to YYYY-MM-DD
+                    const cleanDate = (d) => {
+                        const parts = d.split('/');
+                        if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        return d;
+                    };
+
+                    parsed.push({
+                        compra_date: cleanDate(compra),
+                        presentacion_date: cleanDate(presentacion),
+                        lote: lote,
+                        cupon: cupon,
+                        marca: marca,
+                        monto_bruto: bruto
                     });
                 }
             }
