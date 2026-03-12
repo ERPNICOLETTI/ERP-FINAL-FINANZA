@@ -582,6 +582,14 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             if (accountName.toLowerCase().includes('chubut')) parserType = 'chubut';
             if (accountName.toLowerCase().includes('mercado')) parserType = 'mercadopago';
 
+            // SAFETY CHECK (Silent/Automatic)
+            try {
+                checkFileIntegrity(rows, parserType);
+            } catch (err) {
+                alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
+                return;
+            }
+
             const parsedData = BankParsers[parserType](rows);
 
             for (let i = 0; i < parsedData.length; i++) {
@@ -811,6 +819,37 @@ function renderBankDetails(accountName) {
     if (accTxs.length === 0) {
         list.innerHTML = '<p style="text-align:center; padding: 20px; color:var(--text-muted);">No hay movimientos registrados.</p>';
     }
+}
+
+const BankSchemes = {
+    galicia: ['fecha', 'movimiento', 'débito', 'crédito'],
+    chubut: ['fecha', 'concepto', 'importe'],
+    mercadopago: ['fecha', 'detalle', 'monto']
+};
+
+function checkFileIntegrity(rows, bankType) {
+    const required = BankSchemes[bankType];
+    if (!required) return true; // No schema defined, skip check
+
+    // Flatten all cell values to lower case for comparison
+    const allCells = rows.flat().map(c => String(c || '').toLowerCase());
+    
+    // Safety check: All required words must exist somewhere in the file
+    const missing = required.filter(word => !allCells.some(cell => cell.includes(word)));
+    
+    if (missing.length > 0) {
+        throw new Error(`El archivo no parece ser un extracto de ${bankType.toUpperCase()}. Faltan encabezados críticos: ${missing.join(', ')}`);
+    }
+
+    // Checking if we have at least some rows that look like dates after the header is found
+    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
+    const hasDates = rows.some(row => String(row[0]).match(datePattern));
+    
+    if (!hasDates) {
+        throw new Error("No se detectaron movimientos válidos en el archivo (¿está vacío o en otro formato?)");
+    }
+
+    return true;
 }
 
 const BankParsers = {
