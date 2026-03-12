@@ -935,8 +935,20 @@ function checkFileIntegrity(rows, bankType, accountName = '') {
     const allCells = rows.flat().map(c => String(c || '').toLowerCase());
     const allText = allCells.join(' ');
     
-    // 1. Check basic headers
-    const missing = required.filter(word => !allCells.some(cell => cell.includes(word)));
+    // 1. Check basic headers (Special handling for MercadoPago to allow Settlement reports)
+    let missing = required.filter(word => !allCells.some(cell => cell.includes(word)));
+    
+    // If it's MercadoPago and standard headers are missing, check for Settlement headers
+    if (bankType === 'mercadopago' && missing.length > 0) {
+        const settlementHeaders = ['settlement_date', 'settlement_net_amount', 'transaction_type'];
+        const missingSettlement = settlementHeaders.filter(word => !allCells.some(cell => cell.includes(word)));
+        
+        // If settlement headers are present, it's NOT missing
+        if (missingSettlement.length === 0) {
+            missing = [];
+        }
+    }
+
     if (missing.length > 0) {
         throw new Error(`El archivo no parece ser un extracto de ${bankType.toUpperCase()}. Faltan encabezados críticos: ${missing.join(', ')}`);
     }
