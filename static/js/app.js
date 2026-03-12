@@ -909,6 +909,15 @@ function checkFileIntegrity(rows, bankType, accountName = '') {
         }
     }
 
+    if (bankType === 'chubut') {
+        if (accLower.includes('corriente') && !allText.includes('corriente')) {
+            throw new Error("⚠️ ERROR DE SEGURIDAD: Estás en el módulo de CUENTA CORRIENTE (CHUBUT), pero el archivo parece ser una CAJA DE AHORRO.");
+        }
+        if (accLower.includes('ahorro') && !allText.includes('ahorro')) {
+            throw new Error("⚠️ ERROR DE SEGURIDAD: Estás en el módulo de CAJA DE AHORRO (CHUBUT), pero el archivo parece ser una CUENTA CORRIENTE.");
+        }
+    }
+
     // 3. Date Pattern Check
     const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
     const hasDates = rows.some(row => String(row[0]).match(datePattern));
@@ -969,38 +978,86 @@ const BankParsers = {
         return parsed;
     },
     chubut: (rows) => {
-        // Ejemplo simplificado para Banco Chubut (ajustar según formato real)
         const parsed = [];
+        let startParsing = false;
         rows.forEach(row => {
             if (!row || row.length < 3) return;
             let dateStr = String(row[0] || '').trim();
-            if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/) || dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            
+            // Detect header for Chubut (usually Fecha, Concepto, Importe)
+            if (dateStr.toLowerCase().includes('fecha')) {
+                startParsing = true;
+                return;
+            }
+
+            if (startParsing && (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/) || dateStr.match(/^\d{4}-\d{2}-\d{2}$/))) {
                 let desc = String(row[1] || '').trim();
-                let amount = parseFloat(String(row[2] || '0').replace(',', '.'));
+                let amountStr = String(row[row.length - 1] || '0').replace(/\./g, '').replace(',', '.');
+                let amount = parseFloat(amountStr);
+                
                 if (!isNaN(amount) && amount !== 0) {
                     let dateISO = dateStr;
                     if (dateStr.includes('/')) {
                         const [d, m, y] = dateStr.split('/');
                         dateISO = `${y}-${m}-${d}`;
                     }
-                    parsed.push({ date: dateISO, desc, amount, type: amount > 0 ? 'ingreso' : 'egreso' });
+                    parsed.push({ 
+                        date: dateISO, 
+                        desc, 
+                        amount, 
+                        type: amount > 0 ? 'ingreso' : 'egreso' 
+                    });
                 }
             }
         });
         return parsed;
     },
     mercadopago: (rows) => {
-        // MercadoPago suele tener 'FECHA', 'CONCEPTO', 'MONTO'
         const parsed = [];
+        let startParsing = false;
         rows.forEach(row => {
-            let amount = parseFloat(String(row[row.length - 1] || '0'));
-            if (!isNaN(amount) && amount !== 0) {
-                parsed.push({
-                    date: new Date().toISOString().split('T')[0], // MP placeholder date if not found
-                    desc: String(row[1] || 'Movimiento MP'),
-                    amount: amount,
-                    type: amount > 0 ? 'ingreso' : 'egreso'
-                });
+            if (!row || row.length < 3) return;
+            let firstCell = String(row[0] || '').toLowerCase();
+            
+            // Header for MercadoPago usually starts with 'fecha'
+            if (firstCell.includes('fecha')) {
+                startParsing = true;
+                return;
+            }
+
+            if (startParsing) {
+                // Determine date index and amount index based on common MP formats
+                // (This is a flexible parser that tries to find valid looking data)
+                let dateStr = String(row[0] || '').split(' ')[0]; // Take only date part of 'YYYY-MM-DD HH:MM:SS'
+                let amountIndex = row.length - 1; // Assuming amount is last or near last
+                
+                // Find column that looks like a number
+                for(let i=row.length-1; i>=0; i--) {
+                    if (!isNaN(parseFloat(String(row[i]).replace(',', '.')))) {
+                        amountIndex = i;
+                        break;
+                    }
+                }
+
+                let amount = parseFloat(String(row[amountIndex] || '0').replace(',', '.'));
+                let desc = String(row[1] || 'Movimiento MercadoPago').trim();
+                
+                if (!isNaN(amount) && amount !== 0 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    parsed.push({
+                        date: dateStr,
+                        desc: desc,
+                        amount: amount,
+                        type: amount > 0 ? 'ingreso' : 'egreso'
+                    });
+                } else if (!isNaN(amount) && amount !== 0 && dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                    const [d, m, y] = dateStr.split('/');
+                    parsed.push({
+                        date: `${y}-${m}-${d}`,
+                        desc: desc,
+                        amount: amount,
+                        type: amount > 0 ? 'ingreso' : 'egreso'
+                    });
+                }
             }
         });
         return parsed;
