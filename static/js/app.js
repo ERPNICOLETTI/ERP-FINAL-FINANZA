@@ -982,27 +982,33 @@ const BankParsers = {
         let startParsing = false;
         rows.forEach(row => {
             if (!row || row.length < 3) return;
-            let dateStr = String(row[0] || '').trim();
             
-            // Detect header for Chubut (usually Fecha, Concepto, Importe)
-            if (dateStr.toLowerCase().includes('fecha')) {
+            // Convert everything to string for analysis
+            const cells = row.map(c => String(c || '').trim());
+            
+            // Detect header for Chubut (usually Fecha, Movimientos, Código ..., Importe)
+            // Según el Excel: Row 09: nan | Fecha | Movimientos | Código de movimiento | Importe
+            if (cells.some(c => c.toLowerCase() === 'fecha') && cells.some(c => c.toLowerCase().includes('importe'))) {
                 startParsing = true;
                 return;
             }
 
-            if (startParsing && (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/) || dateStr.match(/^\d{4}-\d{2}-\d{2}$/))) {
-                let desc = String(row[1] || '').trim();
-                let amountStr = String(row[row.length - 1] || '0').replace(/\./g, '').replace(',', '.');
+            if (startParsing) {
+                // Buscamos la columna de fecha (que tiene formato DD/MM/YYYY)
+                let dateIdx = cells.findIndex(c => c.match(/^\d{2}\/\d{2}\/\d{4}$/));
+                if (dateIdx === -1) return;
+
+                let dateStr = cells[dateIdx];
+                let desc = cells[dateIdx + 1] || 'Movimiento Chubut';
+                
+                // El importe suele ser la última columna de datos
+                let amountStr = cells[cells.length - 1].replace(/\./g, '').replace(',', '.');
                 let amount = parseFloat(amountStr);
                 
                 if (!isNaN(amount) && amount !== 0) {
-                    let dateISO = dateStr;
-                    if (dateStr.includes('/')) {
-                        const [d, m, y] = dateStr.split('/');
-                        dateISO = `${y}-${m}-${d}`;
-                    }
+                    const [d, m, y] = dateStr.split('/');
                     parsed.push({ 
-                        date: dateISO, 
+                        date: `${y}-${m}-${d}`, 
                         desc, 
                         amount, 
                         type: amount > 0 ? 'ingreso' : 'egreso' 
