@@ -942,9 +942,11 @@ function checkFileIntegrity(rows, bankType, accountName = '') {
         }
     }
 
-    // 3. Date Pattern Check
-    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-    const hasDates = rows.some(row => String(row[0]).match(datePattern));
+    // 3. Date Pattern Check (Flexibilizado para detectar fecha en cualquier columna)
+    const datePattern = /^(\d{2}[/-]\d{2}[/-]\d{4})|(\d{4}-\d{2}-\d{2})$/;
+    const hasDates = rows.some(row => 
+        Array.isArray(row) && row.some(cell => String(cell || '').trim().match(datePattern))
+    );
     
     if (!hasDates) {
         throw new Error("No se detectaron movimientos válidos en el archivo (¿está vacío o en otro formato?)");
