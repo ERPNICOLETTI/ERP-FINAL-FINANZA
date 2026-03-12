@@ -591,9 +591,26 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             }
 
             const parsedData = BankParsers[parserType](rows);
+            let importedCount = 0;
+            let skippedCount = 0;
 
             for (let i = 0; i < parsedData.length; i++) {
                 const item = parsedData[i];
+
+                // ANTI-DUPLICATE SHIELD (Escudo de Duplicados)
+                // Buscamos si ya existe el movimiento (misma cuenta, fecha, monto y descripción básica)
+                const isDuplicate = transactions.some(t => 
+                    (t.account || '').toLowerCase() === accountName.toLowerCase() &&
+                    t.date === item.date &&
+                    Math.abs(t.amount - item.amount) < 0.01 && // Tolerancia para flotantes
+                    (t.desc || '').substring(0, 50).toLowerCase() === (item.desc || '').substring(0, 50).toLowerCase()
+                );
+
+                if (isDuplicate) {
+                    skippedCount++;
+                    continue;
+                }
+
                 await fetch('/api/transactions', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -608,6 +625,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
                         currency: 'ARS'
                     })
                 });
+                importedCount++;
             }
 
             transactions = await loadTransactions();
@@ -618,7 +636,11 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             renderAccounting();
             renderPayments();
             renderBankDetails(accountName);
-            alert(`Archivo de ${accountName} procesado con éxito.`);
+            
+            let resultMsg = `Procesado finalizado para ${accountName}.\n`;
+            if (importedCount > 0) resultMsg += `✅ ${importedCount} movimientos nuevos cargados.\n`;
+            if (skippedCount > 0) resultMsg += `🚫 ${skippedCount} movimientos omitidos por estar duplicados.`;
+            alert(resultMsg);
         } catch (error) {
             console.error("Error procesando Archivo", error);
             alert("Error al parsear el archivo. Asegúrate que el formato sea compatible.");
@@ -754,6 +776,7 @@ function setupBankView(accountName) {
     const btnImport = document.getElementById('btn-bank-import');
     const fileUpload = document.getElementById('bank-file-upload');
     const btnNew = document.getElementById('btn-bank-new-tx');
+    const btnInitial = document.getElementById('btn-bank-initial-balance');
 
     btnImport.onclick = () => fileUpload.click();
     fileUpload.onchange = (e) => {
@@ -764,6 +787,41 @@ function setupBankView(accountName) {
     
     btnNew.onclick = () => {
         if (window.openTransactionPreFilled) window.openTransactionPreFilled(accountName, 'egreso');
+    };
+
+    btnInitial.onclick = async () => {
+        const amountStr = prompt(`Ingrese el SALDO INICIAL para ${accountName} (use '-' para rojo):`, "0");
+        if (amountStr === null) return;
+        
+        const amount = parseFloat(amountStr.replace(',', '.'));
+        if (isNaN(amount)) {
+            alert("Monto inválido.");
+            return;
+        }
+
+        const date = prompt("Fecha de apertura (YYYY-MM-DD):", "2026-01-01");
+        if (!date) return;
+
+        if (confirm(`¿Confirmas un saldo inicial de ${formatMoney(amount)} para ${accountName} al ${date}?`)) {
+            await fetch('/api/transactions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: Date.now(),
+                    entity: 'Lo de Karlota',
+                    account: accountName,
+                    category: 'Saldo Inicial (Apertura)',
+                    type: amount >= 0 ? 'ingreso' : 'egreso',
+                    amount: amount,
+                    desc: `Saldo Inicial / Apertura de Cuenta`,
+                    date: date,
+                    currency: 'ARS'
+                })
+            });
+            transactions = await loadTransactions();
+            renderTransactions();
+            calculateBalances();
+            renderBankDetails(accountName);
+        }
     };
 
     renderBankDetails(accountName);
