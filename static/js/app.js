@@ -37,6 +37,25 @@ const formatMoney = (val) => new Intl.NumberFormat('es-AR', {
     maximumFractionDigits: 2
 }).format(val);
 
+/**
+ * Parsea un valor a número de forma inteligente, 
+ * detectando si el punto es decimal o separador de miles.
+ */
+function parseSmartNumber(val) {
+    if (typeof val === 'number') return val;
+    let str = String(val || '0').trim().replace('$', '').replace('ARS', '');
+    if (!str) return 0;
+
+    // Si tiene coma, es formato regional (ej: 1.234,56 o 1234,56)
+    if (str.includes(',')) {
+        // Quitamos los puntos de miles y cambiamos la coma por punto decimal
+        return parseFloat(str.replace(/\./g, '').replace(',', '.'));
+    }
+    
+    // Si no tiene coma, asumimos que el punto (si existe) ya es decimal (formato JS/estándar)
+    return parseFloat(str);
+}
+
 function showLoader() {
     const loader = document.getElementById('loader-overlay');
     if (loader) {
@@ -974,10 +993,8 @@ const BankParsers = {
             if (startParsing && dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
                 let desc = String(row[1] || '').replace(/\n/g, ' ').trim();
                 
-                // En el Excel de Galicia, a veces el monto viene en row[2] (Débito) o row[3] (Crédito)
-                // Usamos parseFloat y limpiamos posibles caracteres extra
-                let debitValue = parseFloat(String(row[2] || '0').replace(/\./g, '').replace(',', '.'));
-                let creditValue = parseFloat(String(row[3] || '0').replace(/\./g, '').replace(',', '.'));
+                let debitValue = parseSmartNumber(row[2]);
+                let creditValue = parseSmartNumber(row[3]);
 
                 let amount = 0;
                 let type = 'egreso';
@@ -1028,8 +1045,7 @@ const BankParsers = {
                 let desc = cells[dateIdx + 1] || 'Movimiento Chubut';
                 
                 // El importe suele ser la última columna de datos
-                let amountStr = cells[cells.length - 1].replace(/\./g, '').replace(',', '.');
-                let amount = parseFloat(amountStr);
+                let amount = parseSmartNumber(row[row.length - 1]);
                 
                 if (!isNaN(amount) && amount !== 0) {
                     const [d, m, y] = dateStr.split('/');
@@ -1065,13 +1081,19 @@ const BankParsers = {
                 
                 // Find column that looks like a number
                 for(let i=row.length-1; i>=0; i--) {
-                    if (!isNaN(parseFloat(String(row[i]).replace(',', '.')))) {
-                        amountIndex = i;
+                    let val = parseSmartNumber(row[i]);
+                    if (!isNaN(val) && val !== 0 && typeof row[i] !== 'string') {
+                        amount = val;
                         break;
+                    } else if (typeof row[i] === 'string' && (row[i].includes(',') || row[i].match(/\d/))) {
+                        let potential = parseSmartNumber(row[i]);
+                        if (!isNaN(potential) && potential !== 0) {
+                            amount = potential;
+                            break;
+                        }
                     }
                 }
 
-                let amount = parseFloat(String(row[amountIndex] || '0').replace(',', '.'));
                 let desc = String(row[1] || 'Movimiento MercadoPago').trim();
                 
                 if (!isNaN(amount) && amount !== 0 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
