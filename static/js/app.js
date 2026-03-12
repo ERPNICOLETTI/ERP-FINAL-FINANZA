@@ -584,7 +584,7 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
 
             // SAFETY CHECK (Silent/Automatic)
             try {
-                checkFileIntegrity(rows, parserType);
+                checkFileIntegrity(rows, parserType, accountName);
             } catch (err) {
                 alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
                 return;
@@ -827,21 +827,31 @@ const BankSchemes = {
     mercadopago: ['fecha', 'detalle', 'monto']
 };
 
-function checkFileIntegrity(rows, bankType) {
+function checkFileIntegrity(rows, bankType, accountName = '') {
     const required = BankSchemes[bankType];
-    if (!required) return true; // No schema defined, skip check
+    if (!required) return true;
 
-    // Flatten all cell values to lower case for comparison
     const allCells = rows.flat().map(c => String(c || '').toLowerCase());
+    const allText = allCells.join(' ');
     
-    // Safety check: All required words must exist somewhere in the file
+    // 1. Check basic headers
     const missing = required.filter(word => !allCells.some(cell => cell.includes(word)));
-    
     if (missing.length > 0) {
         throw new Error(`El archivo no parece ser un extracto de ${bankType.toUpperCase()}. Faltan encabezados críticos: ${missing.join(', ')}`);
     }
 
-    // Checking if we have at least some rows that look like dates after the header is found
+    // 2. STRENGTHENED: Account Type Check (Escudo de Precisión)
+    const accLower = accountName.toLowerCase();
+    if (bankType === 'galicia') {
+        if (accLower.includes('corriente') && !allText.includes('corriente')) {
+            throw new Error("⚠️ ERROR DE SEGURIDAD: Estás en el módulo de CUENTA CORRIENTE, pero el archivo parece ser una CAJA DE AHORRO u otro tipo.");
+        }
+        if (accLower.includes('ahorro') && !allText.includes('ahorro')) {
+            throw new Error("⚠️ ERROR DE SEGURIDAD: Estás en el módulo de CAJA DE AHORRO, pero el archivo parece ser una CUENTA CORRIENTE u otro tipo.");
+        }
+    }
+
+    // 3. Date Pattern Check
     const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
     const hasDates = rows.some(row => String(row[0]).match(datePattern));
     
