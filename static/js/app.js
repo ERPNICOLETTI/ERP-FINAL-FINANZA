@@ -816,24 +816,47 @@ function renderBankDetails(accountName) {
 const BankParsers = {
     galicia: (rows) => {
         const parsed = [];
+        let startParsing = false;
+
         rows.forEach(row => {
             if (!row || row.length < 4) return;
+            
             let dateStr = String(row[0] || '').trim();
-            if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            
+            // Galicia Excel: Suele empezar después de los encabezados "Fecha", "Movimiento", "Débito", "Crédito"
+            if (dateStr.toLowerCase().includes('fecha')) {
+                startParsing = true;
+                return;
+            }
+
+            if (startParsing && dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
                 let desc = String(row[1] || '').replace(/\n/g, ' ').trim();
-                let debitStr = String(row[2] || '0').replace(/\./g, '').replace(',', '.');
-                let creditStr = String(row[3] || '0').replace(/\./g, '').replace(',', '.');
+                
+                // En el Excel de Galicia, a veces el monto viene en row[2] (Débito) o row[3] (Crédito)
+                // Usamos parseFloat y limpiamos posibles caracteres extra
+                let debitValue = parseFloat(String(row[2] || '0').replace(/\./g, '').replace(',', '.'));
+                let creditValue = parseFloat(String(row[3] || '0').replace(/\./g, '').replace(',', '.'));
+
                 let amount = 0;
                 let type = 'egreso';
-                let creditAmount = parseFloat(creditStr);
-                if (!isNaN(creditAmount) && creditAmount > 0) {
-                    amount = creditAmount; type = 'ingreso';
-                } else {
-                    let debitAmount = parseFloat(debitStr);
-                    if (!isNaN(debitAmount)) { amount = Math.abs(debitAmount); type = 'egreso'; }
+
+                if (!isNaN(creditValue) && creditValue > 0) {
+                    amount = creditValue;
+                    type = 'ingreso';
+                } else if (!isNaN(debitValue) && debitValue !== 0) {
+                    amount = Math.abs(debitValue);
+                    type = 'egreso';
                 }
+
                 const [d, m, y] = dateStr.split('/');
-                if (amount !== 0) parsed.push({ date: `${y}-${m}-${d}`, desc, amount: type === 'egreso' ? -amount : amount, type });
+                if (amount !== 0) {
+                    parsed.push({ 
+                        date: `${y}-${m}-${d}`, 
+                        desc, 
+                        amount: type === 'egreso' ? -amount : amount, 
+                        type 
+                    });
+                }
             }
         });
         return parsed;
