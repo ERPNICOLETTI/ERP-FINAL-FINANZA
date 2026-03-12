@@ -9,7 +9,11 @@
 // --- ESTADO GLOBAL Y PERSISTENCIA ---
 let transactions = [];
 
-const CUENTAS_LIQUIDEZ = ['Banco Galicia', 'Banco Hipotecario', 'Efectivo / Caja'];
+const CUENTAS_LIQUIDEZ = [
+    'Banco Galicia', 'Banco Hipotecario', 'Efectivo / Caja',
+    'Caja de Ahorro Galicia', 'Cuenta Corriente Galicia',
+    'Caja de Ahorro Chubut', 'Cuenta Corriente Chubut', 'MercadoPago'
+];
 const CUENTAS_DEUDA = ['VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja', 'VISA Hipotecario', 'Préstamo Chubut', 'Préstamo Hipotecario', 'Cheques Emitidos'];
 
 /**
@@ -46,6 +50,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     calculateBalances();
     renderSemaforo();
     setupModals();
+    setupNavigation();
+    renderAccounting();
+    renderPayments();
 
     // GSAP Initial Stagger Animation
     gsap.from(".stat-card", {
@@ -177,7 +184,11 @@ function setupModals() {
     window.accountsData = {
         joaquin: ['Banco Hipotecario', 'VISA Hipotecario', 'Préstamo Hipotecario'],
         jorgelina: ['Banco Galicia', 'VISA Galicia', 'MASTER Galicia', 'Patagonia 365', 'Tarjeta Naranja'],
-        karlota: ['Banco Galicia', 'Efectivo / Caja', 'Préstamo Chubut', 'Cheques Emitidos']
+        karlota: [
+            'Caja de Ahorro Galicia', 'Cuenta Corriente Galicia', 
+            'Caja de Ahorro Chubut', 'Cuenta Corriente Chubut', 
+            'MercadoPago', 'Efectivo / Caja', 'Préstamo Chubut', 'Cheques Emitidos'
+        ]
     };
 
     const incomeCategories = {
@@ -189,7 +200,7 @@ function setupModals() {
     const expenseCategories = {
         joaquin: ['Comida (🍔)', 'Transporte (🚗)', 'Vivienda (🏠)', 'Servicios (💡)', 'Impuestos (🧾)', 'Salud (🏥)', 'Educación (🎓)', 'Ocio (🎮)', 'Compras (🛒)', 'Ropa (👕)', 'Tecnología (💻)', 'Deportes (🏋️)', 'Estética (💅)', 'Mascotas (🐶)', 'Pago Tarjeta (💳)', 'Otros (📦)'],
         jorgelina: ['Comida (🍔)', 'Transporte (🚗)', 'Vivienda (🏠)', 'Servicios (💡)', 'Impuestos (🧾)', 'Salud (🏥)', 'Educación (🎓)', 'Ocio (🎮)', 'Compras (🛒)', 'Ropa (👕)', 'Tecnología (💻)', 'Deportes (🏋️)', 'Estética (💅)', 'Mascotas (🐶)', 'Pago Tarjeta (💳)', 'Otros (📦)'],
-        karlota: ['Proveedores Insumos', 'Mercadería Local', 'Alquiler Local (🏠)', 'Sueldos (💸)', 'Impuestos (🧾)', 'Servicios (💡)', 'Mantenimiento (📦)', 'Otros Egresos']
+        karlota: ['Proveedores Insumos', 'Mercadería Local', 'Alquiler Local (🏠)', 'Sueldos (💸)', 'Impuestos (🧾)', 'Servicios (💡)', 'Mantenimiento (📦)', 'Sindicato - Comercio', 'Sindicato - Otros', 'Otros Egresos']
     };
 
     function updateAccounts() {
@@ -310,6 +321,8 @@ function setupModals() {
         calculateBalances();
         updateChart(transactions);
         renderSemaforo();
+        renderAccounting();
+        renderPayments();
         closeAndClear();
     });
 
@@ -363,6 +376,8 @@ window.deleteTransaction = async function (id) {
         calculateBalances();
         updateChart(transactions);
         renderSemaforo();
+        renderAccounting();
+        renderPayments();
     }
 };
 
@@ -552,7 +567,7 @@ function renderSemaforo() {
     }
 }
 
-async function parseCSV(file) {
+async function parseCSV(file, accountName = 'Banco Galicia') {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const data = e.target.result;
@@ -561,64 +576,30 @@ async function parseCSV(file) {
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-
-            // Convertir a un array de arrays (celdas)
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-            for (let i = 0; i < rows.length; i++) {
-                const row = rows[i];
-                if (!row || row.length < 4) continue;
+            let parserType = 'galicia';
+            if (accountName.toLowerCase().includes('chubut')) parserType = 'chubut';
+            if (accountName.toLowerCase().includes('mercado')) parserType = 'mercadopago';
 
-                // La fecha en Galicia viene usualmente en row[0] como String "DD/MM/YYYY"
-                let dateStr = String(row[0] || '').trim();
+            const parsedData = BankParsers[parserType](rows);
 
-                // Validar si es una fila de transaccion mirando la fecha
-                if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                    // Concepto (suelen venir con saltos de linea)
-                    let desc = String(row[1] || '').replace(/\n/g, ' ').trim();
-
-                    // Galicia: row[2] son débitos (egresos, formato: -X.XXX,XX o vacío)
-                    // Galicia: row[3] son créditos (ingresos, formato: X.XXX,XX o vacío)
-                    let debitStr = String(row[2] || '0').replace(/\./g, '').replace(',', '.');
-                    let creditStr = String(row[3] || '0').replace(/\./g, '').replace(',', '.');
-
-                    let amountRaw = 0;
-                    let type = 'egreso';
-
-                    let creditAmount = parseFloat(creditStr);
-                    if (!isNaN(creditAmount) && creditAmount > 0) {
-                        amountRaw = creditAmount;
-                        type = 'ingreso';
-                    } else {
-                        let debitAmount = parseFloat(debitStr);
-                        if (!isNaN(debitAmount) && debitAmount !== 0) {
-                            amountRaw = Math.abs(debitAmount);
-                            type = 'egreso';
-                        }
-                    }
-
-                    if (amountRaw === 0) continue;
-
-                    // Formatear a ISO "YYYY-MM-DD"
-                    const [d, m, y] = dateStr.split('/');
-                    const dateISO = `${y}-${m}-${d}`;
-
-                    // Envío vía Flask APi
-                    await fetch('/api/transactions', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: Date.now() + i, // Evita colisiones
-                            entity: 'karlota',
-                            account: 'Banco Galicia',
-                            category: 'Importación Banco',
-                            type: type,
-                            amount: amountRaw,
-                            desc: desc,
-                            date: dateISO,
-                            currency: 'ARS'
-                        })
-                    });
-                }
+            for (let i = 0; i < parsedData.length; i++) {
+                const item = parsedData[i];
+                await fetch('/api/transactions', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: Date.now() + i,
+                        entity: 'karlota',
+                        account: accountName,
+                        category: 'Importación Automática',
+                        type: item.type,
+                        amount: item.amount,
+                        desc: item.desc,
+                        date: item.date,
+                        currency: 'ARS'
+                    })
+                });
             }
 
             transactions = await loadTransactions();
@@ -626,10 +607,13 @@ async function parseCSV(file) {
             calculateBalances();
             updateChart(transactions);
             renderSemaforo();
-            alert('Extracto Bancario procesado y conciliado con éxito.');
+            renderAccounting();
+            renderPayments();
+            renderBankDetails(accountName);
+            alert(`Archivo de ${accountName} procesado con éxito.`);
         } catch (error) {
-            console.error("Error procesando Excel", error);
-            alert("Error al parsear el archivo. Asegúrate que sea un extracto válido.");
+            console.error("Error procesando Archivo", error);
+            alert("Error al parsear el archivo. Asegúrate que el formato sea compatible.");
         }
     };
     reader.readAsArrayBuffer(file);
@@ -716,3 +700,323 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseLedger = document.getElementById('closeLedgerModal');
     if (btnCloseLedger) btnCloseLedger.addEventListener('click', closeLedger);
 });
+
+// --- NAVEGACION Y MODULOS NUEVOS ---
+
+function setupNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view-container');
+
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetView = item.getAttribute('data-view');
+
+            if (!targetView) return;
+
+            // Update UI Active State
+            navItems.forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+
+            // Switch Views
+            views.forEach(v => {
+                v.classList.remove('active');
+                
+                let viewId = `view-${targetView}`;
+                // Special handling for dynamic bank views
+                if (targetView.startsWith('bank-')) {
+                    viewId = 'view-bank-generic';
+                    const accountName = item.getAttribute('data-account');
+                    setupBankView(accountName);
+                }
+
+                if (v.id === viewId) {
+                    v.classList.add('active');
+                }
+            });
+        });
+    });
+}
+
+function setupBankView(accountName) {
+    document.getElementById('bank-view-title').textContent = accountName;
+    document.getElementById('bank-view-subtitle').textContent = `Gestión de movimientos y conciliación para ${accountName}`;
+    
+    // Configurar botones de acción
+    const btnImport = document.getElementById('btn-bank-import');
+    const fileUpload = document.getElementById('bank-file-upload');
+    const btnNew = document.getElementById('btn-bank-new-tx');
+
+    btnImport.onclick = () => fileUpload.click();
+    fileUpload.onchange = (e) => {
+        if (e.target.files.length > 0) {
+            parseCSV(e.target.files[0], accountName);
+        }
+    };
+    
+    btnNew.onclick = () => {
+        if (window.openTransactionPreFilled) window.openTransactionPreFilled(accountName, 'egreso');
+    };
+
+    renderBankDetails(accountName);
+}
+
+function renderBankDetails(accountName) {
+    const list = document.getElementById('bank-transactions-list');
+    const balanceEl = document.getElementById('bank-balance');
+    const incEl = document.getElementById('bank-monthly-inc');
+    const expEl = document.getElementById('bank-monthly-exp');
+
+    const accTxs = transactions.filter(t => (t.account || '').toLowerCase() === accountName.toLowerCase());
+    
+    let balance = 0;
+    let monthlyInc = 0;
+    let monthlyExp = 0;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    accTxs.forEach(t => {
+        balance += t.amount;
+        
+        const tDate = new Date(t.date);
+        if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
+            if (t.amount > 0) monthlyInc += t.amount;
+            else monthlyExp += Math.abs(t.amount);
+        }
+    });
+
+    balanceEl.textContent = formatMoney(balance);
+    incEl.textContent = formatMoney(monthlyInc);
+    expEl.textContent = formatMoney(monthlyExp);
+
+    list.innerHTML = '';
+    accTxs.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'transaction-item';
+        const isPos = t.amount > 0;
+        item.innerHTML = `
+            <div class="t-icon" style="background: ${isPos ? 'var(--color-success)' : 'var(--color-danger)'}; color:white;">
+                <i class="fa-solid ${isPos ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
+            </div>
+            <div class="t-details">
+                <div class="t-title">${t.desc}</div>
+                <div class="t-subtitle">${new Date(t.date).toLocaleDateString()} &bull; ${t.category}</div>
+            </div>
+            <div class="t-amount ${isPos ? 'text-positive' : 'text-negative'}">${isPos ? '+' : ''}${formatMoney(t.amount)}</div>
+        `;
+        list.appendChild(item);
+    });
+
+    if (accTxs.length === 0) {
+        list.innerHTML = '<p style="text-align:center; padding: 20px; color:var(--text-muted);">No hay movimientos registrados.</p>';
+    }
+}
+
+const BankParsers = {
+    galicia: (rows) => {
+        const parsed = [];
+        rows.forEach(row => {
+            if (!row || row.length < 4) return;
+            let dateStr = String(row[0] || '').trim();
+            if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                let desc = String(row[1] || '').replace(/\n/g, ' ').trim();
+                let debitStr = String(row[2] || '0').replace(/\./g, '').replace(',', '.');
+                let creditStr = String(row[3] || '0').replace(/\./g, '').replace(',', '.');
+                let amount = 0;
+                let type = 'egreso';
+                let creditAmount = parseFloat(creditStr);
+                if (!isNaN(creditAmount) && creditAmount > 0) {
+                    amount = creditAmount; type = 'ingreso';
+                } else {
+                    let debitAmount = parseFloat(debitStr);
+                    if (!isNaN(debitAmount)) { amount = Math.abs(debitAmount); type = 'egreso'; }
+                }
+                const [d, m, y] = dateStr.split('/');
+                if (amount !== 0) parsed.push({ date: `${y}-${m}-${d}`, desc, amount: type === 'egreso' ? -amount : amount, type });
+            }
+        });
+        return parsed;
+    },
+    chubut: (rows) => {
+        // Ejemplo simplificado para Banco Chubut (ajustar según formato real)
+        const parsed = [];
+        rows.forEach(row => {
+            if (!row || row.length < 3) return;
+            let dateStr = String(row[0] || '').trim();
+            if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/) || dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                let desc = String(row[1] || '').trim();
+                let amount = parseFloat(String(row[2] || '0').replace(',', '.'));
+                if (!isNaN(amount) && amount !== 0) {
+                    let dateISO = dateStr;
+                    if (dateStr.includes('/')) {
+                        const [d, m, y] = dateStr.split('/');
+                        dateISO = `${y}-${m}-${d}`;
+                    }
+                    parsed.push({ date: dateISO, desc, amount, type: amount > 0 ? 'ingreso' : 'egreso' });
+                }
+            }
+        });
+        return parsed;
+    },
+    mercadopago: (rows) => {
+        // MercadoPago suele tener 'FECHA', 'CONCEPTO', 'MONTO'
+        const parsed = [];
+        rows.forEach(row => {
+            let amount = parseFloat(String(row[row.length - 1] || '0'));
+            if (!isNaN(amount) && amount !== 0) {
+                parsed.push({
+                    date: new Date().toISOString().split('T')[0], // MP placeholder date if not found
+                    desc: String(row[1] || 'Movimiento MP'),
+                    amount: amount,
+                    type: amount > 0 ? 'ingreso' : 'egreso'
+                });
+            }
+        });
+        return parsed;
+    }
+};
+
+function renderAccounting() {
+    const taxList = document.getElementById('tax-breakdown-list');
+    if (!taxList) return;
+
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    const karlotaTxs = transactions.filter(t => t.entity === 'karlota');
+    
+    // Categorías que consideramos impuestos
+    const TAX_KEYWORDS = ['impuesto', 'iva', 'iibb', 'suss', 'sicore', 'tasa'];
+    
+    const taxTxs = karlotaTxs.filter(t => 
+        TAX_KEYWORDS.some(kw => t.category.toLowerCase().includes(kw) || t.desc.toLowerCase().includes(kw))
+    );
+
+    let totalTaxes = 0;
+    let totalSales = 0;
+
+    karlotaTxs.forEach(t => {
+        if (t.type === 'ingreso' && t.category.toLowerCase().includes('venta')) {
+            totalSales += t.amount;
+        }
+    });
+
+    taxTxs.forEach(t => totalTaxes += Math.abs(t.amount));
+
+    document.getElementById('tax-monthly-total').textContent = formatMoney(totalTaxes);
+    document.getElementById('tax-iva-estimate').textContent = formatMoney(totalSales * 0.21); // Estimación rápida
+    document.getElementById('tax-retentions').textContent = formatMoney(0); // TODO: Lógica de retenciones si se agrega campo
+
+    taxList.innerHTML = '';
+    const groupedTaxes = {};
+    taxTxs.forEach(t => {
+        groupedTaxes[t.category] = (groupedTaxes[t.category] || 0) + Math.abs(t.amount);
+    });
+
+    Object.entries(groupedTaxes).forEach(([cat, val]) => {
+        taxList.innerHTML += `
+            <div class="tax-item">
+                <span>${cat}</span>
+                <div style="width: 200px; height: 8px; background: rgba(0,0,0,0.05); border-radius: 4px; position:relative;">
+                    <div style="width: ${Math.min(100, (val/totalTaxes)*100)}%; height: 100%; background: var(--color-karlota); border-radius: 4px;"></div>
+                </div>
+                <span>${formatMoney(val)}</span>
+            </div>
+        `;
+    });
+
+    if (taxTxs.length === 0) {
+        taxList.innerHTML = '<p style="text-align:center; color:var(--text-muted);">No hay registros impositivos este mes.</p>';
+    }
+}
+
+function renderPayments() {
+    const pendingList = document.getElementById('sindicato-pending-list');
+    const historyList = document.getElementById('sindicato-history-list');
+    if (!pendingList || !historyList) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    const sindicatoTxs = transactions.filter(t => t.category.toLowerCase().includes('sindicato'));
+    
+    const pending = sindicatoTxs.filter(t => t.date >= today);
+    const history = sindicatoTxs.filter(t => t.date < today);
+
+    pendingList.innerHTML = '';
+    pending.forEach(t => {
+        pendingList.innerHTML += `
+            <div class="sindicato-item">
+                <div class="sindicato-info">
+                    <h4>${t.desc}</h4>
+                    <p><i class="fa-solid fa-calendar"></i> Vence: ${new Date(t.date).toLocaleDateString('es-AR')}</p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-weight:700; color:var(--color-danger);">${formatMoney(Math.abs(t.amount))}</div>
+                    <button class="btn-text" onclick="markAsPaid(${t.id})" style="color:var(--color-success); font-weight:600;">
+                        <i class="fa-solid fa-check"></i> Marcar Pagado
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    historyList.innerHTML = '';
+    history.slice(0, 10).forEach(t => {
+        historyList.innerHTML += `
+            <div class="sindicato-item" style="opacity: 0.7;">
+                <div class="sindicato-info">
+                    <h4>${t.desc}</h4>
+                    <p>Pagado el ${new Date(t.date).toLocaleDateString('es-AR')}</p>
+                </div>
+                <div style="font-weight:700; color:var(--color-success);">${formatMoney(Math.abs(t.amount))}</div>
+            </div>
+        `;
+    });
+
+    const btnAddSindicato = document.getElementById('btn-add-sindicato');
+    if (btnAddSindicato) {
+        btnAddSindicato.onclick = () => {
+            const btnNew = document.getElementById('btn-new-transaction');
+            btnNew.click();
+            setTimeout(() => {
+                document.getElementById('t-entity').value = 'karlota';
+                document.getElementById('t-type').value = 'egreso';
+                document.getElementById('t-entity').dispatchEvent(new Event('change'));
+                setTimeout(() => {
+                    document.getElementById('t-category').value = 'sindicato---comercio';
+                }, 100);
+            }, 100);
+        };
+    }
+}
+
+window.markAsPaid = async function(id) {
+    // Al marcar como pagado, lo que hacemos es que la fecha sea HOY o ayer para que salga del semáforo/pendientes
+    // o simplemente el usuario ya sabe que si cambió la fecha es porque se ejecutó.
+    // Para este sistema, "Pagar" es simplemente confirmar la transaccion.
+    // Podríamos cambiar la fecha a hoy.
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    tx.date = today;
+    
+    // Update in DB (Simulado por re-insert o update si el backend lo permitiera, 
+    // pero como no hay endpoint de update directo en app.py, borramos e insertamos)
+    
+    const url = `/api/transactions/${id}${tx.groupId ? '?groupId=' + tx.groupId : ''}`;
+    await fetch(url, { method: 'DELETE' });
+    
+    await fetch('/api/transactions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tx)
+    });
+
+    transactions = await loadTransactions();
+    renderTransactions();
+    calculateBalances();
+    renderSemaforo();
+    renderAccounting();
+    renderPayments();
+};
