@@ -332,10 +332,10 @@ h6 {
 
 /* Stats Cards */
 .stats-grid {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 24px;
     margin-bottom: 32px;
-    align-items: stretch;
 }
 
 .stat-card {
