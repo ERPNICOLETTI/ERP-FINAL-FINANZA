@@ -1063,40 +1063,44 @@ const BankParsers = {
     mercadopago: (rows) => {
         const parsed = [];
         let startParsing = false;
-        rows.forEach(row => {
-            if (!row || row.length < 3) return;
-            let firstCell = String(row[0] || '').toLowerCase();
+        let colMap = {};
+
+        rows.forEach((row, rowIndex) => {
+            if (!row || row.length < 2) return;
             
-            // Header for MercadoPago usually starts with 'fecha'
-            if (firstCell.includes('fecha')) {
+            // 1. Detect Headers
+            const rowStr = row.join(' ').toLowerCase();
+            if (rowStr.includes('fecha') || rowStr.includes('date') || rowStr.includes('settlement_date')) {
+                row.forEach((cell, idx) => {
+                    const c = String(cell || '').toLowerCase();
+                    if (c.includes('fecha') || c.includes('date')) colMap.date = idx;
+                    if (c.includes('monto_neto') || c.includes('net_amount')) colMap.amount = idx;
+                    if (c.includes('monto') || c.includes('amount')) if (colMap.amount === undefined) colMap.amount = idx;
+                    if (c.includes('detalle') || c.includes('type') || c.includes('transaction_type')) colMap.desc = idx;
+                });
                 startParsing = true;
                 return;
             }
 
             if (startParsing) {
-                // Determine date index and amount index based on common MP formats
-                // (This is a flexible parser that tries to find valid looking data)
-                let dateStr = String(row[0] || '').split(' ')[0]; // Take only date part of 'YYYY-MM-DD HH:MM:SS'
-                let amountIndex = row.length - 1; // Assuming amount is last or near last
-                
-                // Find column that looks like a number
-                for(let i=row.length-1; i>=0; i--) {
-                    let val = parseSmartNumber(row[i]);
-                    if (!isNaN(val) && val !== 0 && typeof row[i] !== 'string') {
-                        amount = val;
-                        break;
-                    } else if (typeof row[i] === 'string' && (row[i].includes(',') || row[i].match(/\d/))) {
-                        let potential = parseSmartNumber(row[i]);
-                        if (!isNaN(potential) && potential !== 0) {
-                            amount = potential;
-                            break;
-                        }
-                    }
-                }
+                let dateCell = row[colMap.date || 0];
+                if (!dateCell) return;
 
-                let desc = String(row[1] || 'Movimiento MercadoPago').trim();
+                let dateStr = String(dateCell).split(' ')[0].split('T')[0]; // Handle YYYY-MM-DD, dates with space or T
                 
-                if (!isNaN(amount) && amount !== 0 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                // Final validation of date format YYYY-MM-DD or DD/MM/YYYY
+                if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/) && !dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) return;
+
+                let amount = parseSmartNumber(row[colMap.amount !== undefined ? colMap.amount : row.length - 1]);
+                let desc = String(row[colMap.desc || 1] || 'Operación MercadoPago').trim();
+
+                if (!isNaN(amount) && amount !== 0) {
+                    // Convert DD/MM/YYYY to YYYY-MM-DD if needed
+                    if (dateStr.includes('/')) {
+                        const [d, m, y] = dateStr.split('/');
+                        dateStr = `${y}-${m}-${d}`;
+                    }
+
                     parsed.push({
                         date: dateStr,
                         desc: desc,
