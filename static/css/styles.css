@@ -364,24 +364,40 @@ h6 {
 /* Stats Cards */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
     margin-bottom: 32px;
+    align-items: stretch;
 }
 
 /* Force 3 columns in bank views for perfect alignment on desktop */
-#view-bank-generic .stats-grid {
+#view-bank-generic .stats-grid,
+#view-facturas .stats-grid {
     grid-template-columns: repeat(3, 1fr);
 }
 
-@media (max-width: 900px) {
-    #view-bank-generic .stats-grid {
+#macro-panels {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 24px;
+    align-items: stretch !important;
+    margin-bottom: 32px;
+}
+
+#macro-panels .stat-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0 !important;
+}
+
+@media (max-width: 1100px) {
+    .stats-grid {
         grid-template-columns: 1fr;
     }
 }
 
 .stat-card {
-    flex: 1;
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);

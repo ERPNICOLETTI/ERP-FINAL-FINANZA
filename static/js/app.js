@@ -8,6 +8,7 @@
 
 // --- ESTADO GLOBAL Y PERSISTENCIA ---
 let transactions = [];
+let facturasData = [];
 
 const CUENTAS_LIQUIDEZ = [
     'Banco Galicia', 'Banco Hipotecario', 'Efectivo / Caja',
@@ -89,6 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSemaforo();
     setupModals();
     setupNavigation();
+    initFacturaFilters(); // Inicializar filtros de facturas una sola vez
     renderAccounting();
     renderPayments();
 
@@ -607,32 +609,77 @@ function renderSemaforo() {
 }
 
 async function parseCSV(file, accountName = 'Banco Galicia') {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
+    const isMultiProcess = (accountName === 'AUTO_DETECT');
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
         const data = e.target.result;
 
         try {
             showLoader();
             const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            let allRows = [];
+            
+            // BUSQUEDA EN TODAS LAS HOJAS: Si el Excel tiene varias pestañas, las unificamos
+            workbook.SheetNames.forEach(sheetName => {
+                const worksheet = workbook.Sheets[sheetName];
+                const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                if (sheetRows.length > 0) allRows = allRows.concat(sheetRows);
+            });
+            
+            const rows = allRows;
 
-            let parserType = 'galicia';
-            if (accountName.toLowerCase().includes('chubut')) parserType = 'chubut';
-            if (accountName.toLowerCase().includes('mercado')) parserType = 'mercadopago';
-            if (accountName.toLowerCase().includes('payway')) parserType = 'payway';
+            let parserType = null;
+            const filename = (file.name || '').toLowerCase();
+            const allText = rows.flat().map(c => String(c || '').toLowerCase()).join(' ');
 
-            // SAFETY CHECK (Silent/Automatic)
-            try {
-                checkFileIntegrity(rows, parserType, accountName);
-            } catch (err) {
-                hideLoader();
-                alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
-                return;
+            // Prioridad 1: Detección por Contenido (Infallible)
+            const isFacturaFile = allText.includes('denominaci') || allText.includes('emisor') || allText.includes('receptor') || 
+                                  allText.includes('proveedor') || allText.includes('cuit') || 
+                                  (allText.includes('iva') && allText.includes('neto')) ||
+                                  (allText.includes('factura') && allText.includes('total'));
+            
+            const isFacturaByFilename = filename.includes('factura') || filename.includes('comprobante') || 
+                                       filename.includes('arca') || filename.includes('calim') || filename.includes('afip');
+
+            if (isFacturaFile || isFacturaByFilename) {
+                parserType = 'afip';
+            } else if (allText.includes('payway') || (allText.includes('monto_bruto') && allText.includes('lote'))) {
+                parserType = 'payway';
+            } else if (allText.includes('mercado') || allText.includes('settlement_date')) {
+                parserType = 'mercadopago';
+            } else if (allText.includes('banco del chubut') || (allText.includes('chubut') && allText.includes('movimientos'))) {
+                parserType = 'chubut';
+            } else if (allText.includes('banco galicia') || (allText.includes('movimiento') && (allText.includes('débito') || allText.includes('crédito')))) {
+                parserType = 'galicia';
             }
 
-            const parsedData = BankParsers[parserType](rows);
+            // Prioridad 2: Si el contenido no fue claro, usamos el nombre o el contexto de la vista
+            if (!parserType) {
+                const searchStr = (accountName + ' ' + filename).toLowerCase();
+                if (searchStr.includes('chubut')) parserType = 'chubut';
+                else if (searchStr.includes('mercado')) parserType = 'mercadopago';
+                else if (searchStr.includes('payway')) parserType = 'payway';
+                else if (searchStr.includes('afip') || searchStr.includes('arca') || searchStr.includes('comprobante') || searchStr.includes('calim')) parserType = 'afip';
+                else if (searchStr.includes('galicia')) parserType = 'galicia';
+                else if (isMultiProcess) parserType = 'afip'; // Por defecto en el importador unificado, asumimos facturas
+                else parserType = 'galicia'; // Default final
+            }
+
+            // SAFETY CHECK — saltamos para AFIP/CALIM porque no tienen formato bancario
+            if (parserType !== 'afip') {
+                try {
+                    checkFileIntegrity(rows, parserType, accountName);
+                } catch (err) {
+                    hideLoader();
+                    alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
+                    return;
+                }
+            }
+
+            const parsedData = (parserType === 'afip') 
+                ? BankParsers.afip(rows, filename) 
+                : BankParsers[parserType](rows);
             
             // Special Case: Payway Persistence
             if (parserType === 'payway') {
@@ -644,6 +691,33 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
                 hideLoader();
                 alert(`✅ Reporte de Payway importado: ${parsedData.length} cupones procesados.`);
                 renderConciliation();
+                return;
+            }
+
+            // Special Case: AFIP/CALIM → van a /api/facturas
+            if (parserType === 'afip') {
+                // DOUBLE CHECK: Si el nombre del archivo dice "comprobantes", forzamos origen AFIP en cada item
+                const isAfipFilename = filename.includes('comprobantes') || filename.includes('arca') || filename.includes('afip');
+                if (isAfipFilename) {
+                    parsedData.forEach(item => item.origen = 'AFIP');
+                }
+
+                const originLabel = isAfipFilename ? 'AFIP' : (filename.includes('calim') ? 'CALIM' : 'Comprobantes');
+
+                if (parsedData.length === 0) {
+                    hideLoader();
+                    alert(`⚠️ No se encontraron facturas válidas en "${filename}".\n\nRevisá que el archivo tenga los encabezados correctos (Fecha, Proveedor, Total, etc).`);
+                    return;
+                }
+
+                await fetch('/api/facturas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(parsedData)
+                });
+                hideLoader();
+                alert(`✅ Importación de ${originLabel} completa:\n- Se analizaron ${parsedData.length} registros.\n- Los duplicados se unificaron automáticamente.\n\nRevisá el mes correspondiente en el selector.`);
+                loadAndRenderFacturas();
                 return;
             }
 
@@ -697,13 +771,17 @@ async function parseCSV(file, accountName = 'Banco Galicia') {
             if (importedCount > 0) resultMsg += `✅ ${importedCount} movimientos nuevos cargados.\n`;
             if (skippedCount > 0) resultMsg += `🚫 ${skippedCount} movimientos omitidos por estar duplicados.`;
             alert(resultMsg);
+            if (!isMultiProcess) hideLoader();
+            resolve();
         } catch (error) {
-            hideLoader();
-            console.error("Error procesando Archivo", error);
-            alert("Error al parsear el archivo. Asegúrate que el formato sea compatible.");
+            if (!isMultiProcess) hideLoader();
+            console.error("Error procesando Archivo:", error);
+            alert("❌ ERROR EN " + file.name + ":\n" + error.message + "\n\nIntentá abrir el archivo y guardarlo de nuevo como .xlsx antes de subirlo.");
+            resolve(); 
         }
     };
     reader.readAsArrayBuffer(file);
+    });
 }
 
 // --- LOGICA DE LIBRO MAYOR (LEDGER) ---
@@ -786,6 +864,168 @@ function closeLedger() {
 document.addEventListener('DOMContentLoaded', () => {
     const btnCloseLedger = document.getElementById('closeLedgerModal');
     if (btnCloseLedger) btnCloseLedger.addEventListener('click', closeLedger);
+
+    // --- SETUP FACTURAS UNIFICADO ---
+    const btnImportUnified = document.getElementById('btn-import-unified');
+    const unifiedUpload = document.getElementById('unified-file-upload');
+    if (btnImportUnified && unifiedUpload) {
+        btnImportUnified.onclick = () => unifiedUpload.click();
+        unifiedUpload.onchange = async (e) => {
+            if (e.target.files.length > 0) {
+                showLoader();
+                // Procesamos todos los archivos seleccionados uno por uno
+                for (let i = 0; i < e.target.files.length; i++) {
+                    await parseCSV(e.target.files[i], 'AUTO_DETECT');
+                }
+                e.target.value = ''; // Reset para permitir re-subida
+                hideLoader();
+                alert("✅ Importación de comprobantes finalizada.");
+                loadAndRenderFacturas();
+            }
+        };
+    }
+
+    const uploadFacturaForm = document.getElementById('upload-factura-form');
+    const facturaFileInput = document.getElementById('upload-factura-file');
+    const previewImg = document.getElementById('factura-preview-img');
+    const previewPdf = document.getElementById('factura-preview-pdf');
+    const previewPlaceholder = document.getElementById('preview-placeholder');
+    const btnClearPreview = document.getElementById('btn-clear-preview');
+
+    if (facturaFileInput) {
+        facturaFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                resetPreview();
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                previewPlaceholder.style.display = 'none';
+                btnClearPreview.style.display = 'flex';
+
+                if (file.type.startsWith('image/')) {
+                    previewImg.src = event.target.result;
+                    previewImg.style.display = 'block';
+                    previewPdf.style.display = 'none';
+                } else if (file.type === 'application/pdf') {
+                    // Usar un blob URL para el PDF permite que se vea mejor y sea más rápido
+                    const url = URL.createObjectURL(file);
+                    previewPdf.src = url;
+                    previewPdf.style.display = 'block';
+                    previewPdf.style.height = '500px'; // Forzar altura para ver bien el contenido
+                    previewImg.style.display = 'none';
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (btnClearPreview) {
+        btnClearPreview.addEventListener('click', resetPreview);
+    }
+
+    function resetPreview() {
+        if (facturaFileInput) facturaFileInput.value = '';
+        if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
+        if (previewPdf) { previewPdf.src = ''; previewPdf.style.display = 'none'; }
+        if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+        if (btnClearPreview) btnClearPreview.style.display = 'none';
+        
+        // Limpiar búsqueda
+        if (searchStatus) searchStatus.textContent = '';
+        if (searchDetail) {
+            searchDetail.textContent = 'Buscaremos este número en la base de datos de ARCA/CALIM.';
+            searchDetail.style.color = 'var(--text-muted)';
+        }
+    }
+
+    const searchStatus = document.getElementById('search-factura-status');
+    const searchDetail = document.getElementById('search-factura-detail');
+    const facturaNumInput = document.getElementById('upload-factura-num');
+
+    if (facturaNumInput) {
+        facturaNumInput.addEventListener('input', function(e) {
+            const val = e.target.value.trim();
+            if (val.length < 3) {
+                searchStatus.textContent = '';
+                searchDetail.textContent = 'Buscaremos este número en la base de datos de ARCA/CALIM.';
+                searchDetail.style.color = 'var(--text-muted)';
+                return;
+            }
+
+            // NORMALIZACIÓN: Quitamos guiones y ceros a la izquierda para comparar "manzanas con manzanas"
+            const cleanVal = val.replace(/-/g, '').replace(/^0+/, '');
+            
+            const match = facturasData.find(f => {
+                const cleanF = f.numero_completo.replace(/-/g, '').replace(/^0+/, '');
+                return cleanF === cleanVal || cleanF.endsWith(cleanVal) || cleanVal.endsWith(cleanF);
+            });
+            
+            if (match) {
+                const systems = [];
+                if (match.esta_en_afip) systems.push('ARCA');
+                if (match.esta_en_calim) systems.push('CALIM');
+                
+                const fechaPretty = match.fecha_emision ? match.fecha_emision.split('-').reverse().join('/') : 'Sin fecha';
+                
+                searchStatus.innerHTML = `✅ ENCONTRADA <span style="font-size:11px; font-weight:normal; opacity:0.8;">(${fechaPretty})</span>`;
+                searchStatus.style.color = 'var(--color-success)';
+                searchDetail.textContent = `Proveedor: ${match.proveedor || 'No especificado'}. Sistemas: ${systems.join(' + ')}.`;
+                searchDetail.style.color = 'var(--color-success)';
+            } else {
+                searchStatus.textContent = '❓ NO ENCONTRADA';
+                searchStatus.style.color = '#f59e0b';
+                searchDetail.textContent = 'No figura en ARCA ni CALIM. Se marcará como "SUBIR A CALIM".';
+                searchDetail.style.color = '#f59e0b';
+            }
+        });
+    }
+
+    if (uploadFacturaForm) {
+        uploadFacturaForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const num = document.getElementById('upload-factura-num').value.trim();
+            const fileInput = document.getElementById('upload-factura-file');
+            
+            if (!num || fileInput.files.length === 0) {
+                alert('Por favor, seleccioná primero la foto/PDF y luego ingresá los últimos 5 dígitos del N° de factura.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('numero_completo', num);
+
+            showLoader();
+            try {
+                const res = await fetch('/api/facturas/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+                hideLoader();
+                if (result.success) {
+                    // Si el backend nos devolvió la fecha, avisamos al usuario
+                    if (result.fecha) {
+                        const [y, m, d] = result.fecha.split('-');
+                        alert(`${result.msg}\n\nPeriodo vinculado: ${m}/${y}`);
+                    } else {
+                        alert(result.msg);
+                    }
+                    loadAndRenderFacturas();
+                    uploadFacturaForm.reset();
+                    resetPreview();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                hideLoader();
+                alert('Error en la subida.');
+            }
+        };
+    }
 });
 
 // --- NAVEGACION Y MODULOS NUEVOS ---
@@ -920,6 +1160,9 @@ function setupNavigation() {
                     
                     if (targetView === 'conciliation') {
                         renderConciliation();
+                    }
+                    if (targetView === 'facturas') {
+                        loadAndRenderFacturas();
                     }
                 }
             });
@@ -1322,6 +1565,196 @@ const BankParsers = {
             }
         });
         return parsed;
+    },
+
+    // =====================================================================
+    // PARSER UNIFICADO: AFIP (ARCA) y CALIM
+    // Auto-detecta el formato y extrae Neto, IVA, Total, Proveedor, Fecha
+    // =====================================================================
+    afip: (rows, filename = '') => {
+        const parsed = [];
+        let colMap = {};
+        let isCalim = false;
+        let headerRowIndex = -1;
+
+        const fileLower = filename.toLowerCase();
+        const forceAfip = fileLower.includes('comprobantes') || fileLower.includes('arca') || fileLower.includes('afip');
+        const forceCalim = fileLower.includes('calim');
+
+        // Paso 1: detectar fila de encabezados mediante SCORING (más robusto)
+        let maxScore = 0;
+        for (let i = 0; i < Math.min(rows.length, 60); i++) {
+            const rowStr = (rows[i] || []).join(' ').toLowerCase();
+            let score = 0;
+            if (rowStr.includes('fecha')) score += 5;
+            if (rowStr.includes('punto de venta') || rowStr.includes('pto. vta.') || rowStr.includes('p.v.')) score += 10;
+            if (rowStr.includes('número desde') || rowStr.includes('nro. desde') || rowStr.includes('número hasta')) score += 10;
+            if (rowStr.includes('proveedor') || rowStr.includes('denominación') || rowStr.includes('emisor')) score += 5;
+            if (rowStr.includes('iva') || rowStr.includes('impuesto') || rowStr.includes('cuit')) score += 5;
+            if (rowStr.includes('neto') || rowStr.includes('total') || rowStr.includes('gravado')) score += 5;
+
+            if (score > maxScore) {
+                maxScore = score;
+                headerRowIndex = i;
+            }
+        }
+
+        if (headerRowIndex === -1 || maxScore < 15) {
+            console.error("❌ No se pudo encontrar una cabecera válida en el archivo:", filename);
+            return parsed;
+        }
+
+        // DETERMINAR ORIGEN basado en columnas específicas de AFIP
+        const headerStr = rows[headerRowIndex].join(' ').toLowerCase();
+        isCalim = !(headerStr.includes('punto de venta') || headerStr.includes('pto. vta.') || headerStr.includes('número desde'));
+        if (forceAfip) isCalim = false;
+        if (forceCalim) isCalim = true;
+        
+        console.log(`🔍 [${filename}] Fila Cabecera: ${headerRowIndex}, Origen: ${isCalim ? 'CALIM' : 'AFIP'}`);
+
+        // Paso 2: mapear columnas con un espectro mucho más amplio de nombres
+        rows[headerRowIndex].forEach((cell, idx) => {
+            const h = String(cell || '').toLowerCase().trim();
+            
+            // Fecha: Prioridad absoluta a "fecha" o "fecha de emisión"
+            if (h === 'fecha' || h === 'emisión' || h === 'fecha de emisión') {
+                colMap.fecha = idx;
+            } else if (!colMap.fecha && (h.includes('fecha') || h.includes('emisi') || h.includes('date'))) {
+                // Solo asignamos si no encontramos una exacta antes, para evitar el overwrite de "Fecha Vto"
+                if (!h.includes('vencimiento') && !h.includes('vto')) {
+                    colMap.fecha = idx;
+                }
+            }
+            
+            // Tipo
+            if (h.includes('tipo') || h.includes('clase') || h.includes('comprobante')) colMap.tipo = idx;
+            
+            // Proveedor
+            if (h.includes('denominaci') || h.includes('proveedor') || h.includes('emisor') || h.includes('nombre') || h.includes('raz') || h.includes('vendedor')) colMap.proveedor = idx;
+            
+            // Punto de Venta y Número (AFIP estándar)
+            if (h.includes('punto de venta') || h.includes('p.v.') || h.includes('pto. vta.')) colMap.pv = idx;
+            if (h.includes('número desde') || h.includes('numero desde') || h.includes('nro. desde') || h.includes('número hasta')) colMap.num = idx;
+            
+            // Número Directo (CALIM o Excel simplificado)
+            if (h === 'numero' || h === 'número' || h === 'nro' || h === 'nro.' || h.includes('factura') || h.includes('comprobante')) {
+                if (colMap.numero_calim === undefined) colMap.numero_calim = idx;
+            }
+
+            // Neto
+            if (h.includes('neto') || h.includes('gravado') || h.includes('subtotal') || h.includes('base imponible')) colMap.neto = idx;
+            
+            // IVA
+            if (h.includes('iva') || h.includes('impuesto') || h.includes('21%') || h.includes('10.5%')) colMap.iva = idx;
+            
+            // Total
+            if (h.includes('total') || h.includes('importe') || h.includes('monto') || h.includes('suma')) colMap.total = idx;
+        });
+
+        // Paso 3: parsear filas de datos con validaciones de seguridad
+        let importadosAFIP = 0;
+        let importadosCALIM = 0;
+
+        for (let i = headerRowIndex + 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || !Array.isArray(row) || row.every(c => !c)) continue;
+            
+            const getVal = (key) => {
+                if (colMap[key] === undefined) return '';
+                const val = row[colMap[key]];
+                return val !== undefined && val !== null ? String(val).trim() : '';
+            };
+
+            // Extracción de Número Unificada
+            let rawPv = getVal('pv') || '';
+            let rawNum = getVal('num') || getVal('numero_calim') || '';
+
+            // Si el número contiene el PV (formato XXXX-XXXXXXXX)
+            if (rawNum.includes('-')) {
+                const p = rawNum.split('-');
+                if (p.length >= 2) {
+                    rawPv = rawPv || p[0];
+                    rawNum = p[1];
+                }
+            }
+            
+            const pv = rawPv.replace(/\D/g, '').padStart(4, '0');
+            const num = rawNum.replace(/\D/g, '').padStart(8, '0');
+            let numeroCompleto = (pv + num).replace(/^0+/, '');
+            
+            if (!numeroCompleto || numeroCompleto.length < 2) continue; 
+
+            // Fecha con detección ULTRA-ROBUSTA
+            let fechaRaw = getVal('fecha');
+            let fechaParsed = null;
+            
+            if (fechaRaw) {
+                // Caso A: Ya es un objeto Date de JS (XLSX puede devolver esto)
+                if (fechaRaw instanceof Date) {
+                    fechaParsed = fechaRaw.toISOString().split('T')[0];
+                } 
+                // Caso B: Es un número serial de Excel (ej: 46053)
+                else if (!isNaN(fechaRaw) && parseFloat(fechaRaw) > 30000) {
+                    const excelDate = new Date(Math.round((parseFloat(fechaRaw) - 25569) * 86400 * 1000));
+                    fechaParsed = excelDate.toISOString().split('T')[0];
+                } 
+                // Caso C: Es texto (DD/MM/YYYY, YYYY-MM-DD, etc)
+                else if (typeof fechaRaw === 'string') {
+                    const cleanDateStr = fechaRaw.split(' ')[0].trim(); 
+                    const parts = cleanDateStr.split(/[\/\-\.]/); // Soporta /, - y .
+                    
+                    if (parts.length === 3) {
+                        let y, m, d;
+                        if (parts[0].length === 4) { // YYYY-MM-DD
+                            y = parts[0]; m = parts[1]; d = parts[2];
+                        } else if (parts[2].length === 4) { // DD/MM/YYYY o MM/DD/YYYY
+                            y = parts[2];
+                            const p0 = parseInt(parts[0]);
+                            const p1 = parseInt(parts[1]);
+                            
+                            // Lógica inteligente: Si el del medio es mayor a 12, el otro es el mes
+                            if (p1 > 12) { // Formato MM/DD/YYYY
+                                m = p0; d = p1;
+                            } else { // Formato estándar DD/MM/YYYY
+                                m = p1; d = p0;
+                            }
+                        }
+                        
+                        if (y && m && d) {
+                            fechaParsed = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        }
+                    }
+                }
+            }
+
+            if (!fechaParsed) {
+                console.warn(`⚠️ Fila ${i}: No se pudo parsear fecha del valor:`, fechaRaw);
+            }
+
+            const tipoComp = getVal('tipo') || 'Factura';
+            const isNC = tipoComp.toLowerCase().includes('nota de crédito') || tipoComp.toLowerCase().includes('nota de credito');
+
+            // Si es Nota de Crédito, los montos deben ser negativos para que resten
+            const factor = isNC ? -1 : 1;
+
+            parsed.push({
+                numero_completo: numeroCompleto,
+                tipo_comprobante: tipoComp,
+                proveedor: getVal('proveedor') || 'Proveedor Desconocido',
+                fecha_emision: fechaParsed,
+                neto_gravado: parseSmartNumber(getVal('neto')) * factor,
+                monto_iva: parseSmartNumber(getVal('iva')) * factor,
+                monto_total: parseSmartNumber(getVal('total')) * factor,
+                origen: isCalim ? 'CALIM' : 'AFIP'
+            });
+
+            if (isCalim) importadosCALIM++; else importadosAFIP++;
+        }
+
+        if (parsed.length === 0 && rows.length > 5) {
+            throw new Error("No se detectaron facturas válidas. Revisá que el archivo tenga números de factura legibles.");
+        }
+        return parsed;
     }
 };
 
@@ -1468,3 +1901,125 @@ window.markAsPaid = async function(id) {
     renderAccounting();
     renderPayments();
 };
+
+// =====================================================================
+// GESTIÓN DE FACTURAS (COMPROBANTES)
+// =====================================================================
+
+function initFacturaFilters() {
+    const fMonth = document.getElementById('facturas-filter-month');
+    const fYear = document.getElementById('facturas-filter-year');
+    if (fMonth && fYear) {
+        const now = new Date();
+        fMonth.value = String(now.getMonth() + 1).padStart(2, '0');
+        fYear.value = String(now.getFullYear());
+        
+        fMonth.onchange = () => loadAndRenderFacturas();
+        fYear.onchange = () => loadAndRenderFacturas();
+    }
+}
+
+async function loadAndRenderFacturas() {
+    const list = document.getElementById('facturas-list');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/facturas');
+        facturasData = await res.json();
+        
+        const monthEl = document.getElementById('facturas-filter-month');
+        const yearEl = document.getElementById('facturas-filter-year');
+
+        if (!monthEl || !yearEl) {
+            console.error("❌ Los selectores de mes/año no se encuentran en el HTML. Por favor, pulsa CTRL + F5 para recargar la página.");
+            // Fallback: mostrar todas si no hay selectores (versión vieja del HTML)
+            renderFacturaRows(facturasData);
+            return;
+        }
+
+        const selMonth = monthEl.value;
+        const selYear = yearEl.value;
+
+        // Filtrar facturas por el mes y año seleccionados
+        const facturas = facturasData.filter(f => {
+            if (selMonth === 'all') return true;
+            if (!f.fecha_emision) return false;
+            const [y, m, d] = f.fecha_emision.split('-');
+            return y === selYear && m === selMonth;
+        });
+
+        renderFacturaRows(facturas, selMonth, selYear);
+
+    } catch (err) {
+        console.error("Error cargando facturas", err);
+    }
+}
+
+function renderFacturaRows(facturas, selMonth = '', selYear = '') {
+    const list = document.getElementById('facturas-list');
+    if (!list) return;
+
+    if (facturas.length === 0) {
+        const msg = selMonth ? `No hay comprobantes cargados para ${selMonth}/${selYear}.` : "No hay comprobantes cargados.";
+        list.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 40px; color: var(--text-muted);">${msg}</td></tr>`;
+        animateValue('facturas-total-iva', 0, 0);
+        animateValue('facturas-total-neto', 0, 0);
+        document.getElementById('facturas-faltantes').textContent = 0;
+        return;
+    }
+
+    let totalIva = 0;
+    let totalNeto = 0;
+    let faltantes = 0;
+
+    list.innerHTML = facturas.map(f => {
+        totalIva += (f.monto_iva || 0);
+        totalNeto += (f.neto_gravado || 0);
+        
+        let statusLabel = '';
+        let statusColor = '';
+        
+        if (f.estado_proceso === 'ARCHIVADO') {
+            statusLabel = 'NORMALIZADA';
+            statusColor = 'var(--color-success)';
+        } else if (f.estado_proceso === 'A_SUBIR') {
+            statusLabel = 'SUBIR A CALIM';
+            statusColor = '#f59e0b'; // Naranja vibrante
+            faltantes++;
+        } else {
+            statusLabel = 'FALTA FÍSICO';
+            statusColor = 'var(--color-danger)';
+            faltantes++;
+        }
+
+        const systems = `
+            <div style="display:flex; gap:4px;">
+                <span style="padding:2px 6px; border-radius:4px; background:${f.esta_en_afip ? '#10b981' : 'rgba(0,0,0,0.05)'}; color:${f.esta_en_afip ? 'white' : '#aaa'}; font-size:9px; font-weight:900; letter-spacing:0.5px; border: 1px solid ${f.esta_en_afip ? '#059669' : 'transparent'};">AFIP</span>
+                <span style="padding:2px 6px; border-radius:4px; background:${f.esta_en_calim ? '#0ea5e9' : 'rgba(0,0,0,0.05)'}; color:${f.esta_en_calim ? 'white' : '#aaa'}; font-size:9px; font-weight:900; letter-spacing:0.5px; border: 1px solid ${f.esta_en_calim ? '#0284c7' : 'transparent'};">CALIM</span>
+            </div>
+        `;
+
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 12px 8px;">${f.fecha_emision ? f.fecha_emision.split('-').reverse().join('/') : '-'}</td>
+                <td style="padding: 12px 8px; font-size:11px; opacity:0.8;">${f.tipo_comprobante || 'Factura'}</td>
+                <td style="padding: 12px 8px; font-family: 'Inter'; font-weight:600;">${f.numero_completo}</td>
+                <td style="padding: 12px 8px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${f.proveedor || ''}">${f.proveedor || '-'}</td>
+                <td style="padding: 12px 8px;">${systems}</td>
+                <td style="padding: 12px 8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:${statusColor}; font-weight:800; font-size:10px; letter-spacing:0.5px;">${statusLabel}</span>
+                        ${f.ruta_archivo ? `<a href="${f.ruta_archivo}" target="_blank" style="color:${statusColor};"><i class="fa-solid fa-file-invoice"></i></a>` : ''}
+                    </div>
+                </td>
+                <td style="padding: 12px 8px; text-align: right; font-weight: 700; color: ${f.monto_total < 0 ? '#f59e0b' : 'inherit'};">
+                    ${formatMoney(f.monto_total || 0)}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    animateValue('facturas-total-iva', 0, totalIva);
+    animateValue('facturas-total-neto', 0, totalNeto);
+    document.getElementById('facturas-faltantes').textContent = faltantes;
+}
