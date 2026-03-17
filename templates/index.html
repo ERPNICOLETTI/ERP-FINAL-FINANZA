@@ -14,6 +14,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- XLSX for parsing bank statements -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body>
@@ -362,7 +364,7 @@
                 </div>
             </div>
 
-            <!-- Invoices / AFIP View -->
+            <!-- Invoices / ARCA View -->
             <div id="view-facturas" class="view-container">
                 <div class="page-header">
                     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -400,9 +402,12 @@
                             </div>
                         </div>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display:flex; gap:10px; align-items:center;">
+                        <button class="btn-primary" id="btn-ver-archivados" style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981;">
+                            <i class="fa-solid fa-folder-open"></i> Ver Archivados
+                        </button>
                         <button class="btn-primary" id="btn-import-unified" style="background:rgba(139,92,246,0.15); color:#8b5cf6; border:1px solid #8b5cf6;">
-                            <i class="fa-solid fa-cloud-arrow-up"></i> Importar Comprobantes (ARCA / CALIM)
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Importar (ARCA / CALIM)
                         </button>
                         <input type="file" id="unified-file-upload" accept=".csv,.xlsx,.xls" multiple style="display:none;">
                     </div>
@@ -444,49 +449,62 @@
 
                 <!-- FORMULARIO ARCHIVAR FÍSICOS -->
                 <div class="glass-panel" style="padding: 20px; margin-bottom: 24px;">
-                    <h3 style="margin-bottom: 16px;"><i class="fa-solid fa-file-arrow-up" style="color:#8b5cf6;"></i> Archivar Comprobante Físico</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;"><i class="fa-solid fa-file-arrow-up" style="color:#8b5cf6;"></i> Archivar Comprobante Físico</h3>
+                        <span style="font-size: 11px; background: rgba(16,185,129,0.1); color: #10b981; padding: 4px 10px; border-radius: 20px; font-weight: 600;">
+                            <i class="fa-solid fa-bolt"></i> MODO GESTOR (Mueve y Borra)
+                        </span>
+                    </div>
                     
                     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
                         <form id="upload-factura-form" style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 16px;">
+                            
+                            <!-- MODO RUTA LOCAL (Sustituye al upload clásico) -->
                             <div class="form-group" style="margin: 0;">
-                                <label>Foto o PDF del Comprobante (Paso 1)</label>
-                                <input type="file" id="upload-factura-file" class="form-control" accept="image/*,.pdf">
+                                <label>Ruta del archivo en tu PC (Paso 1)</label>
+                                <input type="text" id="upload-factura-ruta" class="form-control" 
+                                       placeholder='Pegá la ruta, ej: C:\Users\vos\Desktop\factura.pdf'
+                                       style="font-family: monospace; font-size: 12px;" required>
+                                <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                                    <i class="fa-solid fa-circle-info"></i> El archivo original será <strong>movido</strong> a la carpeta del proveedor y borrado de su origen.
+                                </p>
                             </div>
 
                             <div class="form-group" style="margin: 0; position: relative;">
-                                <label>Últimos 5 dígitos del N° Factura (Paso 2)</label>
+                                <label>Dígitos del N° Factura (Paso 2)</label>
                                 <div style="position: relative;">
-                                    <input type="text" id="upload-factura-num" class="form-control" placeholder="Mirá la previsualización y cargá el número" maxlength="20">
-                                    <div id="search-factura-status" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 700; pointer-events: none;"></div>
+                                    <input type="text" id="upload-factura-num" class="form-control" placeholder="Cargá el número para vincular" maxlength="20" required>
+                                    <div id="search-factura-status" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 800; pointer-events: none;"></div>
                                 </div>
-                                <p id="search-factura-detail" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Buscaremos este número en la base de datos de ARCA/CALIM.</p>
+                                <p id="search-factura-detail" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Buscando en base de datos de ARCA/CALIM...</p>
                             </div>
 
-                            <button type="submit" class="btn-primary" style="background:#8b5cf6; width: 100%;">
-                                <i class="fa-solid fa-link"></i> Subir y Vincular
+                            <button type="submit" class="btn-primary" style="background:#8b5cf6; width: 100%; height: 45px; font-size: 14px;">
+                                <i class="fa-solid fa-shuttle-space"></i> Archivar y Limpiar Origen
                             </button>
                         </form>
 
                         <!-- ZONA DE PREVISUALIZACIÓN -->
                         <div id="factura-preview-container" class="glass-panel" style="flex: 1; min-width: 300px; min-height: 200px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.02); border: 2px dashed var(--border-color); overflow: hidden; position: relative;">
                             <div id="preview-placeholder" style="text-align: center; color: var(--text-muted);">
-                                <i class="fa-solid fa-image" style="font-size: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
-                                <p>Seleccioná un archivo para ver la previsualización acá</p>
+                                <i class="fa-solid fa-folder-tree" style="font-size: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
+                                <p style="font-size: 13px;">Pegá la ruta del archivo para vincularlo</p>
                             </div>
+                            <!-- Nota: La previsualización por ruta local no es posible por seguridad del browser, se quitan los elementos de preview -->
                             <img id="factura-preview-img" style="display: none; max-width: 100%; max-height: 400px; object-fit: contain;">
                             <iframe id="factura-preview-pdf" style="display: none; width: 100%; height: 400px; border: none;"></iframe>
-                            
-                            <button id="btn-clear-preview" class="btn-icon" style="display: none; position: absolute; top: 10px; right: 10px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 10;">
-                                <i class="fa-solid fa-xmark"></i>
-                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- TABLA DE FACTURAS -->
                 <div class="glass-panel" style="padding: 0; overflow: hidden;">
-                    <div class="panel-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color);">
+                    <div class="panel-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between;">
                         <h3><i class="fa-solid fa-table-list"></i> Listado de Comprobantes</h3>
+                        <div style="position:relative;">
+                            <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px;"></i>
+                            <input type="text" id="facturas-search" placeholder="Buscar por N° o proveedor..." style="padding: 7px 12px 7px 32px; border-radius:8px; border:1px solid var(--border-color); font-size:13px; min-width:240px; outline:none;">
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -502,14 +520,53 @@
                                 </tr>
                             </thead>
                             <tbody id="facturas-list">
-                                <tr><td colspan="7" style="text-align:center; padding: 40px; color: var(--text-muted);">Importá tu Excel de AFIP o CALIM para comenzar.</td></tr>
+                                <tr><td colspan="7" style="text-align:center; padding: 40px; color: var(--text-muted);">Importá tu Excel de ARCA o CALIM para comenzar.</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                <!-- PANEL: PENDIENTES POR NORMALIZAR (orden por monto) -->
+                <div class="glass-panel" style="padding:0; overflow:hidden; margin-top:24px;">
+                    <div class="panel-header" style="padding:16px 20px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between;">
+                        <h3 style="color:#ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> Pendientes de Normalizar <span id="pending-count" style="font-size:12px; background:rgba(239,68,68,0.1); border-radius:6px; padding:2px 8px; margin-left:8px;">0</span></h3>
+                        <span style="font-size:12px; color:var(--text-muted);">Ordenados por importe ↓</span>
+                    </div>
+                    <div id="facturas-pending-list" style="max-height:280px; overflow-y:auto; padding:12px;">
+                        <p style="text-align:center; color:var(--text-muted); padding:20px;">Cargando...</p>
+                    </div>
+                </div>
+
+                <!-- PANEL: DISCREPANCIAS (solo en CALIM, no en ARCA) -->
+                <div class="glass-panel" style="padding:0; overflow:hidden; margin-top:24px; margin-bottom:32px;">
+                    <div class="panel-header" style="padding:16px 20px; border-bottom:1px solid var(--border-color);">
+                        <h3 style="color:#f59e0b;"><i class="fa-solid fa-not-equal"></i> Discrepancias: en CALIM pero NO en ARCA <span id="discrepancy-count" style="font-size:12px; background:rgba(245,158,11,0.1); border-radius:6px; padding:2px 8px; margin-left:8px;">0</span></h3>
+                    </div>
+                    <div id="facturas-discrepancy-list" style="max-height:280px; overflow-y:auto; padding:12px;">
+                        <p style="text-align:center; color:var(--text-muted); padding:20px;">Cargando...</p>
+                    </div>
+                </div>
+
             </div>
         </main>
     </div>
+
+    <!-- MODAL: ARCHIVADOS -->
+    <div id="archivados-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:9000; align-items:center; justify-content:center;">
+        <div class="glass-panel" style="width:90%; max-width:700px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; border-radius:20px;">
+            <div style="padding:20px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between;">
+                <h3><i class="fa-solid fa-folder-open" style="color:#10b981;"></i> Comprobantes Archivados</h3>
+                <button id="close-archivados-modal" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="padding:12px 16px;">
+                <input type="text" id="archivados-search" placeholder="Filtrar por nombre de archivo..." style="width:100%; padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); font-size:13px; box-sizing:border-box; outline:none;">
+            </div>
+            <div id="archivados-list" style="overflow-y:auto; flex:1; padding:0 16px 16px; display:flex; flex-direction:column; gap:6px;">
+                <p style="text-align:center; color:var(--text-muted);">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Modal for New Transaction -->
     <div class="modal-overlay" id="transactionModal">

@@ -39,6 +39,20 @@ const formatMoney = (val) => new Intl.NumberFormat('es-AR', {
 }).format(val);
 
 /**
+ * Formatea el numero_completo almacenado (ej: 394100024242) al formato PV-Numero legible (ej: 3941-24242).
+ * Reconstruye la estructura ARCA: 4 dígitos de Punto de Venta + 8 dígitos de Número.
+ */
+function formatNumeroFactura(num) {
+    if (!num) return '-';
+    const str = String(num).replace(/\D/g, '');
+    // Padding a 12 chars para recuperar PV(4) + Num(8)
+    const padded = str.padStart(12, '0');
+    const pv = parseInt(padded.substring(0, 4), 10);
+    const numPart = parseInt(padded.substring(4), 10);
+    return `${pv}-${numPart}`;
+}
+
+/**
  * Parsea un valor a número de forma inteligente, 
  * detectando si el punto es decimal o separador de miles.
  */
@@ -93,6 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initFacturaFilters(); // Inicializar filtros de facturas una sola vez
     renderAccounting();
     renderPayments();
+    initArchiveForm(); // Inicializar formulario de archivado
 
     // GSAP Initial Stagger Animation
     gsap.from(".stat-card", {
@@ -610,178 +625,153 @@ function renderSemaforo() {
 
 async function parseCSV(file, accountName = 'Banco Galicia') {
     const isMultiProcess = (accountName === 'AUTO_DETECT');
-    return new Promise((resolve, reject) => {
+    
+    // Leemos el archivo como ArrayBuffer usando una Promise simple
+    const data = await new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = async (e) => {
-        const data = e.target.result;
-
-        try {
-            showLoader();
-            const workbook = XLSX.read(data, { type: 'array' });
-            let allRows = [];
-            
-            // BUSQUEDA EN TODAS LAS HOJAS: Si el Excel tiene varias pestañas, las unificamos
-            workbook.SheetNames.forEach(sheetName => {
-                const worksheet = workbook.Sheets[sheetName];
-                const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                if (sheetRows.length > 0) allRows = allRows.concat(sheetRows);
-            });
-            
-            const rows = allRows;
-
-            let parserType = null;
-            const filename = (file.name || '').toLowerCase();
-            const allText = rows.flat().map(c => String(c || '').toLowerCase()).join(' ');
-
-            // Prioridad 1: Detección por Contenido (Infallible)
-            const isFacturaFile = allText.includes('denominaci') || allText.includes('emisor') || allText.includes('receptor') || 
-                                  allText.includes('proveedor') || allText.includes('cuit') || 
-                                  (allText.includes('iva') && allText.includes('neto')) ||
-                                  (allText.includes('factura') && allText.includes('total'));
-            
-            const isFacturaByFilename = filename.includes('factura') || filename.includes('comprobante') || 
-                                       filename.includes('arca') || filename.includes('calim') || filename.includes('afip');
-
-            if (isFacturaFile || isFacturaByFilename) {
-                parserType = 'afip';
-            } else if (allText.includes('payway') || (allText.includes('monto_bruto') && allText.includes('lote'))) {
-                parserType = 'payway';
-            } else if (allText.includes('mercado') || allText.includes('settlement_date')) {
-                parserType = 'mercadopago';
-            } else if (allText.includes('banco del chubut') || (allText.includes('chubut') && allText.includes('movimientos'))) {
-                parserType = 'chubut';
-            } else if (allText.includes('banco galicia') || (allText.includes('movimiento') && (allText.includes('débito') || allText.includes('crédito')))) {
-                parserType = 'galicia';
-            }
-
-            // Prioridad 2: Si el contenido no fue claro, usamos el nombre o el contexto de la vista
-            if (!parserType) {
-                const searchStr = (accountName + ' ' + filename).toLowerCase();
-                if (searchStr.includes('chubut')) parserType = 'chubut';
-                else if (searchStr.includes('mercado')) parserType = 'mercadopago';
-                else if (searchStr.includes('payway')) parserType = 'payway';
-                else if (searchStr.includes('afip') || searchStr.includes('arca') || searchStr.includes('comprobante') || searchStr.includes('calim')) parserType = 'afip';
-                else if (searchStr.includes('galicia')) parserType = 'galicia';
-                else if (isMultiProcess) parserType = 'afip'; // Por defecto en el importador unificado, asumimos facturas
-                else parserType = 'galicia'; // Default final
-            }
-
-            // SAFETY CHECK — saltamos para AFIP/CALIM porque no tienen formato bancario
-            if (parserType !== 'afip') {
-                try {
-                    checkFileIntegrity(rows, parserType, accountName);
-                } catch (err) {
-                    hideLoader();
-                    alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada para proteger tus datos.`);
-                    return;
-                }
-            }
-
-            const parsedData = (parserType === 'afip') 
-                ? BankParsers.afip(rows, filename) 
-                : BankParsers[parserType](rows);
-            
-            // Special Case: Payway Persistence
-            if (parserType === 'payway') {
-                await fetch('/api/payway', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsedData)
-                });
-                hideLoader();
-                alert(`✅ Reporte de Payway importado: ${parsedData.length} cupones procesados.`);
-                renderConciliation();
-                return;
-            }
-
-            // Special Case: AFIP/CALIM → van a /api/facturas
-            if (parserType === 'afip') {
-                // DOUBLE CHECK: Si el nombre del archivo dice "comprobantes", forzamos origen AFIP en cada item
-                const isAfipFilename = filename.includes('comprobantes') || filename.includes('arca') || filename.includes('afip');
-                if (isAfipFilename) {
-                    parsedData.forEach(item => item.origen = 'AFIP');
-                }
-
-                const originLabel = isAfipFilename ? 'AFIP' : (filename.includes('calim') ? 'CALIM' : 'Comprobantes');
-
-                if (parsedData.length === 0) {
-                    hideLoader();
-                    alert(`⚠️ No se encontraron facturas válidas en "${filename}".\n\nRevisá que el archivo tenga los encabezados correctos (Fecha, Proveedor, Total, etc).`);
-                    return;
-                }
-
-                await fetch('/api/facturas', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsedData)
-                });
-                hideLoader();
-                alert(`✅ Importación de ${originLabel} completa:\n- Se analizaron ${parsedData.length} registros.\n- Los duplicados se unificaron automáticamente.\n\nRevisá el mes correspondiente en el selector.`);
-                loadAndRenderFacturas();
-                return;
-            }
-
-            let importedCount = 0;
-            let skippedCount = 0;
-
-            for (let i = 0; i < parsedData.length; i++) {
-                const item = parsedData[i];
-
-                // ANTI-DUPLICATE SHIELD (Escudo de Duplicados)
-                const isDuplicate = transactions.some(t => 
-                    (t.account || '').toLowerCase() === accountName.toLowerCase() &&
-                    t.date === item.date &&
-                    Math.abs(t.amount - item.amount) < 0.01 && 
-                    (t.desc || '').substring(0, 50).toLowerCase() === (item.desc || '').substring(0, 50).toLowerCase()
-                );
-
-                if (isDuplicate) {
-                    skippedCount++;
-                    continue;
-                }
-
-                await fetch('/api/transactions', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: Date.now() + i,
-                        entity: 'Lo de Karlota',
-                        account: accountName,
-                        category: 'Importación Automática',
-                        type: item.type,
-                        amount: item.amount,
-                        desc: item.desc,
-                        date: item.date,
-                        currency: 'ARS'
-                    })
-                });
-                importedCount++;
-            }
-
-            transactions = await loadTransactions();
-            renderTransactions();
-            calculateBalances();
-            updateChart(transactions);
-            renderSemaforo();
-            renderAccounting();
-            renderPayments();
-            renderBankDetails(accountName);
-            
-            hideLoader();
-            let resultMsg = `Procesado finalizado para ${accountName}.\n`;
-            if (importedCount > 0) resultMsg += `✅ ${importedCount} movimientos nuevos cargados.\n`;
-            if (skippedCount > 0) resultMsg += `🚫 ${skippedCount} movimientos omitidos por estar duplicados.`;
-            alert(resultMsg);
-            if (!isMultiProcess) hideLoader();
-            resolve();
-        } catch (error) {
-            if (!isMultiProcess) hideLoader();
-            console.error("Error procesando Archivo:", error);
-            alert("❌ ERROR EN " + file.name + ":\n" + error.message + "\n\nIntentá abrir el archivo y guardarlo de nuevo como .xlsx antes de subirlo.");
-            resolve(); 
-        }
-    };
-    reader.readAsArrayBuffer(file);
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsArrayBuffer(file);
     });
+
+    try {
+        showLoader();
+        const workbook = XLSX.read(data, { type: 'array' });
+        let allRows = [];
+        
+        workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            if (sheetRows.length > 0) allRows = allRows.concat(sheetRows);
+        });
+        
+        const rows = allRows;
+        let parserType = null;
+        const filename = (file.name || '').toLowerCase();
+        const allText = rows.flat().map(c => String(c || '').toLowerCase()).join(' ');
+
+        // Prioridad 1: Detección por Contenido
+        const isFacturaFile = allText.includes('denominaci') || allText.includes('emisor') || allText.includes('receptor') || 
+                              allText.includes('proveedor') || allText.includes('cuit') || 
+                              (allText.includes('iva') && allText.includes('neto')) ||
+                              (allText.includes('factura') && allText.includes('total'));
+        
+        const isFacturaByFilename = filename.includes('factura') || filename.includes('comprobante') || 
+                                   filename.includes('arca') || filename.includes('calim') || filename.includes('afip');
+
+        if (isFacturaFile || isFacturaByFilename) {
+            parserType = 'afip';
+        } else if (allText.includes('payway') || (allText.includes('monto_bruto') && allText.includes('lote'))) {
+            parserType = 'payway';
+        } else if (allText.includes('mercado') || allText.includes('settlement_date')) {
+            parserType = 'mercadopago';
+        } else if (allText.includes('banco del chubut') || (allText.includes('chubut') && allText.includes('movimientos'))) {
+            parserType = 'chubut';
+        } else if (allText.includes('banco galicia') || (allText.includes('movimiento') && (allText.includes('débito') || allText.includes('crédito')))) {
+            parserType = 'galicia';
+        }
+
+        if (!parserType) {
+            const searchStr = (accountName + ' ' + filename).toLowerCase();
+            if (searchStr.includes('chubut')) parserType = 'chubut';
+            else if (searchStr.includes('mercado')) parserType = 'mercadopago';
+            else if (searchStr.includes('payway')) parserType = 'payway';
+            else if (searchStr.includes('afip') || searchStr.includes('arca') || searchStr.includes('comprobante') || searchStr.includes('calim')) parserType = 'afip';
+            else if (searchStr.includes('galicia')) parserType = 'galicia';
+            else if (isMultiProcess) parserType = 'afip';
+            else parserType = 'galicia';
+        }
+
+        console.log(`📊 [${filename}] Parser: ${parserType}`);
+
+        if (parserType !== 'afip') {
+            try {
+                checkFileIntegrity(rows, parserType, accountName);
+            } catch (err) {
+                hideLoader();
+                alert(`⚠️ ERROR DE SEGURIDAD: ${err.message}\nLa importación fue cancelada.`);
+                return { success: false, count: 0 };
+            }
+        }
+
+        const parsedData = (parserType === 'afip') 
+            ? BankParsers.afip(rows, filename) 
+            : BankParsers[parserType](rows);
+        
+        if (parserType === 'payway') {
+            await fetch('/api/payway', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData) });
+            hideLoader();
+            alert(`✅ Reporte de Payway importado: ${parsedData.length} cupones procesados.`);
+            renderConciliation();
+            return { success: true, count: parsedData.length };
+        }
+
+        // ARCA / CALIM
+        if (parserType === 'afip') {
+            const isArcaFilename = filename.includes('comprobantes') || filename.includes('arca') || filename.includes('afip');
+            if (isArcaFilename) parsedData.forEach(item => item.origen = 'ARCA');
+
+            const originLabel = isArcaFilename ? 'ARCA' : (filename.includes('calim') ? 'CALIM' : 'Comprobantes');
+
+            if (parsedData.length === 0) {
+                console.warn(`[${filename}] Sin facturas detectadas.`);
+                return { success: false, count: 0, label: originLabel };
+            }
+
+            await fetch('/api/facturas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsedData) });
+            console.log(`✅ [${filename}] ${parsedData.length} registros de ${originLabel} guardados.`);
+
+            if (!isMultiProcess) {
+                hideLoader();
+                alert(`✅ Importación de ${originLabel} completa: ${parsedData.length} registros.`);
+                loadAndRenderFacturas();
+            }
+            return { success: true, count: parsedData.length, label: originLabel };
+        }
+
+        // Banco (Galicia, Chubut, MercadoPago)
+        let importedCount = 0;
+        let skippedCount = 0;
+
+        for (let i = 0; i < parsedData.length; i++) {
+            const item = parsedData[i];
+            const isDuplicate = transactions.some(t => 
+                (t.account || '').toLowerCase() === accountName.toLowerCase() &&
+                t.date === item.date &&
+                Math.abs(t.amount - item.amount) < 0.01 && 
+                (t.desc || '').substring(0, 50).toLowerCase() === (item.desc || '').substring(0, 50).toLowerCase()
+            );
+            if (isDuplicate) { skippedCount++; continue; }
+            await fetch('/api/transactions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: Date.now() + i, entity: 'Lo de Karlota', account: accountName, category: 'Importación Automática', type: item.type, amount: item.amount, desc: item.desc, date: item.date, currency: 'ARS' })
+            });
+            importedCount++;
+        }
+
+        transactions = await loadTransactions();
+        renderTransactions();
+        calculateBalances();
+        updateChart(transactions);
+        renderSemaforo();
+        renderAccounting();
+        renderPayments();
+        renderBankDetails(accountName);
+        
+        hideLoader();
+        let resultMsg = `Procesado finalizado para ${accountName}.\n`;
+        if (importedCount > 0) resultMsg += `✅ ${importedCount} movimientos nuevos cargados.\n`;
+        if (skippedCount > 0) resultMsg += `🚫 ${skippedCount} omitidos (duplicados).`;
+        alert(resultMsg);
+        return { success: true, count: importedCount };
+
+    } catch (error) {
+        hideLoader();
+        console.error(`❌ Error procesando [${file.name}]:`, error);
+        if (!isMultiProcess) {
+            alert(`❌ ERROR en ${file.name}:\n${error.message}`);
+        }
+        return { success: false, count: 0, error: error.message };
+    }
 }
 
 // --- LOGICA DE LIBRO MAYOR (LEDGER) ---
@@ -873,13 +863,17 @@ document.addEventListener('DOMContentLoaded', () => {
         unifiedUpload.onchange = async (e) => {
             if (e.target.files.length > 0) {
                 showLoader();
-                // Procesamos todos los archivos seleccionados uno por uno
-                for (let i = 0; i < e.target.files.length; i++) {
-                    await parseCSV(e.target.files[i], 'AUTO_DETECT');
+                let totalImported = 0;
+                let filesCount = e.target.files.length;
+                
+                for (let i = 0; i < filesCount; i++) {
+                    const result = await parseCSV(e.target.files[i], 'AUTO_DETECT');
+                    if (result && result.success) totalImported += result.count;
                 }
-                e.target.value = ''; // Reset para permitir re-subida
+                
+                e.target.value = ''; 
                 hideLoader();
-                alert("✅ Importación de comprobantes finalizada.");
+                alert(`✅ Importación finalizada.\n\nSe procesaron ${filesCount} archivos y se cargaron un total de ${totalImported} comprobantes en ARCA/CALIM.`);
                 loadAndRenderFacturas();
             }
         };
@@ -1728,7 +1722,7 @@ const BankParsers = {
             }
 
             if (!fechaParsed) {
-                console.warn(`⚠️ Fila ${i}: No se pudo parsear fecha del valor:`, fechaRaw);
+                console.warn(`⚠️ [${filename}] Fila ${i}: No se pudo parsear fecha. Valor crudo:`, fechaRaw);
             }
 
             const tipoComp = getVal('tipo') || 'Factura';
@@ -1745,15 +1739,17 @@ const BankParsers = {
                 neto_gravado: parseSmartNumber(getVal('neto')) * factor,
                 monto_iva: parseSmartNumber(getVal('iva')) * factor,
                 monto_total: parseSmartNumber(getVal('total')) * factor,
-                origen: isCalim ? 'CALIM' : 'AFIP'
+                origen: isCalim ? 'CALIM' : 'ARCA'
             });
 
             if (isCalim) importadosCALIM++; else importadosAFIP++;
         }
 
         if (parsed.length === 0 && rows.length > 5) {
+            console.error(`❌ [${filename}] No se encontraron facturas. Filas totales: ${rows.length}. Cabecera en: ${headerRowIndex}`);
             throw new Error("No se detectaron facturas válidas. Revisá que el archivo tenga números de factura legibles.");
         }
+        console.log(`✅ [${filename}] Procesamiento finalizado: ${parsed.length} facturas encontradas.`);
         return parsed;
     }
 };
@@ -1910,13 +1906,99 @@ function initFacturaFilters() {
     const fMonth = document.getElementById('facturas-filter-month');
     const fYear = document.getElementById('facturas-filter-year');
     if (fMonth && fYear) {
-        const now = new Date();
-        fMonth.value = String(now.getMonth() + 1).padStart(2, '0');
-        fYear.value = String(now.getFullYear());
-        
+        // Seteamos año actual por defecto pero el mes se ajusta luego de cargar data
+        fYear.value = String(new Date().getFullYear());
+        fMonth.value = 'all'; // provisional hasta que veamos qué meses tienen datos
         fMonth.onchange = () => loadAndRenderFacturas();
         fYear.onchange = () => loadAndRenderFacturas();
     }
+
+    // === BUSCADOR EN VIVO ===
+    const searchInput = document.getElementById('facturas-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.toLowerCase();
+            if (!facturasData) return;
+            const filtered = facturasData.filter(f =>
+                formatNumeroFactura(f.numero_completo).toLowerCase().includes(q) ||
+                (f.proveedor || '').toLowerCase().includes(q) ||
+                (f.numero_completo || '').toLowerCase().includes(q)
+            );
+            renderFacturaRows(filtered);
+        });
+    }
+
+    // === MODAL ARCHIVADOS ===
+    const btnVer = document.getElementById('btn-ver-archivados');
+    const modal = document.getElementById('archivados-modal');
+    const closeBtn = document.getElementById('close-archivados-modal');
+
+    if (btnVer && modal) {
+        btnVer.onclick = async () => {
+            modal.style.display = 'flex';
+            const listEl = document.getElementById('archivados-list');
+            const searchEl = document.getElementById('archivados-search');
+            listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Cargando...</p>';
+
+            try {
+                const res = await fetch('/api/facturas/archivados');
+                let archivos = await res.json();
+
+                const renderArch = (files) => {
+                    if (files.length === 0) {
+                        listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No hay archivados todavía.</p>';
+                        return;
+                    }
+
+                    // Agrupar por proveedor
+                    const grupos = {};
+                    files.forEach(f => {
+                        const key = f.proveedor || '📁 Sin carpeta';
+                        if (!grupos[key]) grupos[key] = [];
+                        grupos[key].push(f);
+                    });
+
+                    listEl.innerHTML = Object.entries(grupos).map(([prov, items]) => `
+                        <div style="margin-bottom:16px;">
+                            <div style="display:flex; align-items:center; gap:8px; padding:6px 0; margin-bottom:6px; border-bottom:1px solid var(--border-color);">
+                                <i class="fa-solid fa-folder" style="color:#f59e0b;"></i>
+                                <span style="font-weight:700; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">${prov.replace(/_/g, ' ')}</span>
+                                <span style="font-size:11px; background:rgba(0,0,0,0.05); border-radius:4px; padding:1px 6px;">${items.length}</span>
+                            </div>
+                            ${items.map(f => `
+                                <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; background:rgba(0,0,0,0.02); border:1px solid var(--border-color); margin-bottom:4px;">
+                                    <i class="fa-solid fa-file-pdf" style="color:#ef4444; font-size:18px; flex-shrink:0;"></i>
+                                    <div style="flex:1; overflow:hidden;">
+                                        <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.nombre}">${f.nombre}</div>
+                                        <div style="font-size:11px; color:var(--text-muted);">${f.size_kb} KB</div>
+                                    </div>
+                                    <a href="${f.ruta}" target="_blank" class="btn-primary" style="font-size:11px; padding:5px 10px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid #10b981; white-space:nowrap;">
+                                        <i class="fa-solid fa-eye"></i> Ver
+                                    </a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `).join('');
+                };
+
+                renderArch(archivos);
+
+                if (searchEl) {
+                    searchEl.oninput = () => {
+                        const q = searchEl.value.toLowerCase();
+                        renderArch(archivos.filter(f => 
+                            f.nombre.toLowerCase().includes(q) || 
+                            (f.proveedor || '').toLowerCase().includes(q)
+                        ));
+                    };
+                }
+            } catch (e) {
+                listEl.innerHTML = '<p style="text-align:center;color:var(--color-danger);">Error al cargar archivos.</p>';
+            }
+        };
+    }
+    if (closeBtn && modal) closeBtn.onclick = () => { modal.style.display = 'none'; };
+    if (modal) modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
 }
 
 async function loadAndRenderFacturas() {
@@ -1931,29 +2013,112 @@ async function loadAndRenderFacturas() {
         const yearEl = document.getElementById('facturas-filter-year');
 
         if (!monthEl || !yearEl) {
-            console.error("❌ Los selectores de mes/año no se encuentran en el HTML. Por favor, pulsa CTRL + F5 para recargar la página.");
-            // Fallback: mostrar todas si no hay selectores (versión vieja del HTML)
             renderFacturaRows(facturasData);
             return;
+        }
+
+        // === PUNTO 1: FILTRO INTELIGENTE DE MES ===
+        // Si el filtro es el default ('all'), busca el mes más reciente con datos
+        if (monthEl.value === 'all' && facturasData.length > 0) {
+            const mesesConDatos = [...new Set(
+                facturasData
+                    .filter(f => f.fecha_emision)
+                    .map(f => f.fecha_emision.substring(0, 7))
+            )].sort().reverse();
+            if (mesesConDatos.length > 0) {
+                const [latestYear, latestMonth] = mesesConDatos[0].split('-');
+                yearEl.value = latestYear;
+                monthEl.value = latestMonth;
+                console.log(`📅 Mes más reciente con datos: ${latestMonth}/${latestYear}`);
+            }
         }
 
         const selMonth = monthEl.value;
         const selYear = yearEl.value;
 
-        // Filtrar facturas por el mes y año seleccionados
         const facturas = facturasData.filter(f => {
             if (selMonth === 'all') return true;
             if (!f.fecha_emision) return false;
-            const [y, m, d] = f.fecha_emision.split('-');
+            const [y, m] = f.fecha_emision.split('-');
             return y === selYear && m === selMonth;
         });
 
         renderFacturaRows(facturas, selMonth, selYear);
+        renderPendingPanel();
+        renderDiscrepancyPanel();
 
     } catch (err) {
         console.error("Error cargando facturas", err);
     }
 }
+
+// === PUNTO 3: PANEL PENDIENTES ordenados por monto ===
+function renderPendingPanel() {
+    const container = document.getElementById('facturas-pending-list');
+    const countEl = document.getElementById('pending-count');
+    if (!container) return;
+
+    const pendientes = (facturasData || [])
+        .filter(f => f.estado_proceso !== 'ARCHIVADO' && (f.esta_en_afip || f.esta_en_calim))
+        .sort((a, b) => Math.abs(b.monto_total || 0) - Math.abs(a.monto_total || 0));
+
+    if (countEl) countEl.textContent = pendientes.length;
+
+    if (pendientes.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:var(--color-success); padding:20px;"><i class="fa-solid fa-circle-check"></i> ¡Todo normalizado! No hay pendientes.</p>';
+        return;
+    }
+
+    container.innerHTML = pendientes.map(f => {
+        const numFmt = formatNumeroFactura(f.numero_completo);
+        const prov = (f.proveedor || 'Desconocido').split('-').pop().trim().substring(0, 35);
+        const mes = f.fecha_emision ? f.fecha_emision.substring(0, 7) : '?';
+        const estado = f.estado_proceso === 'A_SUBIR' ? '<span style="color:#f59e0b; font-weight:700; font-size:10px;">SUBIR A CALIM</span>' : '<span style="color:#ef4444; font-weight:700; font-size:10px;">FALTA FÍSICO</span>';
+        return `
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; border:1px solid rgba(239,68,68,0.15); background:rgba(239,68,68,0.03); margin-bottom:4px;">
+                <i class="fa-solid fa-file-circle-xmark" style="color:#ef4444; font-size:18px; flex-shrink:0;"></i>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${prov}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">N&deg; ${numFmt} &bull; ${mes}</div>
+                </div>
+                ${estado}
+                <div style="font-weight:800; font-size:13px; color:#ef4444; white-space:nowrap;">${formatMoney(f.monto_total || 0)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// === PUNTO 2: PANEL DISCREPANCIAS (CALIM sin ARCA) ===
+function renderDiscrepancyPanel() {
+    const container = document.getElementById('facturas-discrepancy-list');
+    const countEl = document.getElementById('discrepancy-count');
+    if (!container) return;
+
+    const disc = (facturasData || []).filter(f => f.esta_en_calim && !f.esta_en_afip);
+    if (countEl) countEl.textContent = disc.length;
+
+    if (disc.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:var(--color-success); padding:20px;"><i class="fa-solid fa-circle-check"></i> Sin discrepancias. Todas las facturas de CALIM también están en ARCA.</p>';
+        return;
+    }
+
+    container.innerHTML = disc.map(f => {
+        const prov = (f.proveedor || 'Desconocido').split('-').pop().trim().substring(0, 40);
+        const mes = f.fecha_emision ? f.fecha_emision.substring(0, 7) : '?';
+        return `
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; border:1px solid rgba(245,158,11,0.2); background:rgba(245,158,11,0.04); margin-bottom:4px;">
+                <i class="fa-solid fa-circle-exclamation" style="color:#f59e0b; font-size:18px; flex-shrink:0;"></i>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${prov}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">N&deg; ${formatNumeroFactura(f.numero_completo)} &bull; ${mes}</div>
+                </div>
+                <span style="color:#f59e0b; font-size:10px; font-weight:700; white-space:nowrap;">Solo CALIM</span>
+                <div style="font-weight:800; font-size:13px; white-space:nowrap;">${formatMoney(f.monto_total || 0)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
 
 function renderFacturaRows(facturas, selMonth = '', selYear = '') {
     const list = document.getElementById('facturas-list');
@@ -1994,7 +2159,7 @@ function renderFacturaRows(facturas, selMonth = '', selYear = '') {
 
         const systems = `
             <div style="display:flex; gap:4px;">
-                <span style="padding:2px 6px; border-radius:4px; background:${f.esta_en_afip ? '#10b981' : 'rgba(0,0,0,0.05)'}; color:${f.esta_en_afip ? 'white' : '#aaa'}; font-size:9px; font-weight:900; letter-spacing:0.5px; border: 1px solid ${f.esta_en_afip ? '#059669' : 'transparent'};">AFIP</span>
+                <span style="padding:2px 6px; border-radius:4px; background:${f.esta_en_afip ? '#10b981' : 'rgba(0,0,0,0.05)'}; color:${f.esta_en_afip ? 'white' : '#aaa'}; font-size:9px; font-weight:900; letter-spacing:0.5px; border: 1px solid ${f.esta_en_afip ? '#059669' : 'transparent'};">ARCA</span>
                 <span style="padding:2px 6px; border-radius:4px; background:${f.esta_en_calim ? '#0ea5e9' : 'rgba(0,0,0,0.05)'}; color:${f.esta_en_calim ? 'white' : '#aaa'}; font-size:9px; font-weight:900; letter-spacing:0.5px; border: 1px solid ${f.esta_en_calim ? '#0284c7' : 'transparent'};">CALIM</span>
             </div>
         `;
@@ -2003,13 +2168,18 @@ function renderFacturaRows(facturas, selMonth = '', selYear = '') {
             <tr style="border-bottom: 1px solid var(--border-color);">
                 <td style="padding: 12px 8px;">${f.fecha_emision ? f.fecha_emision.split('-').reverse().join('/') : '-'}</td>
                 <td style="padding: 12px 8px; font-size:11px; opacity:0.8;">${f.tipo_comprobante || 'Factura'}</td>
-                <td style="padding: 12px 8px; font-family: 'Inter'; font-weight:600;">${f.numero_completo}</td>
+                <td style="padding: 12px 8px; font-family: 'Inter'; font-weight:600; white-space:nowrap;">${formatNumeroFactura(f.numero_completo)}</td>
                 <td style="padding: 12px 8px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${f.proveedor || ''}">${f.proveedor || '-'}</td>
                 <td style="padding: 12px 8px;">${systems}</td>
                 <td style="padding: 12px 8px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="color:${statusColor}; font-weight:800; font-size:10px; letter-spacing:0.5px;">${statusLabel}</span>
-                        ${f.ruta_archivo ? `<a href="${f.ruta_archivo}" target="_blank" style="color:${statusColor};"><i class="fa-solid fa-file-invoice"></i></a>` : ''}
+                        ${f.ruta_archivo ? f.ruta_archivo.split('|').map((r, i) => `
+                            <a href="${r}" target="_blank" style="color:${statusColor};" title="Ver archivo ${i + 1}">
+                                <i class="fa-solid fa-file-invoice" style="${i > 0 ? 'opacity:0.6;' : ''}"></i>
+                                ${i > 0 ? `<span style="font-size:8px; margin-left:-4px;">${i + 1}</span>` : ''}
+                            </a>
+                        `).join('') : ''}
                     </div>
                 </td>
                 <td style="padding: 12px 8px; text-align: right; font-weight: 700; color: ${f.monto_total < 0 ? '#f59e0b' : 'inherit'};">
@@ -2022,4 +2192,152 @@ function renderFacturaRows(facturas, selMonth = '', selYear = '') {
     animateValue('facturas-total-iva', 0, totalIva);
     animateValue('facturas-total-neto', 0, totalNeto);
     document.getElementById('facturas-faltantes').textContent = faltantes;
+}
+
+/**
+ * Modo Gestor (Ruta Local): 
+ * El navegador no puede ver el archivo local por seguridad, 
+ * por lo que el Step 1 es solo pegar la ruta.
+ */
+function initArchiveForm() {
+    const form = document.getElementById('upload-factura-form');
+    const rutaInput = document.getElementById('upload-factura-ruta');
+    const numInput = document.getElementById('upload-factura-num');
+    const statusText = document.getElementById('search-factura-status');
+    const detailText = document.getElementById('search-factura-detail');
+    const btnClear = document.getElementById('btn-clear-preview');
+
+    // 1. Buscador en vivo del número de factura
+    if (numInput) {
+        numInput.oninput = () => {
+            let val = numInput.value.replace(/\D/g, '');
+            if (val.length < 3) {
+                statusText.textContent = '';
+                detailText.textContent = 'Buscando en base de datos de ARCA/CALIM...';
+                detailText.style.color = 'var(--text-muted)';
+                return;
+            }
+
+            const matches = (facturasData || []).filter(f =>
+                String(f.numero_completo).replace(/\D/g, '').endsWith(val)
+            );
+
+            if (matches.length === 1) {
+                const f = matches[0];
+                const isArchived = f.estado_proceso === 'ARCHIVADO';
+                
+                statusText.textContent = isArchived ? 'ℹ️ YA NORMALIZADA' : '✅ ENCONTRADA';
+                statusText.style.color = isArchived ? '#8b5cf6' : '#10b981';
+                
+                detailText.innerHTML = `<strong>${f.proveedor}</strong> &bull; Total: ${formatMoney(f.monto_total)}<br>` +
+                                      (isArchived ? '<span style="color:#8b5cf6; font-size:10px;">Ya tiene archivos. Podés subir otra página si querés.</span>' : '');
+                detailText.style.color = isArchived ? '#8b5cf6' : '#10b981';
+                
+                // Cambiar texto del botón
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (isArchived) {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Agregar otra página / Anexo';
+                    submitBtn.style.background = '#8b5cf6';
+                } else {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-shuttle-space"></i> Archivar y Limpiar Origen';
+                    submitBtn.style.background = '#8b5cf6';
+                }
+            } else if (matches.length > 1) {
+                statusText.textContent = '⚠️ MÚLTIPLES';
+                statusText.style.color = '#f59e0b';
+                detailText.textContent = `Se encontraron ${matches.length} facturas. Sé más específico.`;
+                detailText.style.color = '#f59e0b';
+            } else {
+                statusText.textContent = '❓ NO ENCONTRADA';
+                statusText.style.color = '#ef4444';
+                detailText.textContent = 'No hay facturas vinculables. Se guardará como "Pendiente".';
+                detailText.style.color = '#ef4444';
+            }
+        };
+    }
+
+    // 2. Previsualización de archivo local
+    if (rutaInput) {
+        rutaInput.onchange = () => {
+            const path = rutaInput.value.trim().replace(/"/g, ''); // Limpiar comillas si las pegó
+            if (!path) return;
+
+            const prevImg = document.getElementById('factura-preview-img');
+            const prevPdf = document.getElementById('factura-preview-pdf');
+            const placeholder = document.getElementById('preview-placeholder');
+
+            // Reset
+            if (prevImg) prevImg.style.display = 'none';
+            if (prevPdf) prevPdf.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'block';
+
+            const ext = path.split('.').pop().toLowerCase();
+            const previewUrl = `/api/preview?path=${encodeURIComponent(path)}`;
+
+            if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+                if (prevImg) {
+                    prevImg.src = previewUrl;
+                    prevImg.style.display = 'block';
+                    if (placeholder) placeholder.style.display = 'none';
+                }
+            } else if (ext === 'pdf') {
+                if (prevPdf) {
+                    prevPdf.src = previewUrl;
+                    prevPdf.style.display = 'block';
+                    if (placeholder) placeholder.style.display = 'none';
+                }
+            }
+        };
+    }
+
+    // 3. Envío del formulario (Siempre modo RUTA)
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const num = numInput.value.trim();
+            const ruta = rutaInput.value.trim();
+
+            if (!ruta) {
+                Swal.fire('Atención', "Por favor pegá la ruta completa del archivo.", 'warning');
+                return;
+            }
+            if (!num) {
+                Swal.fire('Atención', "Ingresá los últimos dígitos de la factura.", 'warning');
+                return;
+            }
+
+            showLoader();
+
+            try {
+                const res = await fetch('/api/facturas/upload_ruta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_path: ruta, numero_completo: num })
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    Swal.fire({
+                        title: result.status === 'ARCHIVADO' ? '¡Archivado!' : '¡Pendiente!',
+                        text: result.msg,
+                        icon: 'success',
+                        timer: 4000
+                    });
+                    // Limpiar formulario
+                    rutaInput.value = '';
+                    numInput.value = '';
+                    statusText.textContent = '';
+                    detailText.textContent = 'Buscando en base de datos de ARCA/CALIM...';
+                    loadAndRenderFacturas();
+                } else {
+                    Swal.fire('Error', result.error || 'No se pudo procesar', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire('Error', 'Falla de conexión con el servidor', 'error');
+            } finally {
+                hideLoader();
+            }
+        };
+    }
 }
