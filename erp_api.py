@@ -11,6 +11,11 @@ class AdjuntarRequest(BaseModel):
     identificador: str
     ruta: str
 
+class ForzarAdjuntarRequest(BaseModel):
+    identificador: str
+    proveedor: str
+    ruta: str
+
 # Setup UTF-8 for Windows
 if sys.stdout.encoding != 'utf-8':
     import io
@@ -128,7 +133,7 @@ async def adjuntar_pdf(req: AdjuntarRequest):
     
     conn = master._get_conn()
     try:
-        cur = conn.execute("SELECT numero_completo, proveedor, fecha_emision FROM facturas WHERE numero_completo LIKE ? OR id = ?", (f"%{req.identificador}%", req.identificador))
+        cur = conn.execute("SELECT numero_completo, proveedor, fecha_emision, ruta_archivo FROM facturas WHERE numero_completo LIKE ? OR id = ?", (f"%{req.identificador}%", req.identificador))
         row = cur.fetchone()
         if not row:
              return {"status": "Error", "mensaje": f"Factura con llave '{req.identificador}' no encontrada en la DB."}
@@ -136,6 +141,10 @@ async def adjuntar_pdf(req: AdjuntarRequest):
         num_oficial = row[0]
         proveedor_raw = row[1]
         fecha_emision = row[2]
+        ruta_existente = row[3]
+        
+        if ruta_existente:
+            return {"status": "Aviso", "mensaje": f"Factura {num_oficial} ya fue archivada previamente en: {ruta_existente}"}
         
         # 1. Limpiar el nombre del proveedor de caracteres ilegales para Windows (<>:/\|?*)
         proveedor_limpio = re.sub(r'[<>:"/\\|?*]', '', proveedor_raw).strip()
@@ -179,6 +188,77 @@ async def adjuntar_pdf(req: AdjuntarRequest):
         conn.commit()
         
         return {"status": "Éxito", "mensaje": f"Archivo reorganizado y archivado corporativamente en {proveedor_limpio}\\{nombre_final}"}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        conn.close()
+
+@app.post("/facturas/forzar_adjunto")
+async def forzar_adjunto_pdf(req: ForzarAdjuntarRequest):
+    """Fuerza la creación de bóveda y adjunto, creando un registro Shell (Fantasma) si no existe en AFIP."""
+    import sqlite3
+    import shutil
+    import os
+    import re
+    from datetime import datetime
+    
+    conn = master._get_conn()
+    try:
+        cur = conn.execute("SELECT numero_completo, proveedor, fecha_emision, ruta_archivo FROM facturas WHERE numero_completo LIKE ?", (f"%{req.identificador}%",))
+        row = cur.fetchone()
+        
+        if row and row[3]: # row[3] es ruta_archivo
+            return {"status": "Aviso", "mensaje": f"Factura {row[0]} ya fue archivada previamente con éxito."}
+            
+        num_oficial = req.identificador
+        proveedor_raw = row[1] if row else req.proveedor
+        fecha_emision = row[2] if row else datetime.now().strftime("%Y-%m-%d")
+        
+        proveedor_limpio = re.sub(r'[<>:"/\\|?*]', '', proveedor_raw).strip()
+        boveda_path = os.path.join(WORKSPACE, "static", "archivadas", proveedor_limpio)
+        os.makedirs(boveda_path, exist_ok=True)
+        
+        _, ext = os.path.splitext(req.ruta)
+        if not ext: ext = ".pdf"
+            
+        partes = num_oficial.split('-', 2)
+        if len(partes) == 3:
+            tipo_map = {
+                "001": "FA", "002": "NDA", "003": "NCA",
+                "006": "FB", "007": "NDB", "008": "NCB",
+                "011": "FC", "012": "NDC", "013": "NCC",
+                "051": "FM", "052": "NDM", "053": "NCM"
+            }
+            tipo_str = tipo_map.get(partes[0], f"T{partes[0].lstrip('0') or '0'}")
+            pto_str = str(int(partes[1]))
+            num_str = str(int(partes[2]))
+            nombre_corto = f"{tipo_str}-{pto_str}-{num_str}"
+        else:
+            nombre_corto = num_oficial
+            
+        nombre_final = f"{fecha_emision}_{nombre_corto}{ext}"
+        ruta_definitiva = os.path.join(boveda_path, nombre_final)
+        
+        if not os.path.exists(req.ruta):
+            return {"status": "Error", "mensaje": f"El archivo original propuesto no existe físicamente en Windows: {req.ruta}"}
+            
+        shutil.move(req.ruta, ruta_definitiva)
+        
+        if row: # EXISTE, SOLO ACTUALIZA RUTA
+            conn.execute("UPDATE facturas SET ruta_archivo = ? WHERE numero_completo = ?", (ruta_definitiva, num_oficial))
+        else: # NO EXISTE: CREA REGISTRO SHELL PARA FUTURA CONCILIACION
+            tcod = partes[0] if len(partes) == 3 else ""
+            pvta = partes[1] if len(partes) == 3 else ""
+            ncom = partes[2] if len(partes) == 3 else ""
+            conn.execute('''
+                INSERT INTO facturas (fecha_emision, tipo_comprobante, numero_completo, proveedor, monto_total, monto_iva, neto_gravado, tipo_operacion, esta_en_calim, ruta_archivo, estado_proceso)
+                VALUES (?, 'MANUAL-ESPERANDO-SINC.', ?, ?, 0, 0, 0, 'COMPRA', 0, ?, 'FANTASMA')
+            ''', (fecha_emision, num_oficial, proveedor_raw, ruta_definitiva))
+        
+        conn.commit()
+        msg_fin = f"Archivo organizado corporativamente en [{proveedor_limpio}\\{nombre_final}]. "
+        msg_fin += "¡Actualizado Oficial!" if row else "¡Creado el registro Shell-Fantasma a la espera del próximo Excel de CALIM!"
+        return {"status": "Éxito", "mensaje": msg_fin}
     except Exception as e:
         return {"error": str(e)}
     finally:

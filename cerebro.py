@@ -28,7 +28,7 @@ def trigger_sync():
 if __name__ == "__main__":
     print("🧠 CEREBRO ERP - CONSOLA DE INTERACCIÓN")
     if len(sys.argv) < 2:
-        print("Uso: python cerebro.py [resumen | notas_credito | iva <año> | auditar_iva <2026-01> | discrepancias | sync | buscar <texto> | adjuntar <ticket> <ruta>]")
+        print("Uso: python cerebro.py [resumen | notas_credito | auditar_iva <2026-01> | discrepancias | sync | buscar <texto> | adjuntar <ticket> <ruta> | forzar_adjunto <ticket> <proveedor> <ruta>]")
         sys.exit(0)
     
     command = sys.argv[1].lower()
@@ -72,6 +72,18 @@ if __name__ == "__main__":
         ruta = sys.argv[3]
         res = query_api("facturas/adjuntar", method="POST", data={"identificador": identificador, "ruta": ruta})
         print(f"\n[SISTEMA] {res.get('status', 'Error')}: {res.get('mensaje', res.get('error'))}\n")
+        
+    elif command == "forzar_adjunto":
+        if len(sys.argv) < 5:
+            print("\n🚨 USO DE URGENCIA MANUAL (Archivo Fantasma):")
+            print("python cerebro.py forzar_adjunto <numero_completo> <proveedor_nombre> <ruta_pdf>\n")
+            print("Ej: python cerebro.py forzar_adjunto 006-00005-00007685 'VIA CARGO SA' 'C:/ruta/foto.pdf'")
+            sys.exit(1)
+        identificador = sys.argv[2]
+        proveedor = sys.argv[3]
+        ruta = sys.argv[4]
+        res = query_api("facturas/forzar_adjunto", method="POST", data={"identificador": identificador, "proveedor": proveedor, "ruta": ruta})
+        print(f"\n[MODO FORZADO] {res.get('status', 'Error')}: {res.get('mensaje', res.get('error'))}\n")
     
     elif command == "buscar":
         termino = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -79,15 +91,22 @@ if __name__ == "__main__":
             print("ERROR: Ingrese un término. (Ej: python cerebro.py buscar 'DUO COCO')")
             sys.exit(1)
             
-        res = query_api("facturas", params={"q": termino})
+        res = query_api("facturas", params={"q": termino, "operacion": "COMPRA"})
         if res and "error" not in res:
-            print(f"\n🔍 RESULTADOS PARA LA BÚSQUEDA: '{termino}'")
+            print(f"\n🔍 RESULTADOS DE AUDITORIA PARA: '{termino}'")
             print(f"Total encontrados: {res['count']}")
+            print("-" * 110)
+            print(f"{'FECHA':<12} | {'TICKET':<20} | {'PROVEEDOR':<30} | {'MONTO':<12} | {'ESTADOS'}")
+            print("-" * 110)
             for r in res['results']:
-                ruta = r.get('ruta_archivo', '')
-                estado_file = f"📁 Sí ({ruta})" if ruta else "❌ No adjuntado"
-                print(f"-> {r['fecha_emision']} | FC {r['numero_completo']} | {r['proveedor'][:30]} | $ {r['monto_total']:,.2f} | DOC: {estado_file}")
-            print("========================================================================================\n")
+                # Calcular íconos de estado
+                afip = "✅ AFIP" if r.get('esta_en_afip') else "❌ AFIP"
+                calim = "✅ CALIM" if r.get('esta_en_calim') else "❌ CALIM"
+                pdf = f"📁 STATIC (PDF)" if r.get('ruta_archivo') else "📄 SIN DOC"
+                
+                info_line = f"-> {r['fecha_emision']:<12} | {r['numero_completo']:<20} | {r['proveedor'][:30]:<30} | $ {r['monto_total']:>10,.2f} | [{afip}] [{calim}] [{pdf}]"
+                print(info_line)
+            print("-" * 110 + "\n")
             
     elif command == "discrepancias":
         res = query_api("facturas/discrepancias")
