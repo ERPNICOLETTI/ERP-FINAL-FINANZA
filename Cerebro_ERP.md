@@ -1,36 +1,73 @@
-# 🧠 Cerebro Analítico: Proyecto ERP FINAL
+# 🧠 Cerebro ERP - Manual de Arquitectura y Operación "Ladrillo por Ladrillo"
 
-Este documento es la **Fuente de Verdad Técnica** del proyecto. Este sistema ha pivotado 180° desde una aplicación web tradicional a una arquitectura centralizada, analítica y orientada a la Inteligencia Artificial (IA).
-
-## 🎯 Misión del Proyecto
-Digitalizar, consolidar y auditar la información financiera de **Lo de Karlota**, **Joaquín** y **Jorgelina**. El objetivo central es cruzar la facturación (ARCA/CALIM) con los cobros por medios electrónicos (Payway) y los movimientos bancarios reales (Galicia, Chubut, MercadoPago) en una única base de datos inteligente para detectar discrepancias y automatizar análisis.
+Este documento contiene la lógica maestra, el flujo de trabajo y las instrucciones técnicas del **Cerebro ERP**. Está diseñado para que cualquier IA o desarrollador entienda cómo opera el sistema desde cero.
 
 ---
 
-## 🏗️ Arquitectura del Sistema (Modo IA Centralizada)
+## 🏛️ 1. Filosofía de Diseño: Modularidad Total
+El sistema se rige por la separación absoluta de responsabilidades. Nada está "pegado", todo se enchufa.
 
-### 1. El Motor Analítico: `erp_master.py`
-Se encarga de conectarse con la base de datos `erp_nicoletti.db` y provee:
-- **Indexación Inmediata**: Mantiene un índice de búsqueda inteligente `search_index` (FTS5) cruzando Transacciones, Payway y Facturas.
-- **Auditoría Local**: Tiene funciones para detectar automáticamente cupones de Payway sin conciliar y discrepancias de sistema (ej. Facturas en ARCA pero no en CALIM).
-
-### 2. La API de Servicio: `erp_api.py` (FastAPI)
-Expone el poder analítico a nivel de red (por defecto `http://127.0.0.1:5005`):
-- Endpoint `/search?q=...`: Búsqueda de cualquier término en todos los módulos como si fuese Google.
-- Endpoint `/audit`: Arroja las falencias detectadas directo en JSON.
-- Endpoint `/facturas/discrepancias`: Lista los conflictos impositivos.
-
-### 3. El Cerebro: `cerebro.py`
-Es el CLI o script principal de contacto para el usuario y la IA. Se utiliza para lanzar comandos analíticos, registrar correcciones y dialogar directamente con la API mediante peticiones HTTP.
+### Arquitectura de 3 Capas:
+1.  **Capa 0: El Motor (Core)** - Ubicado en `/core/`. Aquí reside la inteligencia pura. `tarjetas.py` sabe calcular, `ingesta.py` sabe guardar. No saben de dónde vienen los datos, solo saben procesarlos.
+2.  **Capa 1: El Servicio (API)** - `erp_api.py`. Expone la inteligencia al mundo (o a la red local). Nadie toca la base de datos directamente excepto la API (vía el Core).
+3.  **Capa 2: La Interfaz (Cerebro CLI)** - `cerebro.py`. Es la consola de comandos. Su única tarea es recibir tus órdenes, hablar con la API y mostrarte los resultados de forma linda.
 
 ---
 
-## 🛠️ Instrucciones para el Asistente IA
-Si se te pide realizar una inspección o corrección:
-1. Usa el script `cerebro.py` invocándolo (ej. `python cerebro.py buscar <término>`).
-2. Conéctate a `erp_master.py` si necesitas crear una función nueva de parseo o carga masiva (csv, excel).
-3. Toda la información de verdad reside en `erp_nicoletti.db` (Tablas: `transactions`, `payway_records`, `facturas`, `search_index`).
-4. **CERO WEB**: Este proyecto ya no utiliza Flask templates, HTML, CSS o carpetas `static`. Todo es CLI + API + IA.
+## 🌲 2. Estructura de Carpetas
+```text
+/
+├── cerebro.py          # Consola central (Comandos)
+├── erp_api.py          # Servidor de Inteligencia (Puerto 5005)
+├── erp_master.py       # Maestro de Esquema y Auditoría Global
+├── erp_nicoletti.db    # La Base de Datos (Único Punto de Verdad)
+├── core/               # INTELIGENCIA MODULAR
+│   ├── ingesta.py      # "El Ladrillero" (Guarda en DB de forma limpia)
+│   ├── tarjetas.py     # Motor de conciliación de plásticos
+│   └── facturas.py     # Motor de análisis fiscal ARCA/AFIP
+└── parsers/            # HERRAMIENTAS DE EXTRACCIÓN
+    ├── parser_payway_liq.py    # Lector de CSV Prisma
+    └── parser_patagonia.py    # Lector de PDF Patagonia 365
+```
 
 ---
-*Generado bajo el nuevo paradigma de interacción por el Asistente Antigravity.*
+
+## 🏗️ 3. El Flujo de Ingesta (Cómo entra un dato)
+Para mantener el orden, cada vez que entra un archivo nuevo (PDF de Patagonia, CSV de Payway, etc.), sigue este camino:
+
+1.  **EXTRACCIÓN**: El **Parser** correspondiente abre el archivo y extrae los datos crudos, convirtiéndolos en un diccionario de Python estándar.
+2.  **NORMALIZACIÓN**: El Parser le pasa ese diccionario a `core/ingesta.py` (El Ladrillero).
+3.  **PERSISTENCIA**: El Ladrillero limpia los formatos (puntos, comas, fechas) y ejecuta un `INSERT OR IGNORE`. Si el dato ya existía, no hace nada. Si es nuevo, coloca el "ladrillo".
+
+---
+
+## 🛠️ 4. Manual de Comandos (Cómo opero el sistema)
+
+### 🎫 Área: Tarjetas (Conciliación Financiera)
+*   **Ver resumen del año**: `python cerebro.py tarjetas resumen 2026`
+    *   *Qué hace*: Te muestra una tabla consolidada de Payway, Patagonia y Naranja con Bruto, Neto y Gastos.
+*   **Importar datos nuevos**: `python cerebro.py tarjetas importar <FUENTE> <RUTA_ARCHIVO>`
+    *   *Fuentes Soportadas*: `PAYWAY`, `PATAGONIA365`.
+*   **Auditoría de Fugas**: `python cerebro.py tarjetas audit`
+    *   *Qué hace*: Cruza ticket por ticket contra los depósitos diarios para ver si Payway te debe plata.
+
+### 🧾 Área: Facturas (Auditoría Fiscal)
+*   **Buscar cualquier cosa**: `python cerebro.py facturas buscar "Nombre Proveedor"`
+*   **Resumen de IVA**: `python cerebro.py facturas resumen 2026`
+*   **Alertas Rojas**: `python cerebro.py facturas discrepancias`
+    *   *Qué hace*: Te avisa qué facturas de la AFIP no se subieron al sistema contable (CALIM).
+
+---
+
+## 🧩 5. Cómo expandir el sistema (Instrucciones para el futuro)
+Si querés agregar una nueva fuente (Ejemplo: **Naranja**):
+
+1.  **Crear el Lector**: Crear `parsers/parser_naranja.py`. Su única misión es devolver un diccionario con los campos: `total_bruto`, `total_neto`, `fecha`, etc.
+2.  **Llamar al Ladrillero**: Al final del parser, importar `core.ingesta` y llamar a `persistir_liquidacion(data)`.
+3.  **Actualizar API**: Agregar la opción "NARANJA" en el endpoint `/tarjetas/importar` de `erp_api.py`.
+4.  **Actualizar Cerebro**: ¡Nada! Cerebro ya está preparado para mostrar cualquier fuente que aparezca en la tabla unificada.
+
+---
+
+> [!IMPORTANT]
+> **ORDEN ABSOLUTO**: Nunca escribas código de base de datos fuera de `/core/`. Nunca escribas lógica de cálculo dentro de `cerebro.py`. Mantener las capas separadas es lo que hace que el sistema sea eterno.

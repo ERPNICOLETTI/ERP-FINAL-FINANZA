@@ -37,7 +37,37 @@ class ERPMaster:
         ''')
         conn.execute('''
             CREATE TABLE IF NOT EXISTS payway_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, compra_date TEXT, presentacion_date TEXT, lote INTEGER, cupon TEXT, marca TEXT, monto_bruto REAL, estado TEXT DEFAULT 'pendiente', matching_tx_id INTEGER, FOREIGN KEY(matching_tx_id) REFERENCES transactions(id)
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                fecha_compra TEXT, 
+                fecha_presentacion TEXT, 
+                fecha_pago TEXT,
+                lote TEXT, 
+                cupon TEXT, 
+                marca TEXT, 
+                monto_bruto REAL, 
+                estado TEXT DEFAULT 'PENDIENTE', 
+                metadata TEXT,
+                matching_tx_id INTEGER, 
+                FOREIGN KEY(matching_tx_id) REFERENCES transactions(id)
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS liquidaciones_tarjetas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fuente TEXT, -- Payway, Patagonia365, Naranja
+                tipo TEXT,   -- DIARIA, MENSUAL
+                fecha_liquidacion TEXT,
+                periodo TEXT, -- YYYY-MM
+                marca TEXT,
+                establecimiento TEXT,
+                total_bruto REAL,
+                costo_arancel REAL,
+                costo_financiero REAL,
+                iva_21 REAL,
+                iva_105 REAL,
+                retenciones REAL, -- Suma de Ganancias, IVA, IIBB
+                total_neto REAL,
+                metadata TEXT
             )
         ''')
         conn.execute('''
@@ -67,8 +97,10 @@ class ERPMaster:
         
         # 2. Índices de Rendimiento
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions (date, amount)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_pw_date ON payway_records (compra_date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pw_date ON payway_records (fecha_compra)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_fac_num ON facturas (numero_completo)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pw_unique ON payway_records (lote, cupon, fecha_compra, monto_bruto)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_liq_unique ON liquidaciones_tarjetas (fuente, tipo, fecha_liquidacion, periodo, marca, total_bruto)")
 
         # 3. Índice FTS5 para Búsqueda 360 estilo Google
         conn.execute("DROP TABLE IF EXISTS search_index")
@@ -79,7 +111,7 @@ class ERPMaster:
             INSERT INTO search_index(source, id, name, amount, date, extra)
             SELECT 'Transaccion', id, desc, amount, date, entity || ' / ' || account FROM transactions
             UNION ALL
-            SELECT 'Payway', id, cupon || ' Lote ' || lote, monto_bruto, compra_date, marca FROM payway_records
+            SELECT 'Payway', id, cupon || ' Lote ' || lote, monto_bruto, fecha_compra, marca FROM payway_records
             UNION ALL
             SELECT 'Factura', id, numero_completo || ' ' || proveedor, monto_total, fecha_emision, tipo_comprobante FROM facturas
         """)

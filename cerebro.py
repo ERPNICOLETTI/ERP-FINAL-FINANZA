@@ -1,163 +1,106 @@
+import sys
 import os
 import requests
-import sys
 
-# Motor de Inteligencia (Cerebro) interactivo para consultar la API
+# CEREBRO ERP - Consola de Control Central 🦾🏗️🧱🧠⚖️
+
 API_URL = "http://127.0.0.1:5005"
 
 def query_api(endpoint, params=None, method="GET", data=None):
     try:
+        url = f"{API_URL}/{endpoint}"
         if method.upper() == "POST":
-            response = requests.post(f"{API_URL}/{endpoint}", json=data, params=params)
+            response = requests.post(url, json=data, params=params)
         else:
-            response = requests.get(f"{API_URL}/{endpoint}", params=params)
-            
+            response = requests.get(url, params=params)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"Error conectando a la API: {e}")
+        print(f"Error de conexion con API: {e}")
         return None
 
-def trigger_sync():
-    try:
-        response = requests.post(f"{API_URL}/sync")
-        return response.json()
-    except Exception as e:
-        print(f"Error: {e}")
+def mostrar_ayuda():
+    print("\nCEREBRO ERP - CONSOLA DE INTERACCION (MULTI-AREA)")
+    print("-" * 65)
+    print("AREA: tarjetas (Payway, Patagonia 365, Naranja)")
+    print("   -> resumen [anio]      | Consolidado de todas las liquidaciones.")
+    print("   -> importar <src> <p>  | Importar PDF/CSV (Fuentes: PAYWAY, PATAGONIA365).")
+    print("   -> audit               | Cruce de ventas diarias vs depositos.")
+    print("   -> cupon <id/numero>   | Detalle tecnico de un cupon.")
+    
+    print("\nAREA: facturas (ARCA/CALIM)")
+    print("   -> resumen [anio]      | Balance Ventas vs Compras.")
+    print("   -> buscar <termino>    | Buscar comprobantes en DB.")
+    print("-" * 65 + "\n")
 
 if __name__ == "__main__":
-    print("🧠 CEREBRO ERP - CONSOLA DE INTERACCIÓN")
-    if len(sys.argv) < 2:
-        print("Uso: python cerebro.py [resumen | notas_credito | auditar_iva <2026-01> | discrepancias | sync | buscar <texto> | adjuntar <ticket> <ruta> | forzar_adjunto <ticket> <proveedor> <ruta>]")
+    if len(sys.argv) < 3:
+        mostrar_ayuda()
         sys.exit(0)
     
-    command = sys.argv[1].lower()
+    area = sys.argv[1].lower()
+    cmd = sys.argv[2].lower()
     
-    if command == "notas_credito":
-        res = query_api("facturas", params={"tipo": "Nota de Crédito", "operacion": "VENTA"})
-        if res and not "error" in res:
-            print("\n=== TOTAL NOTAS DE CRÉDITO EMITIDAS (HISTÓRICO) ===")
-            print(f"Total Encontradas: {res['count']}")
-            print(f"💰 Suma Total Impactada: $ {res['total_monto']:,.2f}")
-            print("============================================================\n")
-    elif command == "resumen":
-        anio = sys.argv[2] if len(sys.argv) > 2 else ""
-        res = query_api("summary", params={"anio": anio} if anio else None)
-        if res and "error" not in res:
-            titulo = f"DEL AÑO {anio}" if anio else "GLOBAL"
-            print(f"\n=== RESUMEN DE LA BASE DE DATOS ({titulo}) ===")
-            print(f"💰 Transacciones Bancarias y Manuales:")
-            print(f"   - Total: {res['transacciones']['total_registros']} registros")
-            print(f"   - Período: {res['transacciones']['fecha_inicio']} a {res['transacciones']['fecha_fin']}")
-            print(f"   - Monto Histórico: $ {res['transacciones']['monto_total']:,.2f}")
-            print(f"\n💳 Cupones Payway (POSnet):")
-            print(f"   - Total: {res['payway']['total_cupones']} cupones")
-            print(f"   - Período: {res['payway']['fecha_inicio']} a {res['payway']['fecha_fin']}")
-            print(f"   - Monto Bruto: $ {res['payway']['monto_total_bruto']:,.2f}")
-            print(f"\n🧾 Facturas ARCA (Compras y Ventas):")
-            print(f"   - Total: {res['facturas']['total_comprobantes']} comprobantes")
-            print(f"   - Período: {res['facturas']['fecha_inicio']} a {res['facturas']['fecha_fin']}")
-            print(f"   - Total Ventas: $ {res['facturas']['monto_ventas']:,.2f}")
-            print(f"   - Total Compras: $ {res['facturas']['monto_compras']:,.2f}")
-            print("===================================\n")
-    elif command == "audit":
-        res = query_api("audit")
-        if res:
-            print(f"Payway sin conciliar: {res['unmatched_payway_count']}")
-    elif command == "adjuntar":
-        if len(sys.argv) < 4:
-            print("Uso: python cerebro.py adjuntar <numero_completo_o_id> <ruta_pdf_u_foto>")
-            sys.exit(1)
-        identificador = sys.argv[2]
-        ruta = sys.argv[3]
-        res = query_api("facturas/adjuntar", method="POST", data={"identificador": identificador, "ruta": ruta})
-        print(f"\n[SISTEMA] {res.get('status', 'Error')}: {res.get('mensaje', res.get('error'))}\n")
+    # --- ÁREA: TARJETAS ---
+    if area == "tarjetas":
+        if cmd == "resumen":
+            anio = sys.argv[3] if len(sys.argv) > 3 else "2026"
+            res = query_api("summary", params={"anio": anio})
+            if res:
+                print(f"\nRESUMEN CONSOLIDADO DE TARJETAS ({anio})")
+                print("-" * 85)
+                print(f"{'FUENTE':<15} | {'TIPO':<10} | {'CANT':<5} | {'MONTO BRUTO':<15} | {'NETO REAL':<15}")
+                print("-" * 85)
+                for l in res['tarjetas']['liquidaciones']:
+                    print(f"{l['fuente']:<15} | {l['tipo']:<10} | {l['cantidad']:<5} | ${l['bruto']:>14,.2f} | ${l['neto']:>14,.2f}")
+                print("-" * 85 + "\n")
         
-    elif command == "forzar_adjunto":
-        if len(sys.argv) < 5:
-            print("\n🚨 USO DE URGENCIA MANUAL (Archivo Fantasma):")
-            print("python cerebro.py forzar_adjunto <numero_completo> <proveedor_nombre> <ruta_pdf>\n")
-            print("Ej: python cerebro.py forzar_adjunto 006-00005-00007685 'VIA CARGO SA' 'C:/ruta/foto.pdf'")
-            sys.exit(1)
-        identificador = sys.argv[2]
-        proveedor = sys.argv[3]
-        ruta = sys.argv[4]
-        res = query_api("facturas/forzar_adjunto", method="POST", data={"identificador": identificador, "proveedor": proveedor, "ruta": ruta})
-        print(f"\n[MODO FORZADO] {res.get('status', 'Error')}: {res.get('mensaje', res.get('error'))}\n")
-    
-    elif command == "buscar":
-        termino = sys.argv[2] if len(sys.argv) > 2 else ""
-        if not termino:
-            print("ERROR: Ingrese un término. (Ej: python cerebro.py buscar 'DUO COCO')")
-            sys.exit(1)
-            
-        res = query_api("facturas", params={"q": termino, "operacion": "COMPRA"})
-        if res and "error" not in res:
-            print(f"\n🔍 RESULTADOS DE AUDITORIA PARA: '{termino}'")
-            print(f"Total encontrados: {res['count']}")
-            print("-" * 110)
-            print(f"{'FECHA':<12} | {'TICKET':<20} | {'PROVEEDOR':<30} | {'MONTO':<12} | {'ESTADOS'}")
-            print("-" * 110)
-            for r in res['results']:
-                # Calcular íconos de estado
-                afip = "✅ AFIP" if r.get('esta_en_afip') else "❌ AFIP"
-                calim = "✅ CALIM" if r.get('esta_en_calim') else "❌ CALIM"
-                pdf = f"📁 STATIC (PDF)" if r.get('ruta_archivo') else "📄 SIN DOC"
-                
-                info_line = f"-> {r['fecha_emision']:<12} | {r['numero_completo']:<20} | {r['proveedor'][:30]:<30} | $ {r['monto_total']:>10,.2f} | [{afip}] [{calim}] [{pdf}]"
-                print(info_line)
-            print("-" * 110 + "\n")
-            
-    elif command == "discrepancias":
-        res = query_api("facturas/discrepancias")
-        if res:
-            print("\n=== ALERTAS ROJAS Y DISCREPANCIAS ===")
-            
-            print("\n🚨 SÓLO EN AFIP (Te olvidaste de enviar a CALIM):")
-            if res['afip_pendientes_en_calim']:
-                for f in res['afip_pendientes_en_calim']:
-                    print(f"   -> FC {f['numero_completo']} | {f['proveedor'][:30]} | $ {f['monto_total']:,.2f}")
+        elif cmd == "importar":
+            if len(sys.argv) < 5:
+                print("Uso: python cerebro.py tarjetas importar <FUENTE> <PATH_ARCHIVO>")
             else:
-                print("   [Excelente] Todas las de AFIP están volcadas a CALIM.")
-                
-            print("\n⚠️ SÓLO EN CALIM (Manuales de Intereses, o no figuran en AFIP):")
-            if res['calim_huerfanas_de_afip']:
-                for f in res['calim_huerfanas_de_afip']:
-                    print(f"   -> FC {f['numero_completo']} | {f['proveedor'][:30]} | $ {f['monto_total']:,.2f}")
-            else:
-                 print("   [Excelente] Todo CALIM coincide nativamente con AFIP.")
-            print("=====================================\n")
-    elif command == "iva":
-        anio = sys.argv[2] if len(sys.argv) > 2 else "2026"
-        res = query_api("iva", params={"anio": anio})
-        if res and "error" not in res:
-            print(f"\n=== BALANCE DE IVA ({res['periodo']}) ===")
-            print(f"🟢 Crédito Fiscal (COMPRAS): $ {res['iva_compras_credito']:,.2f}")
-            print(f"🔴 Débito Fiscal (VENTAS)  : $ {res['iva_ventas_debito']:,.2f}")
-            print("------------------------------------------")
-            if res['saldo_a_depositar'] > 0:
-                print(f"🧾 SALDO A PAGAR: $ {res['saldo_a_depositar']:,.2f}")
-            else:
-                print(f"✅ SALDO A FAVOR: $ {abs(res['saldo_a_depositar']):,.2f}")
-            print("==========================================\n")
-    elif command == "auditar_iva":
-        periodo = sys.argv[2] if len(sys.argv) > 2 else "2026-01"
-        res = query_api("iva/auditar", params={"periodo": periodo})
-        if res and not "error" in res:
-            print(f"\n=== AUDITORÍA IMPOSITIVA PROFUNDA (PERÍODO {res['periodo']}) ===")
-            print("\n[ 🔴 DÉBITO FISCAL / TUS VENTAS AL ESTADO ]")
-            print(f"1. AFIP (Tus CSV Reales) : $ {res['afip_crudo']['ventas_debito']:,.2f}")
-            print(f"2. Contador (PDF F.2051) : $ {res['contador_f2051']['ventas_debito']:,.2f}")
-            print(f"-> BRECHA MATEMÁTICA     : $ {res['diferencias_vs_afip']['brecha_debito']:,.2f}  (Diferencia a revisar)")
+                fuente = sys.argv[3]
+                path = sys.argv[4]
+                print(f"Iniciando importacion de {fuente}...")
+                res = query_api("tarjetas/importar", method="POST", data={"fuente": fuente, "path": path})
+                if res and res.get('status') == 'success':
+                    print(f"OK: Datos de {fuente} procesados e ingresados.")
+                else:
+                    print(f"ERROR: {res.get('message') if res else 'API Caida'}")
+
+        elif cmd == "audit":
+            res = query_api("tarjetas/audit")
+            if res:
+                print("\nAUDITORIA DE VENTAS (Cruce Diarios Payway)")
+                print(f"   Pendientes de Deposito: {len(res.get('missing_liquidations', []))}")
+                print(f"   Depositos sin Tickets:  {len(res.get('missing_coupons', []))}\n")
             
-            print("\n[ 🟢 CRÉDITO FISCAL / TUS INGRESOS COMPROBABLES ]")
-            print(f"1. AFIP (Tu CSV Público) : $ {res['afip_crudo']['compras_credito']:,.2f}")
-            print(f"2. CALIM (Sistema Oculto): $ {res['calim_interno']['compras_credito']:,.2f}")
-            print(f"3. Contador (Libro IVA)  : $ {res['contador_f2051']['compras_credito']:,.2f}")
-            print(f"-> BRECHA A TU FAVOR     : $ {res['diferencias_vs_afip']['brecha_credito']:,.2f}  (Extras salvados p/ AFIP)")
-            print("=================================================================\n")
-    elif command == "sync":
-        trigger_sync()
-        print("[OK] Sincronización de índices completada por la API.")
+        elif cmd == "cupon":
+            cid = sys.argv[3]
+            res = query_api(f"tarjetas/cupon/{cid}")
+            if res:
+                print(f"\nDETALLE CUPON {res['cupon']}")
+                print(f"   - Monto: $ {res['monto_bruto']:,.2f} | Marca: {res['marca']}")
+
+    # --- ÁREA: FACTURAS ---
+    elif area == "facturas":
+        if cmd == "resumen":
+            anio = sys.argv[3] if len(sys.argv) > 3 else "2026"
+            res = query_api("summary", params={"anio": anio})
+            if res:
+                f = res['facturacion']
+                print(f"\nRESUMEN FACTURACION ({anio})")
+                print(f"   - Ingresos: $ {f['monto_ventas']:,.2f}")
+                print(f"   - Egresos:  $ {f['monto_compras']:,.2f}\n")
+        
+        elif cmd == "buscar":
+            termino = sys.argv[3]
+            res = query_api("facturas/buscar", params={"q": termino})
+            if res:
+                print(f"\nRESULTADOS BUSQUEDA: {termino}")
+                for f in res[:5]:
+                    print(f"   - {f['fecha_emision']} | {f['proveedor'][:25]:<25} | $ {f['monto_total']:>10,.2f}")
+                print()
+
     else:
-        print("Comando no reconocido.")
+        mostrar_ayuda()
