@@ -39,9 +39,20 @@ def parse_payway_liq(csv_path):
             }
             
             # PASAR AL LADRILLERO (INGESTA)
-            ingesta.persistir_liquidacion(data)
+            liq_id = ingesta.persistir_liquidacion(data)
             
-        print(f"🧱 Se procesaron {len(df)} días de liquidación Payway.")
+            # DIGITALIZACIÓN BIT A BIT: Guardamos el detalle atómico de la fila
+            if liq_id:
+                detalle = [{
+                    "fecha": data["fecha_liquidacion"],
+                    "descripcion": f"Liq {row['Nro. Liquidación']} - {row['Marca']} {row['Establecimiento']}",
+                    "monto_bruto": data["total_bruto"],
+                    "monto_neto": data["total_neto"],
+                    "metadata_raw": row.to_dict()
+                }]
+                ingesta.persistir_liquidacion_detalle(liq_id, detalle)
+            
+        print(f"🧱 Se procesaron {len(df)} días de liquidación Payway con bit-by-bit.")
 
     except Exception as e:
         print(f"Error procesando Payway Liq: {e}")

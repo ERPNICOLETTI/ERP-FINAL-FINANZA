@@ -32,12 +32,16 @@ El sistema se rige por la separación absoluta de responsabilidades. Nada está 
 
 ---
 
-## 🏗️ 3. El Flujo de Ingesta (Cómo entra un dato)
-Para mantener el orden, cada vez que entra un archivo nuevo (PDF de Patagonia, CSV de Payway, etc.), sigue este camino:
+## 🏗️ 3. El Flujo de Ingesta (Digitalización Bit a Bit)
+Para que no se pierda ni un centavo, cada archivo (PDF, CSV, XLSX) se digitaliza en dos capas:
 
-1.  **EXTRACCIÓN**: El **Parser** correspondiente abre el archivo y extrae los datos crudos, convirtiéndolos en un diccionario de Python estándar.
-2.  **NORMALIZACIÓN**: El Parser le pasa ese diccionario a `core/ingesta.py` (El Ladrillero).
-3.  **PERSISTENCIA**: El Ladrillero limpia los formatos (puntos, comas, fechas) y ejecuta un `INSERT OR IGNORE`. Si el dato ya existía, no hace nada. Si es nuevo, coloca el "ladrillo".
+1.  **CAPA DE CABECERA (Header)**: Se guardan los totales generales (Bruto, Neto, Fecha, Marca) en la tabla `liquidaciones_tarjetas`.
+2.  **CAPA ATÓMICA (Detalle)**: Se guarda **cada línea** del archivo original en la tabla `liquidaciones_detalles`. 
+    *   Si el PDF tiene certificados, leyendas o texto legal, queda capturado como texto dentro de la base de datos.
+    *   **Metadatos JSON**: Usamos campos JSON para guardar "certificados" o "textos puntuales" de cada fuente sin ensuciar la estructura principal.
+
+**Camino del dato**:
+`Archivo Raw` -> `Parser` (Extrae todo) -> `Ladrillero` (Normaliza) -> `DB (Header + Detalles)`
 
 ---
 

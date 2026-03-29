@@ -11,28 +11,53 @@ def get_db_connection():
 
 # --- ÁREA: TARJETAS ---
 def persistir_liquidacion(data: dict):
-    """Guarda una liquidación (diaria o mensual) de cualquier fuente."""
+    """Guarda una liquidación y devuelve su ID."""
     conn = get_db_connection()
     try:
-        # Normalizamos campos obligatorios antes de insertar
         fuente = data.get('fuente', 'DESCONOCIDA').upper()
         tipo = data.get('tipo', 'DIARIA').upper()
-        fecha = data.get('fecha_liquidacion')
-        periodo = data.get('periodo')
         
-        conn.execute('''
+        cursor = conn.execute('''
             INSERT OR IGNORE INTO liquidaciones_tarjetas (
                 fuente, tipo, fecha_liquidacion, periodo, marca, establecimiento,
                 total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
                 retenciones, total_neto, metadata
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            fuente, tipo, fecha, periodo, data.get('marca'), data.get('establecimiento'),
+            fuente, tipo, data.get('fecha_liquidacion'), data.get('periodo'), 
+            data.get('marca'), data.get('establecimiento'),
             data.get('total_bruto', 0.0), data.get('costo_arancel', 0.0), 
             data.get('costo_financiero', 0.0), data.get('iva_21', 0.0), 
             data.get('iva_105', 0.0), data.get('retenciones', 0.0),
             data.get('total_neto', 0.0), json.dumps(data.get('metadata', {}))
         ))
+        
+        # Si no insertó (por duplicado), buscamos el ID existente
+        last_id = cursor.lastrowid
+        if last_id == 0:
+            res = conn.execute("SELECT id FROM liquidaciones_tarjetas WHERE fuente=? AND tipo=? AND fecha_liquidacion=? AND total_bruto=?", 
+                               (fuente, tipo, data.get('fecha_liquidacion'), data.get('total_bruto'))).fetchone()
+            if res: last_id = res[0]
+            
+        conn.commit()
+        return last_id
+    finally:
+        conn.close()
+
+def persistir_liquidacion_detalle(liq_id, detalle_lista: list):
+    """Guarda línea por línea cada fragmento de la liquidación."""
+    conn = get_db_connection()
+    try:
+        for d in detalle_lista:
+            conn.execute('''
+                INSERT INTO liquidaciones_detalles (
+                    liquidacion_id, fecha, descripcion, monto_bruto, arancel, financiero, iva, retenciones, monto_neto, metadata_raw
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                liq_id, d.get('fecha'), d.get('descripcion'), d.get('monto_bruto', 0.0),
+                d.get('arancel', 0.0), d.get('financiero', 0.0), d.get('iva', 0.0),
+                d.get('retenciones', 0.0), d.get('monto_neto', 0.0), json.dumps(d.get('metadata_raw', {}))
+            ))
         conn.commit()
     finally:
         conn.close()

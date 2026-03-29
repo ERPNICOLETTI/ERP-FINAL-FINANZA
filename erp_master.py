@@ -75,6 +75,22 @@ class ERPMaster:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, numero_completo TEXT UNIQUE, tipo_operacion TEXT, tipo_comprobante TEXT, proveedor TEXT, fecha_emision TEXT, neto_gravado REAL, monto_iva REAL, monto_total REAL, esta_en_afip INTEGER DEFAULT 0, esta_en_calim INTEGER DEFAULT 0, estado_proceso TEXT DEFAULT 'PENDIENTE', ruta_archivo TEXT
             )
         ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS liquidaciones_detalles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                liquidacion_id INTEGER, -- FK a liquidaciones_tarjetas (el "header")
+                fecha TEXT,
+                descripcion TEXT,
+                monto_bruto REAL,
+                arancel REAL,
+                financiero REAL,
+                iva REAL,
+                retenciones REAL,
+                monto_neto REAL,
+                metadata_raw TEXT, -- JSON con el resto de los campos "cada bit"
+                FOREIGN KEY(liquidacion_id) REFERENCES liquidaciones_tarjetas(id)
+            )
+        ''')
         
         # 2. Tabla Desacoplada para CALIM (Espejo para cruces)
         conn.execute('''
@@ -114,6 +130,8 @@ class ERPMaster:
             SELECT 'Payway', id, cupon || ' Lote ' || lote, monto_bruto, fecha_compra, marca FROM payway_records
             UNION ALL
             SELECT 'Factura', id, numero_completo || ' ' || proveedor, monto_total, fecha_emision, tipo_comprobante FROM facturas
+            UNION ALL
+            SELECT 'Liquidacion', id, fuente || ' ' || marca, total_bruto, fecha_liquidacion, 'Periodo: ' || periodo FROM liquidaciones_tarjetas
         """)
         
         conn.commit()
