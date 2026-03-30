@@ -1,0 +1,226 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+31/01/2026
+000000509590
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+100
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271756
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+1.615.500,00
+146.648,54
+1.468.851,46
+0,00
+0,00
+0,00
+FECHA DE PAGO 02/01 Arancel $ 6.068,00
+ Pesos
+Serv.Costos Financieros $ 13.761,90
+ Fecha de presentación 30/12
+ Liq. N° 00321249 - Lote N° 0098 Deduc.Impositivas $ 5.045,47
+ 2 Ventas en 3 pagos - Cuotas MiPyME 3 $ 169.900,00
+Serv.Cobro Anticipado $ 8.612,25
+ Liq. N° 00321251 - Lote N° 0098
+ 4 Ventas Tj.Débito $ 222.500,00
+Total del día $ 392.400,00 $ 33.487,62 $ 358.912,38
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 05/01 Arancel $ 4.406,00
+ Pesos
+Serv.Costos Financieros $ 16.848,00
+ Fecha de presentación 02/01
+ Liq. N° 00390420 - Lote N° 0099 Deduc.Impositivas $ 5.444,07
+ 2 Ventas en 3 pagos - Cuotas MiPyME 3 $ 81.000,00
+Serv.Cobro Anticipado $ 10.543,51
+ Liq. N° 00390420 - Lote N° 0100
+ 2 Ventas en 3 pagos - Cuotas MiPyME 3 $ 127.000,00
+ Liq. N° 00390422 - Lote N° 0100
+ 2 Ventas Tj.Débito $ 20.500,00
+Total del día $ 228.500,00 $ 37.241,58 $ 191.258,42
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 06/01 Arancel $ 894,00
+ Pesos
+Serv.Costos Financieros $ 147,35
+ Fecha de presentación 05/01
+ Liq. N° 00405721 - Lote N° 0101 Deduc.Impositivas $ 218,68
+ 1 Venta Tj. Débito $ 29.000,00
+ Liq. N° 00405721 - Lote N° 0102
+ 1 Venta Tj. Débito $ 5.500,00
+ Liq. N° 00405722 - Lote N° 0102
+ 1 Venta en 1 pago $ 24.000,00
+Total del día $ 58.500,00 $ 1.260,03 $ 57.239,97
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 08/01 Arancel $ 3.894,00
+ Pesos
+Serv.Costos Financieros $ 9.405,76
+ Fecha de presentación 07/01
+ Liq. N° 00276222 - Lote N° 0104 Deduc.Impositivas $ 3.544,26
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 129.000,00
+Serv.Cobro Anticipado $ 6.617,58
+ Liq. N° 00276224 - Lote N° 0104
+ 1 Venta Tj. Débito $ 14.500,00
+ Liq. N° 00276225 - Lote N° 0104
+ 1 Venta en 1 pago $ 57.000,00
+Total del día $ 200.500,00 $ 23.461,60 $ 177.038,40
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 09/01 Arancel $ 302,40
+ Pesos Deduc.Impositivas $ 63,50
+ Fecha de presentación 08/01
+ Liq. N° 00302707 - Lote N° 0105
+ 1 Venta Tj. Débito $ 25.200,00
+Total del día $ 25.200,00 $ 365,90 $ 24.834,10
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 12/01 Arancel $ 1.000,00
+ Pesos
+Serv.Costos Financieros $ 5.218,74
+ Fecha de presentación 09/01
+ Liq. N° 00296829 - Lote N° 0106 Deduc.Impositivas $ 1.492,49
+ 1 Venta en 1 pago $ 50.000,00
+Total del día $ 50.000,00 $ 7.711,23 $ 42.288,77
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 13/01 Arancel $ 1.254,00
+ Pesos
+Serv.Costos Financieros $ 1.747,98
+ Fecha de presentación 12/01
+ Liq. N° 00379803 - Lote N° 0107 Deduc.Impositivas $ 715,11
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 24.900,00
+Serv.Cobro Anticipado $ 1.277,34
+ Liq. N° 00379805 - Lote N° 0107
+ 1 Venta Tj. Débito $ 11.000,00
+ Liq. N° 00379805 - Lote N° 0108
+ 1 Venta Tj. Débito $ 52.000,00
+Total del día $ 87.900,00 $ 4.994,43 $ 82.905,57
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 15/01 Arancel $ 840,00
+ Pesos
+Deduc.Impositivas $ 176,40
+ Fecha de presentación 14/01
+ Liq. N° 00275930 - Lote N° 0110
+ 2 Ventas Tj.Débito $ 70.000,00
+Total del día $ 70.000,00 $ 1.016,40 $ 68.983,60
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 16/01 Arancel $ 228,00
+ Pesos
+Deduc.Impositivas $ 47,88
+ Fecha de presentación 15/01
+ Liq. N° 00281239 - Lote N° 0112
+ 2 Ventas Tj.Débito $ 19.000,00
+Total del día $ 19.000,00 $ 275,88 $ 18.724,12
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 19/01 Arancel $ 1.120,00
+ Pesos
+Serv.Costos Financieros $ 343,82
+ Fecha de presentación 16/01
+ Liq. N° 00286456 - Lote N° 0113 Deduc.Impositivas $ 307,40
+ 1 Venta en 1 pago $ 56.000,00
+Total del día $ 56.000,00 $ 1.771,22 $ 54.228,78
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 20/01 Arancel $ 1.396,00
+ Pesos
+Serv.Costos Financieros $ 1.509,30
+ Fecha de presentación 19/01
+ Liq. N° 00381415 - Lote N° 0116 Deduc.Impositivas $ 683,24
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 21.500,00
+Serv.Cobro Anticipado $ 1.102,93
+ Liq. N° 00381417 - Lote N° 0114
+ 1 Venta Tj. Débito $ 12.000,00
+ Liq. N° 00381417 - Lote N° 0115
+ 2 Ventas Tj.Débito $ 68.500,00
+Total del día $ 102.000,00 $ 4.691,47 $ 97.308,53
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 21/01 Arancel $ 3.776,00
+ Pesos
+Serv.Costos Financieros $ 11.863,80
+ Fecha de presentación 20/01
+ Liq. N° 00285670 - Lote N° 0117 Deduc.Impositivas $ 4.268,63
+ 2 Ventas en 3 pagos - Cuotas MiPyME 3 $ 169.000,00
+Serv.Cobro Anticipado $ 8.669,53
+ Liq. N° 00285672 - Lote N° 0117
+ 1 Venta Tj. Débito $ 33.000,00
+Total del día $ 202.000,00 $ 28.577,96 $ 173.422,04
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 23/01 Arancel $ 456,00
+ Pesos
+Deduc.Impositivas $ 95,76
+ Fecha de presentación 22/01
+ Liq. N° 00278949 - Lote N° 0119
+ 3 Ventas Tj.Débito $ 38.000,00
+Total del día $ 38.000,00 $ 551,76 $ 37.448,24
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 26/01 Arancel $ 510,00
+ Pesos
+Deduc.Impositivas $ 107,10
+ Fecha de presentación 23/01
+ Liq. N° 00293642 - Lote N° 0120
+ 1 Venta Tj. Débito $ 42.500,00
+Total del día $ 42.500,00 $ 617,10 $ 41.882,90
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 27/01 Arancel $ 516,00
+ Pesos
+Deduc.Impositivas $ 108,36
+ Fecha de presentación 26/01
+ Liq. N° 00371893 - Lote N° 0121
+ 1 Venta Tj. Débito $ 43.000,00
+Total del día $ 43.000,00 $ 624,36 $ 42.375,64
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 1.468.851,46
+ (Fecha de Pago 02/01 al 27/01)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Crédito 2,00 % $ 3.740,00
+ Arancel Tj.Débito 1,20 % $ 8.474,40
+ Arancel Tj.Crédito en Cuotas 2,00 $ 14.446,00
+Servicio Costos Financieros
+ -Serv.Cobro Anticipado
+ 3 Ventas en 1 día $ 841,13
+ 1 Venta en 17 días $ 5.218,74
+ -Plan Cuotas
+ 11 Ventas en 3 cuotas $ 54.786,78
+Servicio Payway
+ Servicio Cobro Anticipado $ 36.823,14
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 69.543,41
+ Tasa 10,50 % $ 54.786,78
+Deducciones Impositivas
+ IVA 21,00 % $ 14.604,04
+ IVA 10,50 % Ley 25.063 $ 5.752,56
+Percep./Retenc.AFIP - DGI $ 1.961,75
+ (ver Constancia RG 796
+ en hoja aparte)
+___________________________________________________________________________________________________________________________________________
+ Fin de la información
+38.012

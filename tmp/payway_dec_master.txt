@@ -1,0 +1,131 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+31/12/2025
+000000506654
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+100
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271756
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+4.659.700,00
+328.412,56
+4.331.287,44
+0,00
+0,00
+0,00
+FECHA DE PAGO 01/12 Arancel $ 138,00
+ Pesos
+Deduc.Impositivas $ 28,98
+ Fecha de presentación 28/11
+ Liq. N° 00303703 - Lote N° 0070
+ 1 Venta Tj. Débito $ 11.500,00
+Total del día $ 11.500,00 $ 166,98 $ 11.333,02
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 02/12 Arancel $ 3.787,20
+ Pesos
+Serv.Costos Financieros $ 46,04
+ Fecha de presentación 01/12
+ Liq. N° 00410639 - Lote N° 0071 Deduc.Impositivas $ 914,08
+ 2 Ventas Tj.Débito $ 248.100,00
+ Liq. N° 00410639 - Lote N° 0072
+ 1 Venta Tj. Débito $ 55.000,00
+ Liq. N° 00410640 - Lote N° 0072
+ 1 Venta en 1 pago $ 7.500,00
+Total del día $ 310.600,00 $ 4.747,32 $ 305.852,68
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 04/12 Arancel $ 366,00
+ Pesos
+Deduc.Impositivas $ 76,86
+ Fecha de presentación 03/12
+ Liq. N° 00279009 - Lote N° 0074
+ 1 Venta Tj. Débito $ 30.500,00
+Total del día $ 30.500,00 $ 442,86 $ 30.057,14
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 05/12 Arancel $ 2.483,60
+ Pesos
+Serv.Costos Financieros $ 2.750,58
+ Fecha de presentación 04/12
+ Liq. N° 00315301 - Lote N° 0075 Deduc.Impositivas $ 1.220,08
+ 2 Ventas Tj.Débito $ 100.300,00
+ Liq. N° 00315302 - Lote N° 0075
+ 1 Venta en 1 pago $ 64.000,00
+Total del día $ 164.300,00 $ 6.454,26 $ 157.845,74
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 09/12 Arancel $ 1.224,00
+ Pesos
+Serv.Costos Financieros $ 2.630,24
+ Fecha de presentación 05/12
+ Liq. N° 00317819 - Lote N° 0076 Deduc.Impositivas $ 925,01
+ 1 Venta en 1 pago $ 61.200,00
+Total del día $ 61.200,00 $ 4.779,25 $ 56.420,75
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 30/12 Arancel $ 1.648,00
+ Pesos
+Serv.Costos Financieros $ 2.349,00
+ Fecha de presentación 29/12
+ Liq. N° 00413071 - Lote N° 0096 Deduc.Impositivas $ 901,42
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 29.000,00
+Serv.Cobro Anticipado $ 1.470,01
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 4.331.287,44
+ (Fecha de Pago 01/12 al 30/12)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Crédito 2,00 % $ 8.238,00
+ Arancel Tj.Débito 1,20 % $ 33.060,00
+ Arancel Tj.Crédito en Cuotas 2,00 $ 29.856,00
+Servicio Costos Financieros
+ -Serv.Cobro Anticipado
+ 9 Ventas en 1 día $ 1.246,31
+ 5 Ventas en 7 días $ 8.978,05
+ -Plan Cuotas
+ 16 Ventas en 3 cuotas $ 120.916,80
+Servicio Payway
+ Servicio Cobro Anticipado $ 75.670,11
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 157.048,47
+ Tasa 10,50 % $ 120.916,80
+Deducciones Impositivas
+ IVA 21,00 % $ 32.979,99
+ IVA 10,50 % Ley 25.063 $ 12.696,19
+Percep./Retenc.AFIP - DGI $ 4.771,11
+ (ver Constancia RG 796
+ en hoja aparte)
+___________________________________________________________________________________________________________________________________________
+ Fin de la información
+37.544

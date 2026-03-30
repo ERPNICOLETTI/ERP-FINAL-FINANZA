@@ -1,0 +1,106 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+28/02/2026
+000000512596
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+391
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271715
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+94.000,00
+1.137,40
+92.862,60
+ 0,00
+0,00
+0,00
+FECHA DE PAGO 02/02 Arancel $ 120,00
+ Pesos
+Deduc.Impositivas $ 25,20
+ Fecha de presentación 30/01
+ Liq. N° 00281059 - Lote N° 0126
+ 1 Venta Tj. Débito $ 12.000,00
+Total del día $ 12.000,00 $ 145,20 $ 11.854,80
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 10/02 Arancel $ 370,00
+ Pesos
+Deduc.Impositivas $ 77,70
+ Fecha de presentación 09/02
+ Liq. N° 00386082 - Lote N° 0133
+ 1 Venta Tj. Débito $ 8.000,00
+ Liq. N° 00386082 - Lote N° 0134
+ 1 Venta Tj. Débito $ 29.000,00
+Total del día $ 37.000,00 $ 447,70 $ 36.552,30
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 25/02 Arancel $ 450,00
+ Pesos
+Deduc.Impositivas $ 94,50
+ Fecha de presentación 24/02
+ Liq. N° 00282130 - Lote N° 0147
+ 1 Venta Tj. Débito $ 45.000,00
+Total del día $ 45.000,00 $ 544,50 $ 44.455,50
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 92.862,60
+ (Fecha de Pago 02/02 al 25/02)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Débito 1,00 % $ 940,00
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 940,00
+Deducciones Impositivas
+ IVA 21,00 % $ 197,40
+___________________________________________________________________________________________________________________________________________
+SR. COMERCIANTE: SI UD. REGISTRO LAS OPERACIONES DESDE EL RESUMEN DIARIO DE LIQUIDACIONES NO ES VALIDO
+EL COMPUTO DE CREDITOS FISCALES IVA Y RETENCIONES/PERCEPCIONES DE INGRESOS BRUTOS INCLUIDOS EN EL
+PRESENTE RESUMEN MENSUAL.
+___________________________________________________________________________________________________________________________________________
+ Continúa en la página siguiente
+35.345
+Liquidación a Comercios
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS NETO
+PERCIBIDO
+ADEMAS LE RECORDAMOS QUE SE ENCUENTRA VIGENTE LA LEY 25.065 EN LA CUAL SE ESTABLECE QUE LAS
+TRANSACCIONES EN UN PAGO CON TARJETAS DE CREDITO Y DEBITO DEBEN REALIZARSE AL MISMO PRECIO QUE LAS
+REALIZADAS EN EFECTIVO.
+___________________________________________________________________________________________________________________________________________
+DE ACUERDO A LO ESTABLECIDO POR EL ART.13 -2DO.PARRAFO- DEL DECRETO 380/2001 CORRESPONDE COMO CREDITO DE
+IMPUESTO EL 17% SOBRE $ 31.079.780,79
+___________________________________________________________________________________________________________________________________________
+ Fin de la información
+35.346

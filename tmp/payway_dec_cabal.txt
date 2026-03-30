@@ -1,0 +1,114 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+31/12/2025
+000000506653
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+391
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271715
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+233.200,00
+26.689,87
+206.510,13
+0,00
+0,00
+0,00
+FECHA DE PAGO 12/12 Arancel $ 1.340,00
+ Pesos
+Serv.Costos Financieros $ 5.427,00
+ Fecha de presentación 11/12
+ Liq. N° 00306037 - Lote N° 0081 Deduc.Impositivas $ 2.337,28
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 67.000,00
+ Serv.Cobro AnticipTotal del día $ 67.000,00 $ 12.500,51 $ 54.499,49
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 16/12 Arancel $ 295,00
+ Pesos
+Deduc.Impositivas $ 61,95
+ Fecha de presentación 15/12
+ Liq. N° 00433463 - Lote N° 0084
+ 1 Venta Tj. Débito $ 29.500,00
+Total del día $ 29.500,00 $ 356,95 $ 29.143,05
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 22/12 Arancel $ 1.760,00
+ Pesos
+Serv.Costos Financieros $ 5.653,80
+ Fecha de presentación 19/12
+ Liq. N° 00335564 - Lote N° 0088 Deduc.Impositivas $ 2.511,39
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 69.800,00
+Serv.Cobro Anticipado $ 3.538,17
+ Liq. N° 00335566 - Lote N° 0088
+ 1 Venta Tj. Débito $ 36.400,00
+Total del día $ 106.200,00 $ 13.463,36 $ 92.736,64
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 26/12 Arancel $ 155,00
+ Pesos
+Deduc.Impositivas $ 32,55
+ Fecha de presentación 23/12
+ Liq. N° 00404645 - Lote N° 0093
+ 1 Venta Tj. Débito $ 15.500,00
+Total del día $ 15.500,00 $ 187,55 $ 15.312,45
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 29/12 Arancel $ 150,00
+ Pesos
+Deduc.Impositivas $ 31,50
+ Fecha de presentación 26/12
+ Liq. N° 00442840 - Lote N° 0095
+ 1 Venta Tj. Débito $ 15.000,00
+Total del día $ 15.000,00 $ 181,50 $ 14.818,50
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 206.510,13
+ (Fecha de Pago 12/12 al 29/12)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Débito 1,00 % $ 964,00
+ Arancel Tj.Crédito en Cuotas 2,00 $ 2.736,00
+Servicio Costos Financieros
+ -Plan Cuotas
+ 2 Ventas en 3 cuotas $ 11.080,80
+Servicio Payway
+ Servicio Cobro Anticipado $ 6.934,40
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 21.715,20
+Deducciones Impositivas
+ IVA 21,00 % $ 4.560,17
+Percep./Retenc.AFIP - DGI $ 414,50
+ (ver Constancia RG 796
+ en hoja aparte)
+___________________________________________________________________________________________________________________________________________
+ Fin de la información
+37.538
