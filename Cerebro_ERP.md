@@ -9,8 +9,15 @@ El sistema se rige por la separación absoluta de responsabilidades. Nada está 
 
 ### Arquitectura de 3 Capas:
 1.  **Capa 0: El Motor (Core)** - Ubicado en `/core/`. Aquí reside la inteligencia pura. `tarjetas.py` sabe calcular, `ingesta.py` sabe guardar. No saben de dónde vienen los datos, solo saben procesarlos.
-2.  **Capa 1: El Servicio (API)** - `erp_api.py`. Expone la inteligencia al mundo (o a la red local). Nadie toca la base de datos directamente excepto la API (vía el Core).
+2.  **Capa 1: El Servicio (API)** - `erp_api.py`. Expone la inteligencia al mundo. Nadie toca la base de datos directamente excepto la API (vía el Core). **Separación por Áreas**: La API organiza las rutas (`/tarjetas/`, `/facturas/`) para mantener los dominios de datos aislados.
 3.  **Capa 2: La Interfaz (Cerebro CLI)** - `cerebro.py`. Es la consola de comandos. Su única tarea es recibir tus órdenes, hablar con la API y mostrarte los resultados de forma linda.
+
+### 🧩 Flujo de Orden (Cómo se organiza la información)
+El sistema mantiene un orden jerárquico estricto para evitar confusión entre fuentes:
+- **Identidad de Fuente**: Todos los datos se etiquetan con su `fuente` original (`PAYWAY`, `PATAGONIA365`, `NARANJA`).
+- **Consolidación Inteligente**: En la base de datos, las liquidaciones de diferentes orígenes conviven en la misma tabla maestra para permitir sumas globales, pero mantienen sus metadatos específicos en campos JSON.
+- **Rutas Propias**: Cada fuente tiene su propio Parser dedicado en `/parsers/`, asegurando que un cambio en el formato de Patagonia no afecte a Payway.
+- **Auditoría 360**: El motor de auditoría cruza las ventas (fuente POSNET) contra las liquidaciones (fuente BANCO/TARJETA) usando la `fecha_presentacion` como puente de unión.
 
 ---
 
@@ -27,8 +34,8 @@ El sistema se rige por la separación absoluta de responsabilidades. Nada está 
 │   └── facturas.py     # Motor de análisis fiscal ARCA/AFIP
 └── parsers/            # HERRAMIENTAS DE EXTRACCIÓN
     ├── parser_payway_liq.py    # Lector de CSV Prisma
-    └── parser_patagonia.py    # Lector de PDF Patagonia 365
-```
+    ├── parser_patagonia.py     # Lector de PDF Patagonia 365
+    └── parser_naranja_xlsx.py  # Lector de Excel Naranja
 
 ---
 
@@ -54,6 +61,8 @@ Para que no se pierda ni un centavo, cada archivo (PDF, CSV, XLSX) se digitaliza
 *   **Resumen Anual**: `python cerebro.py tarjetas resumen 2026`
 *   **Importar Patagonia**: `python cerebro.py tarjetas importar PATAGONIA365 "RUTA_AL_PDF"`
 *   **Importar Payway**: `python cerebro.py tarjetas importar PAYWAY "RUTA_AL_CSV"`
+*   **Importar Naranja**: `python cerebro.py tarjetas importar NARANJA "RUTA_AL_XLSX"`
+
 
 ### 🧾 Área: Facturas y Búsquedas
 *   **Búsqueda 360**: El sistema indexa automáticamente cada bit de información. Puedes buscar por cualquier término y el ERP te dirá en qué factura, liquidación o detalle aparece.
