@@ -74,6 +74,20 @@ Para que no se pierda ni un centavo, cada archivo (PDF, CSV, XLSX) se digitaliza
 
 ---
 
+## 🧠 5. Reglas de Negocio Contable (El Motor de Conciliación)
+El mayor valor del Cerebro ERP es su capacidad de entender las distorsiones del sistema financiero argentino. Al codificar el futuro **Conciliador Tarjetas vs Bancos**, se deben respetar las siguientes reglas descubiertas en producción:
+
+1.  **Depositos Fraccionados por Marca**: 
+    Las procesadoras (ej. Payway) reportan un "Neto a Cobrar" diario. El banco rara vez recibe un único depósito con ese número. 
+    *   *Mastercard*: Suele depositarse limpio o agrupado.
+    *   *Visa*: Suele partirse en múltiples acreditaciones (Débito y Crédito) más un ajuste de Débito (comisiones). **El ERP debe sumar los lote de Acreditaciones de un día y restar los Débitos de la procesadora para que el monto haga "Match" con el Neto teórico expedido.**
+2.  **Impuesto al Cheque Diferido (Ley 25413)**:
+    Si la cuenta no tiene fondos al ingresar plata y luego retirarse todo (o por cortes de día), el banco cobra este impuesto de forma rezagada o acumulativa a fin de mes. **El ERP NO debe buscar el impuesto el mismo día de la venta.** Debe sumarizar el impuesto en el período mensual (ej: "Carga Fiscal Real Enero") y contrastar contra la masa de facturación.
+3.  **Adelanto de Cupones (Cobro Anticipado)**:
+    Cuando se enciende el cobro al instante, las fechas teóricas de pago a 14/18 días de los cupones de crédito quedan obsoletas. **El ERP usa la `fecha_compra` o `fecha_presentacion` (+ margen de 24/48hs hábiles) para cruzar contra el banco**, y asume que cualquier débito extra de la procesadora esconde el "Costo Financiero" por habilitar esta ventaja, catalogándolo automáticamente como pérdida financiera.
+
+---
+
 ## 🧩 5. Instrucciones para la IA (Mantenimiento de 0)
 Si eres una nueva IA tomando el control:
 1.  **Mira el Esquema**: `erp_master.py` define la arquitectura de tablas.
