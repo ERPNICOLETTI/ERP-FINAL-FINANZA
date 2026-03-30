@@ -99,6 +99,21 @@ class ERPMaster:
             )
         ''')
 
+        # 3. Módulo Bancos / Cuenta Corriente (El cruce final)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS bancos_movimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                banco TEXT, -- CHUBUT, GALICIA, MACRO
+                cuenta TEXT, -- e.g. CAJA DE AHORRO, CUENTA CORRIENTE
+                fecha TEXT,
+                descripcion TEXT,
+                codigo_movimiento TEXT, -- ID del movimiento en el banco (no siempre es único)
+                importe REAL,
+                metadata TEXT,
+                UNIQUE(banco, cuenta, fecha, descripcion, codigo_movimiento, importe)
+            )
+        ''')
+
         # 3. Tabla Desacoplada para Declaraciones Juradas (F.2051)
         conn.execute('''
             CREATE TABLE IF NOT EXISTS libroiva (
@@ -116,7 +131,6 @@ class ERPMaster:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pw_date ON payway_records (fecha_compra)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_fac_num ON facturas (numero_completo)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pw_unique ON payway_records (lote, cupon, fecha_compra, monto_bruto)")
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_liq_unique ON liquidaciones_tarjetas (fuente, tipo, fecha_liquidacion, periodo, marca, total_bruto)")
 
         # 3. Índice FTS5 para Búsqueda 360 estilo Google
         conn.execute("DROP TABLE IF EXISTS search_index")
@@ -132,6 +146,8 @@ class ERPMaster:
             SELECT 'Factura', id, numero_completo || ' ' || proveedor, monto_total, fecha_emision, tipo_comprobante FROM facturas
             UNION ALL
             SELECT 'Liquidacion', id, fuente || ' ' || marca, total_bruto, fecha_liquidacion, 'Periodo: ' || periodo FROM liquidaciones_tarjetas
+            UNION ALL
+            SELECT 'Banco', id, banco || ' ' || descripcion, importe, fecha, codigo_movimiento FROM bancos_movimientos
         """)
         
         conn.commit()

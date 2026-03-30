@@ -102,5 +102,21 @@ if __name__ == "__main__":
                     print(f"   - {f['fecha_emision']} | {f['proveedor'][:25]:<25} | $ {f['monto_total']:>10,.2f}")
                 print()
 
+    # --- ÁREA: BANCOS ---
+    elif area == "bancos":
+        if cmd == "importar":
+            if len(sys.argv) < 5:
+                print("Uso: python cerebro.py bancos importar <BANCO> <PATH_ARCHIVO>")
+            else:
+                fuente = sys.argv[3]
+                path = sys.argv[4]
+                print(f"Iniciando importación de movimientos de {fuente}...")
+                res = query_api("bancos/importar", method="POST", data={"fuente": fuente, "path": path})
+                if res and res.get('status') == 'success':
+                    print(f"OK: Extracto de {fuente} procesado y guardado en la base de datos.")
+                else:
+                    print(f"ERROR: {res.get('message') if res else 'API Caída'}")
+
+
     else:
         mostrar_ayuda()

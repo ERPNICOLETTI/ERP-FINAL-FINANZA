@@ -7,10 +7,8 @@ from pydantic import BaseModel
 from erp_master import ERPMaster
 
 # IMPORTACIÓN ESTRUCTURADA POR ÁREAS 🏗️🧱🧠⚖️
-from core import tarjetas
-from core import facturas
-from core import ingesta
-from parsers import parser_payway_liq, parser_patagonia
+from core import tarjetas, facturas, ingesta
+from parsers import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
 class ImportRequest(BaseModel):
     fuente: str
@@ -57,13 +55,41 @@ async def get_cupon(cid: str):
 async def importar_tarjetas(req: ImportRequest):
     """Gatilla una importación selectiva desde archivos locales."""
     try:
-        if req.fuente.upper() == 'PAYWAY':
+        fuente = req.fuente.upper()
+        if fuente == 'PAYWAY':
             parser_payway_liq.parse_payway_liq(req.path)
             return {"status": "success", "fuente": "PAYWAY"}
-        elif req.fuente.upper() == 'PATAGONIA365':
+        
+        elif fuente == 'PATAGONIA365':
             parser_patagonia.parse_patagonia_365(req.path)
             return {"status": "success", "fuente": "PATAGONIA365"}
-        return {"status": "error", "message": "Fuente no soportada"}
+            
+        elif fuente == 'NARANJA':
+            if os.path.isdir(req.path):
+                import glob
+                archivos = glob.glob(os.path.join(req.path, "*.xlsx"))
+                for a in archivos:
+                    parser_naranja_xlsx.parse_naranja_xlsx(a)
+            else:
+                parser_naranja_xlsx.parse_naranja_xlsx(req.path)
+            return {"status": "success", "fuente": "NARANJA"}
+            
+        return {"status": "error", "message": f"Fuente '{fuente}' no soportada"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/bancos/importar")
+async def importar_bancos(req: ImportRequest):
+    """Importar extractos bancarios al sistema."""
+    try:
+        fuente = req.fuente.upper()
+        if fuente == 'CHUBUT':
+            # No se puede llamar a un script de forma estática si no está bien modularizado
+            # como lo importamos dinámicamente o lo llamamos desde subproceso:
+            from parsers.parser_chubut import parse_chubut_excel
+            parse_chubut_excel(req.path)
+            return {"status": "success", "fuente": "CHUBUT"}
+        return {"status": "error", "message": f"Banco '{fuente}' no soportado"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

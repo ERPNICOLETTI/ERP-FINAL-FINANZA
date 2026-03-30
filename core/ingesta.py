@@ -102,7 +102,7 @@ def persistir_factura(f: dict):
 
 # --- ÁREA: BANCO ---
 def persistir_transaccion(t: dict):
-    """Guarda movimientos bancarios."""
+    """Guarda movimientos bancarios (Legacy ERP)."""
     conn = get_db_connection()
     try:
         conn.execute('''
@@ -115,5 +115,27 @@ def persistir_transaccion(t: dict):
             t.get('date'), t.get('currency', 'ARS')
         ))
         conn.commit()
+    finally:
+        conn.close()
+
+def persistir_movimientos_banco_lista(lista_movimientos: list):
+    """Guarda movimientos bancarios de cuenta corriente (Cruce Exacto)."""
+    conn = get_db_connection()
+    try:
+        agregados = 0
+        for b in lista_movimientos:
+            cursor = conn.execute('''
+                INSERT OR IGNORE INTO bancos_movimientos (
+                    banco, cuenta, fecha, descripcion, codigo_movimiento, importe, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'), b.get('fecha'), b.get('descripcion'),
+                b.get('codigo_movimiento'), b.get('importe'),
+                json.dumps(b.get('metadata', {}))
+            ))
+            if cursor.rowcount > 0:
+                agregados += 1
+        conn.commit()
+        return agregados
     finally:
         conn.close()
