@@ -19,7 +19,7 @@ def persistir_liquidacion(data: dict):
         tipo = data.get('tipo', 'DIARIA').upper()
         
         cursor = conn.execute('''
-            INSERT OR REPLACE INTO liquidaciones_tarjetas (
+            INSERT OR IGNORE INTO liquidaciones_tarjetas (
                 fuente, tipo, fecha_liquidacion, periodo, marca, establecimiento,
                 total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
                 retenciones, total_neto, metadata
@@ -33,11 +33,13 @@ def persistir_liquidacion(data: dict):
             data.get('total_neto', 0.0), json.dumps(data.get('metadata', {}))
         ))
         
-        # Si no insertó (por duplicado), buscamos el ID existente
         last_id = cursor.lastrowid
+        # Si last_id es 0, significa que el registro ya existía (IGNORE actuó)
         if last_id == 0:
-            res = conn.execute("SELECT id FROM liquidaciones_tarjetas WHERE fuente=? AND tipo=? AND fecha_liquidacion=? AND total_bruto=?", 
-                               (fuente, tipo, data.get('fecha_liquidacion'), data.get('total_bruto'))).fetchone()
+            res = conn.execute("""
+                SELECT id FROM liquidaciones_tarjetas 
+                WHERE fuente=? AND fecha_liquidacion=? AND periodo=? AND marca=? AND total_neto=?
+            """, (fuente, data.get('fecha_liquidacion'), data.get('periodo'), data.get('marca'), data.get('total_neto'))).fetchone()
             if res: last_id = res[0]
             
         conn.commit()

@@ -67,7 +67,8 @@ class ERPMaster:
                 iva_105 REAL,
                 retenciones REAL, -- Suma de Ganancias, IVA, IIBB
                 total_neto REAL,
-                metadata TEXT
+                metadata TEXT,
+                UNIQUE(fuente, fecha_liquidacion, periodo, marca, establecimiento, total_neto)
             )
         ''')
         conn.execute('''
