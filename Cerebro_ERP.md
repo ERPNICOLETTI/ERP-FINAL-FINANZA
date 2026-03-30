@@ -35,43 +35,38 @@ El sistema se rige por la separación absoluta de responsabilidades. Nada está 
 ## 🏗️ 3. El Flujo de Ingesta (Digitalización Bit a Bit)
 Para que no se pierda ni un centavo, cada archivo (PDF, CSV, XLSX) se digitaliza en dos capas:
 
-1.  **CAPA DE CABECERA (Header)**: Se guardan los totales generales (Bruto, Neto, Fecha, Marca) en la tabla `liquidaciones_tarjetas`.
-2.  **CAPA ATÓMICA (Detalle)**: Se guarda **cada línea** del archivo original en la tabla `liquidaciones_detalles`. 
-    *   Si el PDF tiene certificados, leyendas o texto legal, queda capturado como texto dentro de la base de datos.
-    *   **Metadatos JSON**: Usamos campos JSON para guardar "certificados" o "textos puntuales" de cada fuente sin ensuciar la estructura principal.
+1.  **CAPA DE CABECERA (Header)**: Se guardan los totales generales en `liquidaciones_tarjetas`.
+2.  **CAPA ATÓMICA (Detalle)**: Se guarda **cada línea** del archivo original en `liquidaciones_detalles`. 
+
+**Reglas de Oro del Ladrillero (`core/ingesta.py`):**
+*   **Normalización Robusta**: El motor limpia automáticamente caracteres basura (como letras pegadas a números) para asegurar que los montos sean siempre correctos.
+*   **Update Inteligente (`INSERT OR REPLACE`)**: Si vuelves a importar el mismo archivo con correcciones, el sistema sobreescribe la información anterior para que siempre tengas el dato más puro disponible.
+*   **Búsqueda Nuclear**: Al estar todo digitalizado, puedes buscar "Resoluciones", "Nros de Certificado" o "Ingresos Brutos" directamente con una consulta a la tabla de detalles.
 
 **Camino del dato**:
-`Archivo Raw` -> `Parser` (Extrae todo) -> `Ladrillero` (Normaliza) -> `DB (Header + Detalles)`
+`Archivo Raw` -> `Parser` (Limpia y extrae) -> `Ladrillero` (Persiste) -> `DB (Header + Detalles)`
 
 ---
 
 ## 🛠️ 4. Manual de Comandos (Cómo opero el sistema)
 
 ### 🎫 Área: Tarjetas (Conciliación Financiera)
-*   **Ver resumen del año**: `python cerebro.py tarjetas resumen 2026`
-    *   *Qué hace*: Te muestra una tabla consolidada de Payway, Patagonia y Naranja con Bruto, Neto y Gastos.
-*   **Importar datos nuevos**: `python cerebro.py tarjetas importar <FUENTE> <RUTA_ARCHIVO>`
-    *   *Fuentes Soportadas*: `PAYWAY`, `PATAGONIA365`.
-*   **Auditoría de Fugas**: `python cerebro.py tarjetas audit`
-    *   *Qué hace*: Cruza ticket por ticket contra los depósitos diarios para ver si Payway te debe plata.
+*   **Resumen Anual**: `python cerebro.py tarjetas resumen 2026`
+*   **Importar Patagonia**: `python cerebro.py tarjetas importar PATAGONIA365 "RUTA_AL_PDF"`
+*   **Importar Payway**: `python cerebro.py tarjetas importar PAYWAY "RUTA_AL_CSV"`
 
-### 🧾 Área: Facturas (Auditoría Fiscal)
-*   **Buscar cualquier cosa**: `python cerebro.py facturas buscar "Nombre Proveedor"`
-*   **Resumen de IVA**: `python cerebro.py facturas resumen 2026`
-*   **Alertas Rojas**: `python cerebro.py facturas discrepancias`
-    *   *Qué hace*: Te avisa qué facturas de la AFIP no se subieron al sistema contable (CALIM).
+### 🧾 Área: Facturas y Búsquedas
+*   **Búsqueda 360**: El sistema indexa automáticamente cada bit de información. Puedes buscar por cualquier término y el ERP te dirá en qué factura, liquidación o detalle aparece.
 
 ---
 
-## 🧩 5. Cómo expandir el sistema (Instrucciones para el futuro)
-Si querés agregar una nueva fuente (Ejemplo: **Naranja**):
-
-1.  **Crear el Lector**: Crear `parsers/parser_naranja.py`. Su única misión es devolver un diccionario con los campos: `total_bruto`, `total_neto`, `fecha`, etc.
-2.  **Llamar al Ladrillero**: Al final del parser, importar `core.ingesta` y llamar a `persistir_liquidacion(data)`.
-3.  **Actualizar API**: Agregar la opción "NARANJA" en el endpoint `/tarjetas/importar` de `erp_api.py`.
-4.  **Actualizar Cerebro**: ¡Nada! Cerebro ya está preparado para mostrar cualquier fuente que aparezca en la tabla unificada.
+## 🧩 5. Instrucciones para la IA (Mantenimiento de 0)
+Si eres una nueva IA tomando el control:
+1.  **Mira el Esquema**: `erp_master.py` define la arquitectura de tablas.
+2.  **Sigue la Normalización**: Usa siempre `normalizar_importe` de los parsers existentes. No intentes inventar reglas de limpieza de números nuevas.
+3.  **Digitaliza TODO**: Al crear un nuevo parser, asegúrate de loopiar cada línea/celda del archivo y guardarla en `liquidaciones_detalles`.
 
 ---
 
 > [!IMPORTANT]
-> **ORDEN ABSOLUTO**: Nunca escribas código de base de datos fuera de `/core/`. Nunca escribas lógica de cálculo dentro de `cerebro.py`. Mantener las capas separadas es lo que hace que el sistema sea eterno.
+> **ORDEN ABSOLUTO**: Nunca escribas código de base de datos fuera de `/core/`. Nunca escribas lógica de cálculo dentro de `cerebro.py`. La API (`erp_api.py`) es el único puente oficial entre la interfaz y los datos.

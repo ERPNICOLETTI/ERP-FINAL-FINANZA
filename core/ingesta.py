@@ -12,13 +12,14 @@ def get_db_connection():
 # --- ÁREA: TARJETAS ---
 def persistir_liquidacion(data: dict):
     """Guarda una liquidación y devuelve su ID."""
+    print(f"LADRILLERO: Persistiendo {data.get('fuente')} - Neto: {data.get('total_neto')}")
     conn = get_db_connection()
     try:
         fuente = data.get('fuente', 'DESCONOCIDA').upper()
         tipo = data.get('tipo', 'DIARIA').upper()
         
         cursor = conn.execute('''
-            INSERT OR IGNORE INTO liquidaciones_tarjetas (
+            INSERT OR REPLACE INTO liquidaciones_tarjetas (
                 fuente, tipo, fecha_liquidacion, periodo, marca, establecimiento,
                 total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
                 retenciones, total_neto, metadata
