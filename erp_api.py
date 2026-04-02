@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from erp_master import ERPMaster
 
 # IMPORTACIÓN ESTRUCTURADA POR ÁREAS 🏗️🧱🧠⚖️
-from core import tarjetas, facturas, ingesta
+from core import tarjetas, ingesta
+from facturas_compra import motor_compras as facturas
 from parsers import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
 class ImportRequest(BaseModel):
@@ -97,9 +98,34 @@ async def importar_bancos(req: ImportRequest):
 async def buscar_facturas(q: str):
     return facturas.buscar_global(q)
 
-@app.get("/facturas/discrepancias")
-async def get_discrepancias():
-    return facturas.reporte_discrepancias()
+@app.post("/facturas/importar")
+async def importar_facturas(req: ImportRequest):
+    """Gatilla importación de AFIP o CALIM."""
+    try:
+        fuente = req.fuente.upper()
+        if fuente == 'AFIP':
+            from facturas_compra.importador_afip import parse_afip_csv
+            parse_afip_csv(req.path)
+            return {"status": "success", "fuente": "AFIP"}
+        elif fuente == 'CALIM':
+            from facturas_compra.importador_calim import parse_calim_excel
+            parse_calim_excel(req.path)
+            return {"status": "success", "fuente": "CALIM"}
+        return {"status": "error", "message": f"Fuente '{fuente}' no soportada en facturas"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/facturas/sync_archivos")
+async def sync_archivos():
+    """Ejecuta el organizador y sincronizador de archivos físicos."""
+    try:
+        from facturas_compra.sincronizador_ficheros import sync
+        from facturas_compra.organizador_carpetas import migrate_folders
+        migrate_folders()
+        sync()
+        return {"status": "success", "message": "Archivos organizados y sincronizados"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/sync")
 async def sync_data():

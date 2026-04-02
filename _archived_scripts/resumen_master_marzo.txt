@@ -1,0 +1,172 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+31/03/2026
+000000515677
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+100
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271756
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+589.200,00
+35.924,44
+553.275,56
+0,00
+0,00
+0,00
+FECHA DE PAGO 02/03 Arancel $ 228,00
+ Pesos
+Deduc.Impositivas $ 47,88
+ Fecha de presentación 27/02
+ Liq. N° 00304437 - Lote N° 0150
+ 1 Venta Tj. Débito $ 19.000,00
+Total del día $ 19.000,00 $ 275,88 $ 18.724,12
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 04/03 Arancel $ 670,80
+ Pesos
+Deduc.Impositivas $ 140,86
+ Fecha de presentación 03/03
+ Liq. N° 00292458 - Lote N° 0153
+ 2 Ventas Tj.Débito $ 55.900,00
+Total del día $ 55.900,00 $ 811,66 $ 55.088,34
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 05/03 Arancel $ 420,00
+ Pesos
+Deduc.Impositivas $ 88,20
+ Fecha de presentación 04/03
+ Liq. N° 00267857 - Lote N° 0154
+ 1 Venta Tj. Débito $ 35.000,00
+Total del día $ 35.000,00 $ 508,20 $ 34.491,80
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 06/03 Arancel $ 1.260,00
+ Pesos
+Serv.Costos Financieros $ 6.575,61
+ Fecha de presentación 05/03
+ Liq. N° 00276151 - Lote N° 0155 Deduc.Impositivas $ 1.880,53
+ 1 Venta en 1 pago $ 63.000,00
+Total del día $ 63.000,00 $ 9.716,14 $ 53.283,86
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 10/03 Arancel $ 598,80
+ Pesos
+Deduc.Impositivas $ 125,74
+ Fecha de presentación 09/03
+ Liq. N° 00386879 - Lote N° 0157
+ 1 Venta Tj. Débito $ 49.900,00
+Total del día $ 49.900,00 $ 724,54 $ 49.175,46
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 16/03 Arancel $ 2.050,00
+ Pesos
+Serv.Costos Financieros $ 7.974,50
+ Fecha de presentación 13/03
+ Liq. N° 00307286 - Lote N° 0162 Deduc.Impositivas $ 2.622,12
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 102.500,00
+ Serv.Cobro Anticip Continúa en la página siguiente
+37.278
+Liquidación a Comercios
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS NETO
+PERCIBIDO
+Total del día $ 102.500,00 $ 17.860,85 $ 84.639,15
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 17/03 Arancel $ 156,00
+ Pesos
+Deduc.Impositivas $ 32,76
+ Fecha de presentación 16/03
+ Liq. N° 00389119 - Lote N° 0163
+ 1 Venta Tj. Débito $ 13.000,00
+Total del día $ 13.000,00 $ 188,76 $ 12.811,24
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 19/03 Arancel $ 1.420,00
+ Pesos
+Serv.Costos Financieros $ 1.246,35
+ Fecha de presentación 18/03
+ Liq. N° 00269296 - Lote N° 0164 Deduc.Impositivas $ 559,92
+ 1 Venta en 1 pago $ 22.000,00
+ Liq. N° 00269297 - Lote N° 0164
+ 1 Venta en 1 pago $ 49.000,00
+Total del día $ 71.000,00 $ 3.226,27 $ 67.773,73
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 20/03 Arancel $ 958,80
+ Pesos
+Deduc.Impositivas $ 201,34
+ Fecha de presentación 19/03
+ Liq. N° 00267197 - Lote N° 0165
+ 2 Ventas Tj.Débito $ 79.900,00
+Total del día $ 79.900,00 $ 1.160,14 $ 78.739,86
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 25/03 Arancel $ 282,00
+ Pesos
+Deduc.Impositivas $ 59,22
+ Fecha de presentación 20/03
+ Liq. N° 00284417 - Lote N° 0166
+ 1 Venta Tj. Débito $ 23.500,00
+Total del día $ 23.500,00 $ 341,22 $ 23.158,78
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 26/03 Arancel $ 918,00
+ Pesos
+Deduc.Impositivas $ 192,78
+ Fecha de presentación 25/03
+ Liq. N° 00415188 - Lote N° 0167
+ 1 Venta Tj. Débito $ 76.500,00
+Total del día $ 76.500,00 $ 1.110,78 $ 75.389,22
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 553.275,56
+ (Fecha de Pago 02/03 al 26/03)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Crédito 2,00 % $ 2.680,00
+ Arancel Tj.Débito 1,20 % $ 4.232,40
+ Arancel Tj.Crédito en Cuotas 2,00 $ 2.050,00
+Servicio Costos Financieros
+ -Serv.Cobro Anticipado
+ 1 Venta en 1 día $ 300,84
+ 1 Venta en 7 días $ 945,51
+ 1 Venta en 17 días $ 6.575,61
+ -Plan Cuotas
+ 1 Venta en 3 cuotas $ 7.974,50
+Servicio Payway
+ Servicio Cobro Anticipado $ 5.214,23
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 21.998,59
+ Tasa 10,50 % $ 7.974,50
+Deducciones Impositivas
+ IVA 21,00 % $ 4.619,65
+ IVA 10,50 % Ley 25.063 $ 837,32
+Percep./Retenc.AFIP - DGI $ 494,38
+___________________________________________________________________________________________________________________________________________
+ Fin de la información

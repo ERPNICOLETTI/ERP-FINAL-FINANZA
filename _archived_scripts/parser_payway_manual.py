@@ -21,18 +21,18 @@ def parse_payway_manual_text(text):
     m_bruto = re.search(r'TOTAL PRESENTADO \$ ([\d\.,]+)', text)
     m_descuento = re.search(r'TOTAL DESCUENTO \$ ([\d\.,]+)', text)
     m_neto_total = re.search(r'SALDO \$ ([\d\.,]+)', text)
-    m_fecha = re.search(r'FECHA DE EMISION:\s+(\d{2}/\d{2}/\d{4})', text)
+    m_fecha = re.search(r'(\d{2}/\d{2}/\d{4})', text)
     m_est = re.search(r'Nº DE ESTABLECIMIENTO:\s+(\d+)', text)
     
-    fecha_emision = m_fecha.group(1) if m_fecha else "2026-02-28"
+    fecha_emision = m_fecha.group(1) if m_fecha else "2026-03-31"
     # Convertir a ISO
     if "/" in fecha_emision:
         dia, mes, anio = fecha_emision.split('/')
         fecha_iso = f"{anio}-{mes}-{dia}"
         periodo = f"{anio}-{mes}"
     else:
-        fecha_iso = "2026-02-28"
-        periodo = "2026-02"
+        fecha_iso = "2026-03-31"
+        periodo = "2026-03"
 
     header = {
         "fuente": "PAYWAY_RESUMEN",

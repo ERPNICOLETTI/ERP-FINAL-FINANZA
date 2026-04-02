@@ -1,0 +1,112 @@
+Resumen Mensual de Liquidaciones
+HOJA
+FECHA DE EMISION:
+Nº DE RESUMEN:
+PAGADOR:
+SUCURSAL:
+DOMICILIO:
+Nº DE CUIT:
+RESP./CARACTER:
+Nº AG.RET.ING.BRUTOS:
+Nº CUIT ESTABLEC.:
+CARACTER:
+Nº ING.BRUTOS:
+Nº DE ESTABLECIMIENTO:
+TOTAL PRESENTADO $ TOTAL PRESENTADO U$S
+TOTAL DESCUENTO $ TOTAL DESCUENTO U$S
+SALDO $ SALDO U$S
+DETALLE DE LAS TRANSACCIONES MONTO
+PRESENTADO
+DETALLE DE DESCUENTOS
+NETO
+PERCIBIDO
+1
+31/03/2026
+000000515676
+083 BANCO DEL CHUBUT S.A.
+030 SAENZ PE¦A
+CALLE ROQUE SAENZ44 CP 9120
+30 50001299 0
+Resp.Inscripto
+900
+27-32954997-1
+IVA RESPONSABLE INSCRIPTO
+00027329549971
+0029271707
+Razón Social
+JORGELINA BELEN DOMINGUEZ
+Establecimiento
+LO DE KARLOTA
+9 DE JULIO 170 LOC
+C.P. 9120 PUERTO MADRYN
+CHUBUT
+3.140.600,00
+371.198,41
+2.769.401,59
+0,00
+0,00
+0,00
+FECHA DE PAGO 02/03 Arancel $ 1.754,00
+ Pesos
+Serv.Costos Financieros $ 3.769,16
+ Fecha de presentación 27/02
+ Liq. N° 00304436 - Lote N° 0150 Deduc.Impositivas $ 1.325,55
+ 1 Venta en 1 pago $ 87.700,00
+Total del día $ 87.700,00 $ 6.848,71 $ 80.851,29
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 03/03 Arancel $ 2.144,00
+ Pesos
+Serv.Costos Financieros $ 6.853,24
+ Fecha de presentación 02/03
+ Liq. N° 00390007 - Lote N° 0152 Servicio PAYWAY $ 0,00
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 64.500,00
+Deduc.Impositivas $ 2.207,49
+ Liq. N° 00390009 - Lote N° 0151
+ 1 Venta en 1 pago $ 13.200,00 Serv.Cobro Anticipado $ 3.281,15
+ Liq. N° 00390009 - Lote N° 0152
+ 1 Venta en 1 pago $ 29.500,00
+Total del día $ 107.200,00 $ 14.485,88 $ 92.714,12
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 09/03 Arancel $ 5.166,00
+ Pesos
+Serv.Costos Financieros $ 19.123,24
+ Fecha de presentación 06/03
+ Liq. N° 00297660 - Lote N° 0156 Deduc.Impositivas $ 6.340,46
+ 4 Ventas en 3 pagos - Cuotas MiPyME 3 $ 245.800,00
+Serv.Cobro Anticipado $ 12.503,96
+ Liq. N° 00297662 - Lote N° 0156
+ 1 Venta Tj. Débito $ 25.000,00
+Total del día $ 270.800,00 $ 43.133,66 $ 227.666,34
+___________________________________________________________________________________________________________________________________________
+FECHA DE PAGO 26/03 Arancel $ 9.678,00
+ Pesos
+Serv.Costos Financieros $ 31.585,95
+ Fecha de presentación 25/03
+ Liq. N° 00415184 - Lote N° 0167 Deduc.Impositivas $ 10.646,55
+ 1 Venta en 3 pagos - Cuotas MiPyME 3 $ 78.000,00
+Serv.Cobro Anticipado $ 18.567,72
+Total del día $ 528.600,00 $ 70.478,22 $ 458.121,78
+___________________________________________________________________________________________________________________________________________
+ SE ACREDITO EN:
+ CA000000699596001 $ 2.769.401,59
+ (Fecha de Pago 02/03 al 31/03)
+___________________________________________________________________________________________________________________________________________
+DESGLOSE DE DESCUENTOS
+Arancel
+ Arancel Tj.Crédito 2,00 % $ 12.642,00
+ Arancel Tj.Débito 1,00 % $ 7.384,00
+ Arancel Tj.Crédito en Cuotas 2,00 $ 35.402,00
+Servicio Costos Financieros
+ -Plan Cuotas
+ 26 Ventas en 3 cuotas $ 146.314,44
+Servicio Payway
+ Servicio Cobro Anticipado $ 83.539,51
+Base Imponible IVA Monto Gravado
+ Tasa 21,00 % $ 185.606,00
+ Tasa 10,50 % $ 127.763,16
+Deducciones Impositivas
+ IVA 21,00 % $ 38.977,04
+ IVA 10,50 % Ley 25.063 $ 13.415,02
+Percep./Retenc.AFIP - DGI $ 5.437,19
+___________________________________________________________________________________________________________________________________________
+ Fin de la información
