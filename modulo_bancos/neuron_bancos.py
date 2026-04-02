@@ -44,6 +44,8 @@ def handle_command(cmd, args, query_api):
                 total += s['importe']
             print("-" * 60)
             print(f"TOTAL DETECTADO: $ {total:,.2f}\n")
+        else:
+            print("❌ No se encontraron movimientos de sueldos para el periodo indicado.\n")
     
     elif cmd == "audit":
         print("Módulo de Auditoría Bancaria (Cruce de extractos vs Ventas)... próximamente.")
