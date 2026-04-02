@@ -24,6 +24,22 @@ def initialize_all():
     
     # 2. El Core construye la infraestructura de búsqueda
     setup_search_index()
+    
+    # 3. El Core construye el registro de auditoría de ingestas (Anti-duplicados)
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS core_registro_ingestas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo TEXT,
+            tipo TEXT,              -- FILE, TEXT
+            nombre_fuente TEXT,     -- filename or description
+            hash_sha256 TEXT UNIQUE,
+            fecha_proceso TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
     print("✨ [CORE] Base de datos lista y orquestada.")
 
 def setup_search_index():

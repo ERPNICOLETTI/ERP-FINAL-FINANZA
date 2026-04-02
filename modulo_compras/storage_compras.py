@@ -47,7 +47,7 @@ def init_db_compras():
         )
     ''')
 
-    # Libro IVA
+    # Libro IVA Consolidado
     conn.execute('''
         CREATE TABLE IF NOT EXISTS libroiva (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +56,21 @@ def init_db_compras():
             credito_fiscal REAL,
             saldo_tecnico REAL,
             saldo_libre_disponibilidad REAL
+        )
+    ''')
+
+    # DETALLE DE IVA (Especial para Comisiones e Intereses)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS iva_desglosado (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo_origen TEXT,     -- TARJETAS, BANCOS
+            fuente TEXT,            -- PAYWAY, CHUBUT, etc.
+            fecha TEXT,
+            neto_gravado REAL,
+            iva_105 REAL,
+            iva_21 REAL,
+            descripcion TEXT,
+            extern_id INTEGER       -- Referencia al ID original en el módulo
         )
     ''')
     conn.commit()
@@ -74,6 +89,23 @@ def save_factura(f: dict):
             f.get('numero_completo'), f.get('tipo_operacion'), f.get('tipo_comprobante'),
             f.get('proveedor'), f.get('fecha_emision'), f.get('neto_gravado'),
             f.get('monto_iva'), f.get('monto_total'), f.get('status', 'SOLO_AFIP')
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+def registrar_impuesto(data: dict):
+    """API Interna para registrar IVA desde cualquier módulo."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO iva_desglosado (
+                modulo_origen, fuente, fecha, neto_gravado, iva_105, iva_21, descripcion, extern_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('modulo'), data.get('fuente'), data.get('fecha'),
+            data.get('neto_gravado', 0), data.get('iva_105', 0), data.get('iva_21', 0),
+            data.get('descripcion'), data.get('extern_id')
         ))
         conn.commit()
     finally:

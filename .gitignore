@@ -6,3 +6,8 @@ tmp/
 __pycache__/
 *.pyc
 *.pyo
+.DS_Store
+
+# Crudos de Módulos (Ignorar contenido, mantener carpeta)
+modulo_*/crudos/*
+!modulo_*/crudos/.gitkeep

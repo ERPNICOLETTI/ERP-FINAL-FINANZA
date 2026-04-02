@@ -16,6 +16,7 @@ Cada dominio de negocio (Tarjetas, Compras, Bancos) es una unidad autónoma y au
 > **Aislamiento de Dominios**: Está terminantemente prohibido que un módulo acceda directamente a las tablas o archivos de persistencia de otro módulo. La comunicación entre dominios debe hacerse a través de interfaces de servicio (Funciones de Storage o API interna).
 
 -   **Persistencia Local**: Cada módulo gestiona su propia base de datos lógica a través de su respectivo archivo `storage_*.py`. El dominio es el único dueño de su esquema SQL.
+-   **Crudos Locales**: Cada módulo tiene su propia carpeta `crudos/`. Los archivos de origen (PDF, CSV, XLSX) deben depositarse en el módulo correspondiente. El Core solo orquesta la llamada, pero el módulo "manda" en sus archivos.
 -   **Orquestación Central**: El `core_sistema` actúa como el "Hub". Su responsabilidad es coordinar la inicialización, la infraestructura y mantener el motor de búsqueda global **FTS5** (`search_index`). No debe contener lógica ni persistencia de negocio.
 
 ---
