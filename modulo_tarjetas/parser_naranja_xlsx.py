@@ -5,7 +5,7 @@ import re
 
 # Parser Naranja XLSX (Digitalización Bit a Bit) 🏗️🧱🧠⚖️🚀
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core import ingesta
+from core_sistema import db_ingesta as ingesta
 
 def normalizar_importe(val):
     if pd.isna(val) or val is None: return 0.0

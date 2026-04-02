@@ -4,7 +4,7 @@ import sys
 
 # Añadir path raíz para importar core
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core import ingesta
+from core_sistema import db_ingesta as ingesta
 
 def normalizar_importe(texto):
     if not texto: return 0.0

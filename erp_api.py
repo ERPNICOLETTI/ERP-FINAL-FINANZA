@@ -6,16 +6,17 @@ from typing import List, Dict, Any
 from pydantic import BaseModel
 from erp_master import ERPMaster
 
-# IMPORTACIÓN ESTRUCTURADA POR ÁREAS 🏗️🧱🧠⚖️
-from core import tarjetas, ingesta
-from facturas_compra import motor_compras as facturas
-from parsers import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
+# IMPORTACIÓN ESTRUCTURADA POR DOMINIOS (DDD) 🏗️🧱🧠⚖️
+from modulo_tarjetas import logica_tarjetas as tarjetas
+from core_sistema import db_ingesta as ingesta
+from modulo_compras import motor_compras as facturas
+from modulo_tarjetas import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
 class ImportRequest(BaseModel):
     fuente: str
     path: str
 
-app = FastAPI(title="ERP Final API - Área Inteligencia", version="3.1.0")
+app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
 
 # Workspace Context
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
@@ -25,10 +26,10 @@ master = ERPMaster(WORKSPACE)
 async def home():
     return """
     <html>
-        <head><title>ERP API - Modo Cerebro</title></head>
+        <head><title>ERP API - Modo Arquitecto DDD</title></head>
         <body style="font-family: sans-serif; background: #0f172a; color: white; padding: 50px;">
             <h1 style="color: #38bdf8;">🧠 ERP Central Intelligence API</h1>
-            <p>Estado: <span style="color: #10b981;">MODULARIZADO Y SEGURO</span></p>
+            <p>Estado: <span style="color: #10b981;">ARQUITECTURA DDD IMPLEMENTADA</span></p>
         </body>
     </html>
     """
@@ -85,9 +86,7 @@ async def importar_bancos(req: ImportRequest):
     try:
         fuente = req.fuente.upper()
         if fuente == 'CHUBUT':
-            # No se puede llamar a un script de forma estática si no está bien modularizado
-            # como lo importamos dinámicamente o lo llamamos desde subproceso:
-            from parsers.parser_chubut import parse_chubut_excel
+            from modulo_bancos.parser_chubut import parse_chubut_excel
             parse_chubut_excel(req.path)
             return {"status": "success", "fuente": "CHUBUT"}
         return {"status": "error", "message": f"Banco '{fuente}' no soportado"}
@@ -104,11 +103,11 @@ async def importar_facturas(req: ImportRequest):
     try:
         fuente = req.fuente.upper()
         if fuente == 'AFIP':
-            from facturas_compra.importador_afip import parse_afip_csv
+            from modulo_compras.importador_afip import parse_afip_csv
             parse_afip_csv(req.path)
             return {"status": "success", "fuente": "AFIP"}
         elif fuente == 'CALIM':
-            from facturas_compra.importador_calim import parse_calim_excel
+            from modulo_compras.importador_calim import parse_calim_excel
             parse_calim_excel(req.path)
             return {"status": "success", "fuente": "CALIM"}
         return {"status": "error", "message": f"Fuente '{fuente}' no soportada en facturas"}
@@ -119,8 +118,8 @@ async def importar_facturas(req: ImportRequest):
 async def sync_archivos():
     """Ejecuta el organizador y sincronizador de archivos físicos."""
     try:
-        from facturas_compra.sincronizador_ficheros import sync
-        from facturas_compra.organizador_carpetas import migrate_folders
+        from modulo_compras.sincronizador_ficheros import sync
+        from modulo_compras.organizador_carpetas import migrate_folders
         migrate_folders()
         sync()
         return {"status": "success", "message": "Archivos organizados y sincronizados"}

@@ -2,6 +2,7 @@ import pandas as pd
 import sqlite3
 import os
 import sys
+from core_sistema import db_ingesta as ingesta
 
 def ingesta_hipotecario(file_path, db_path):
     print(f"💎 PROCESANDO BANCO HIPOTECARIO (ÁREA JOAQUÍN)...")
