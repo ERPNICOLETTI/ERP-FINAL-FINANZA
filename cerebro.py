@@ -1,8 +1,10 @@
 import sys
 import os
 import requests
+import importlib
 
-# CEREBRO ERP - Consola de Control Central 🦾🏗️🧱🧠⚖️
+# CEREBRO ERP - Consola de Control Central (Orquestador DDD) 🦾🧠⚖️
+# Este archivo es el "Hub" que conecta con las Neuronas de cada módulo.
 
 API_URL = "http://127.0.0.1:5005"
 
@@ -16,107 +18,49 @@ def query_api(endpoint, params=None, method="GET", data=None):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"Error de conexion con API: {e}")
+        print(f"Error de conexión con API: {e}")
         return None
 
 def mostrar_ayuda():
-    print("\nCEREBRO ERP - CONSOLA DE INTERACCION (MULTI-AREA)")
-    print("-" * 65)
-    print("AREA: tarjetas (Payway, Patagonia 365, Naranja)")
-    print("   -> resumen [anio]      | Consolidado de todas las liquidaciones.")
-    print("   -> importar <src> <p>  | Importar PDF/CSV (Fuentes: PAYWAY, PATAGONIA365).")
-    print("   -> audit               | Cruce de ventas diarias vs depositos.")
-    print("   -> cupon <id/numero>   | Detalle tecnico de un cupon.")
-    
-    print("\nAREA: facturas (ARCA/CALIM)")
-    print("   -> resumen [anio]      | Balance Ventas vs Compras.")
-    print("   -> buscar <termino>    | Buscar comprobantes en DB.")
-    print("-" * 65 + "\n")
+    print("\n🧠 CEREBRO ERP - CONSOLA CENTRAL")
+    print("-" * 50)
+    print("ÁREAS DISPONIBLES:")
+    print("   -> tarjetas     | Gestión de recaudación y POS.")
+    print("   -> facturas     | Gestión de ARCA (AFIP) y CALIM.")
+    print("   -> bancos       | Tesorería y conciliación.")
+    print("-" * 50)
+    print("Para ver comandos de una neurona: python cerebro.py <AREA>")
+    print("-" * 50 + "\n")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         mostrar_ayuda()
         sys.exit(0)
     
     area = sys.argv[1].lower()
-    cmd = sys.argv[2].lower()
+    command = sys.argv[2].lower() if len(sys.argv) > 2 else None
+    args = sys.argv[3:] if len(sys.argv) > 3 else []
     
-    # --- ÁREA: TARJETAS ---
-    if area == "tarjetas":
-        if cmd == "resumen":
-            anio = sys.argv[3] if len(sys.argv) > 3 else "2026"
-            res = query_api("summary", params={"anio": anio})
-            if res:
-                print(f"\nRESUMEN CONSOLIDADO DE TARJETAS ({anio})")
-                print("-" * 85)
-                print(f"{'FUENTE':<15} | {'TIPO':<10} | {'CANT':<5} | {'MONTO BRUTO':<15} | {'NETO REAL':<15}")
-                print("-" * 85)
-                for l in res['tarjetas']['liquidaciones']:
-                    print(f"{l['fuente']:<15} | {l['tipo']:<10} | {l['cantidad']:<5} | ${l['bruto']:>14,.2f} | ${l['neto']:>14,.2f}")
-                print("-" * 85 + "\n")
-        
-        elif cmd == "importar":
-            if len(sys.argv) < 5:
-                print("Uso: python cerebro.py tarjetas importar <FUENTE> <PATH_ARCHIVO>")
+    # Mapeo de áreas a sus respectivas neuronas
+    mapping = {
+        "tarjetas": "modulo_tarjetas.neuron_tarjetas",
+        "facturas": "modulo_compras.neuron_compras",
+        "bancos": "modulo_bancos.neuron_bancos"
+    }
+    
+    if area in mapping:
+        try:
+            # Importación dinámica de la neurona especialista
+            neuron = importlib.import_module(mapping[area])
+            if command:
+                neuron.handle_command(command, args, query_api)
             else:
-                fuente = sys.argv[3]
-                path = sys.argv[4]
-                print(f"Iniciando importacion de {fuente}...")
-                res = query_api("tarjetas/importar", method="POST", data={"fuente": fuente, "path": path})
-                if res and res.get('status') == 'success':
-                    print(f"OK: Datos de {fuente} procesados e ingresados.")
-                else:
-                    print(f"ERROR: {res.get('message') if res else 'API Caida'}")
-
-        elif cmd == "audit":
-            res = query_api("tarjetas/audit")
-            if res:
-                print("\nAUDITORIA DE VENTAS (Cruce Diarios Payway)")
-                print(f"   Pendientes de Deposito: {len(res.get('missing_liquidations', []))}")
-                print(f"   Depositos sin Tickets:  {len(res.get('missing_coupons', []))}\n")
-            
-        elif cmd == "cupon":
-            cid = sys.argv[3]
-            res = query_api(f"tarjetas/cupon/{cid}")
-            if res:
-                print(f"\nDETALLE CUPON {res['cupon']}")
-                print(f"   - Monto: $ {res['monto_bruto']:,.2f} | Marca: {res['marca']}")
-
-    # --- ÁREA: FACTURAS ---
-    elif area == "facturas":
-        if cmd == "resumen":
-            anio = sys.argv[3] if len(sys.argv) > 3 else "2026"
-            res = query_api("summary", params={"anio": anio})
-            if res:
-                f = res['facturacion']
-                print(f"\nRESUMEN FACTURACION ({anio})")
-                print(f"   - Ingresos: $ {f['monto_ventas']:,.2f}")
-                print(f"   - Egresos:  $ {f['monto_compras']:,.2f}\n")
-        
-        elif cmd == "buscar":
-            termino = sys.argv[3]
-            res = query_api("facturas/buscar", params={"q": termino})
-            if res:
-                print(f"\nRESULTADOS BUSQUEDA: {termino}")
-                for f in res[:5]:
-                    print(f"   - {f['fecha_emision']} | {f['proveedor'][:25]:<25} | $ {f['monto_total']:>10,.2f}")
-                print()
-
-    # --- ÁREA: BANCOS ---
-    elif area == "bancos":
-        if cmd == "importar":
-            if len(sys.argv) < 5:
-                print("Uso: python cerebro.py bancos importar <BANCO> <PATH_ARCHIVO>")
-            else:
-                fuente = sys.argv[3]
-                path = sys.argv[4]
-                print(f"Iniciando importación de movimientos de {fuente}...")
-                res = query_api("bancos/importar", method="POST", data={"fuente": fuente, "path": path})
-                if res and res.get('status') == 'success':
-                    print(f"OK: Extracto de {fuente} procesado y guardado en la base de datos.")
-                else:
-                    print(f"ERROR: {res.get('message') if res else 'API Caída'}")
-
-
+                print(f"\n🧬 NEURONA {area.upper()} - Comandos disponibles:")
+                # Si la neurona no recibe comando, mostramos su ayuda básica (implementada dentro de handle_command o similar)
+                neuron.handle_command("help", [], query_api)
+        except ImportError as e:
+            print(f"Error al cargar la neurona {area}: {e}")
+        except AttributeError as e:
+            print(f"La neurona {area} no tiene un manejador válido: {e}")
     else:
         mostrar_ayuda()

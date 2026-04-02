@@ -1,143 +1,62 @@
 import sqlite3
-import json
+import os
 
-# MOTOR DE INGESTA Y NORMALIZACIÓN 🏗️🧱🧠
-# Es el "ladrillero" que recibe los datos de los parsers y los coloca en su lugar.
+# CORE SISTEMA - ORQUESTADOR DE BASE DE DATOS Y BÚSQUEDA GLOBAL 🧠🏗️⚖️
+# Este archivo coordina el esquema modular y mantiene el índice FTS5.
 
 DB_PATH = 'erp_nicoletti.db'
 
 def get_db_connection():
     return sqlite3.connect(DB_PATH)
 
-# --- ÁREA: TARJETAS ---
-def persistir_liquidacion(data: dict):
-    """Guarda una liquidación y devuelve su ID."""
-    print(f"LADRILLERO: Persistiendo {data.get('fuente')} - Neto: {data.get('total_neto')}")
-    conn = get_db_connection()
-    try:
-        fuente = data.get('fuente', 'DESCONOCIDA').upper()
-        tipo = data.get('tipo', 'DIARIA').upper()
-        
-        cursor = conn.execute('''
-            INSERT OR IGNORE INTO liquidaciones_tarjetas (
-                fuente, tipo, fecha_liquidacion, periodo, marca, establecimiento,
-                total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
-                retenciones, total_neto, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            fuente, tipo, data.get('fecha_liquidacion'), data.get('periodo'), 
-            data.get('marca'), data.get('establecimiento'),
-            data.get('total_bruto', 0.0), data.get('costo_arancel', 0.0), 
-            data.get('costo_financiero', 0.0), data.get('iva_21', 0.0), 
-            data.get('iva_105', 0.0), data.get('retenciones', 0.0),
-            data.get('total_neto', 0.0), json.dumps(data.get('metadata', {}))
-        ))
-        
-        last_id = cursor.lastrowid
-        # Si last_id es 0, significa que el registro ya existía (IGNORE actuó)
-        if last_id == 0:
-            res = conn.execute("""
-                SELECT id FROM liquidaciones_tarjetas 
-                WHERE fuente=? AND fecha_liquidacion=? AND periodo=? AND marca=? AND total_neto=?
-            """, (fuente, data.get('fecha_liquidacion'), data.get('periodo'), data.get('marca'), data.get('total_neto'))).fetchone()
-            if res: last_id = res[0]
-            
-        conn.commit()
-        return last_id
-    finally:
-        conn.close()
+def initialize_all():
+    """Llamada central para inicializar toda la estructura del ERP."""
+    from modulo_tarjetas.storage_tarjetas import init_db_tarjetas
+    from modulo_compras.storage_compras import init_db_compras
+    from modulo_bancos.storage_bancos import init_db_bancos
+    
+    print("🧠 [CORE] Iniciando construcción modular de la base de datos...")
+    
+    # 1. Cada módulo construye sus propias tablas
+    init_db_tarjetas()
+    init_db_compras()
+    init_db_bancos()
+    
+    # 2. El Core construye la infraestructura de búsqueda
+    setup_search_index()
+    print("✨ [CORE] Base de datos lista y orquestada.")
 
-def persistir_liquidacion_detalle(liq_id, detalle_lista: list):
-    """Guarda línea por línea cada fragmento de la liquidación."""
+def setup_search_index():
+    """Prepara la tabla virtual FTS5 para búsquedas inteligentes."""
     conn = get_db_connection()
     try:
-        for d in detalle_lista:
-            conn.execute('''
-                INSERT INTO liquidaciones_detalles (
-                    liquidacion_id, fecha, descripcion, monto_bruto, arancel, financiero, iva, retenciones, monto_neto, metadata_raw
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                liq_id, d.get('fecha'), d.get('descripcion'), d.get('monto_bruto', 0.0),
-                d.get('arancel', 0.0), d.get('financiero', 0.0), d.get('iva', 0.0),
-                d.get('retenciones', 0.0), d.get('monto_neto', 0.0), json.dumps(d.get('metadata_raw', {}))
-            ))
+        conn.execute("DROP TABLE IF EXISTS search_index")
+        conn.execute("CREATE VIRTUAL TABLE search_index USING fts5(source, id, name, amount, date, extra)")
         conn.commit()
     finally:
         conn.close()
 
-def persistir_cupones(lista_cupones: list):
-    """Guarda masivamente cupones individuales (movimientos presentados)."""
+def update_search_index():
+    """Regenera el índice de búsqueda cruzando todos los módulos."""
     conn = get_db_connection()
     try:
-        for c in lista_cupones:
-            conn.execute('''
-                INSERT OR IGNORE INTO payway_records (
-                    fecha_compra, fecha_presentacion, fecha_pago, lote, cupon, marca, monto_bruto, metadata
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                c.get('fecha_compra'), c.get('fecha_presentacion'), c.get('fecha_pago'),
-                c.get('lote'), c.get('cupon'), c.get('marca'), c.get('monto_bruto'),
-                json.dumps(c.get('metadata', {}))
-            ))
+        print("🔍 [CORE] Actualizando índice de búsqueda global...")
+        conn.execute("DELETE FROM search_index")
+        conn.execute("""
+            INSERT INTO search_index(source, id, name, amount, date, extra)
+            SELECT 'Tarjeta_Payway', id, cupon || ' Lote ' || lote, monto_bruto, fecha_compra, marca FROM payway_records
+            UNION ALL
+            SELECT 'Factura', id, numero_completo || ' ' || proveedor, monto_total, fecha_emision, status FROM facturas
+            UNION ALL
+            SELECT 'Liquidacion', id, fuente || ' ' || marca, total_bruto, fecha_liquidacion, 'Periodo: ' || periodo FROM liquidaciones_tarjetas
+            UNION ALL
+            SELECT 'Banco', id, banco || ' ' || descripcion, importe, fecha, cuenta FROM bancos_movimientos
+        """)
         conn.commit()
     finally:
         conn.close()
 
-# --- ÁREA: FACTURACIÓN ---
-def persistir_factura(f: dict):
-    """Guarda una factura normalizada."""
-    conn = get_db_connection()
-    try:
-        conn.execute('''
-            INSERT OR IGNORE INTO facturas (
-                numero_completo, tipo_operacion, tipo_comprobante, proveedor, 
-                fecha_emision, neto_gravado, monto_iva, monto_total
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            f.get('numero_completo'), f.get('tipo_operacion'), f.get('tipo_comprobante'),
-            f.get('proveedor'), f.get('fecha_emision'), f.get('neto_gravado'),
-            f.get('monto_iva'), f.get('monto_total')
-        ))
-        conn.commit()
-    finally:
-        conn.close()
-
-# --- ÁREA: BANCO ---
-def persistir_transaccion(t: dict):
-    """Guarda movimientos bancarios (Legacy ERP)."""
-    conn = get_db_connection()
-    try:
-        conn.execute('''
-            INSERT OR IGNORE INTO transactions (
-                entity, account, category, type, amount, desc, date, currency
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            t.get('entity'), t.get('account'), t.get('category'), 
-            t.get('type'), t.get('amount'), t.get('desc'), 
-            t.get('date'), t.get('currency', 'ARS')
-        ))
-        conn.commit()
-    finally:
-        conn.close()
-
-def persistir_movimientos_banco_lista(lista_movimientos: list):
-    """Guarda movimientos bancarios de cuenta corriente (Cruce Exacto)."""
-    conn = get_db_connection()
-    try:
-        agregados = 0
-        for b in lista_movimientos:
-            cursor = conn.execute('''
-                INSERT OR IGNORE INTO bancos_movimientos (
-                    banco, cuenta, fecha, descripcion, codigo_movimiento, importe, metadata
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'), b.get('fecha'), b.get('descripcion'),
-                b.get('codigo_movimiento'), b.get('importe'),
-                json.dumps(b.get('metadata', {}))
-            ))
-            if cursor.rowcount > 0:
-                agregados += 1
-        conn.commit()
-        return agregados
-    finally:
-        conn.close()
+# Las funciones persistir_* han sido delegadas a sus respectivos módulos
+# modulo_tarjetas.storage_tarjetas
+# modulo_compras.storage_compras
+# modulo_bancos.storage_bancos

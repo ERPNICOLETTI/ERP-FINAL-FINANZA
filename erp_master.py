@@ -4,6 +4,7 @@ import sys
 import os
 import re
 from datetime import datetime, timedelta
+from core_sistema import db_ingesta
 
 # Configuración de salida UTF-8 para Windows
 if sys.stdout.encoding != 'utf-8':
@@ -26,134 +27,8 @@ class ERPMaster:
         return conn
 
     def setup_schema(self):
-        """Prepara las tablas base de ERP FINAL y añade índices de IA / Búsqueda Full-Text."""
-        conn = self._get_conn()
-        
-        # 1. Asegurar tablas legacy del ERP
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY, entity TEXT, account TEXT, category TEXT, type TEXT, amount REAL, desc TEXT, date TEXT, groupId INTEGER, currency TEXT DEFAULT 'ARS'
-            )
-        ''')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS payway_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                fecha_compra TEXT, 
-                fecha_presentacion TEXT, 
-                fecha_pago TEXT,
-                lote TEXT, 
-                cupon TEXT, 
-                marca TEXT, 
-                monto_bruto REAL, 
-                estado TEXT DEFAULT 'PENDIENTE', 
-                metadata TEXT,
-                matching_tx_id INTEGER, 
-                FOREIGN KEY(matching_tx_id) REFERENCES transactions(id)
-            )
-        ''')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS liquidaciones_tarjetas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fuente TEXT, -- Payway, Patagonia365, Naranja
-                tipo TEXT,   -- DIARIA, MENSUAL
-                fecha_liquidacion TEXT,
-                periodo TEXT, -- YYYY-MM
-                marca TEXT,
-                establecimiento TEXT,
-                total_bruto REAL,
-                costo_arancel REAL,
-                costo_financiero REAL,
-                iva_21 REAL,
-                iva_105 REAL,
-                retenciones REAL, -- Suma de Ganancias, IVA, IIBB
-                total_neto REAL,
-                metadata TEXT,
-                UNIQUE(fuente, fecha_liquidacion, periodo, marca, establecimiento, total_neto)
-            )
-        ''')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS facturas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, numero_completo TEXT UNIQUE, tipo_operacion TEXT, tipo_comprobante TEXT, proveedor TEXT, fecha_emision TEXT, neto_gravado REAL, monto_iva REAL, monto_total REAL, esta_en_afip INTEGER DEFAULT 0, esta_en_calim INTEGER DEFAULT 0, estado_proceso TEXT DEFAULT 'PENDIENTE', ruta_archivo TEXT
-            )
-        ''')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS liquidaciones_detalles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                liquidacion_id INTEGER, -- FK a liquidaciones_tarjetas (el "header")
-                fecha TEXT,
-                descripcion TEXT,
-                monto_bruto REAL,
-                arancel REAL,
-                financiero REAL,
-                iva REAL,
-                retenciones REAL,
-                monto_neto REAL,
-                metadata_raw TEXT, -- JSON con el resto de los campos "cada bit"
-                FOREIGN KEY(liquidacion_id) REFERENCES liquidaciones_tarjetas(id)
-            )
-        ''')
-        
-        # 2. Tabla Desacoplada para CALIM (Espejo para cruces)
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS facturas_calim (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, numero_completo TEXT UNIQUE, tipo_operacion TEXT, tipo_comprobante TEXT, proveedor TEXT, fecha_emision TEXT, neto_gravado REAL, monto_iva REAL, monto_total REAL, estado_proceso TEXT DEFAULT 'CALIM_BRUTO'
-            )
-        ''')
-
-        # 3. Módulo Bancos / Cuenta Corriente (El cruce final)
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS bancos_movimientos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                banco TEXT, -- CHUBUT, GALICIA, MACRO
-                cuenta TEXT, -- e.g. CAJA DE AHORRO, CUENTA CORRIENTE
-                fecha TEXT,
-                descripcion TEXT,
-                codigo_movimiento TEXT, -- ID del movimiento en el banco (no siempre es único)
-                importe REAL,
-                metadata TEXT,
-                UNIQUE(banco, cuenta, fecha, descripcion, codigo_movimiento, importe)
-            )
-        ''')
-
-        # 3. Tabla Desacoplada para Declaraciones Juradas (F.2051)
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS libroiva (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                periodo TEXT UNIQUE,
-                debito_fiscal REAL,
-                credito_fiscal REAL,
-                saldo_tecnico REAL,
-                saldo_libre_disponibilidad REAL
-            )
-        ''')
-        
-        # 2. Índices de Rendimiento
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions (date, amount)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_pw_date ON payway_records (fecha_compra)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_fac_num ON facturas (numero_completo)")
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pw_unique ON payway_records (lote, cupon, fecha_compra, monto_bruto)")
-
-        # 3. Índice FTS5 para Búsqueda 360 estilo Google
-        conn.execute("DROP TABLE IF EXISTS search_index")
-        conn.execute("CREATE VIRTUAL TABLE search_index USING fts5(source, id, name, amount, date, extra)")
-        
-        # Poblar el índice (Cross-table View)
-        conn.execute("""
-            INSERT INTO search_index(source, id, name, amount, date, extra)
-            SELECT 'Transaccion', id, desc, amount, date, entity || ' / ' || account FROM transactions
-            UNION ALL
-            SELECT 'Payway', id, cupon || ' Lote ' || lote, monto_bruto, fecha_compra, marca FROM payway_records
-            UNION ALL
-            SELECT 'Factura', id, numero_completo || ' ' || proveedor, monto_total, fecha_emision, tipo_comprobante FROM facturas
-            UNION ALL
-            SELECT 'Liquidacion', id, fuente || ' ' || marca, total_bruto, fecha_liquidacion, 'Periodo: ' || periodo FROM liquidaciones_tarjetas
-            UNION ALL
-            SELECT 'Banco', id, banco || ' ' || descripcion, importe, fecha, codigo_movimiento FROM bancos_movimientos
-        """)
-        
-        conn.commit()
-        conn.close()
-        print("[OK] Esquema actualizado. Índices FTS5 regenerados.")
+        """DELEGADO: Llama al nuevo sistema de inicialización modular."""
+        db_ingesta.initialize_all()
 
     def run_audit(self):
         """Cruza los datos entre Payway, Banco (Transactions) y Facturas buscando alertas de falencias."""

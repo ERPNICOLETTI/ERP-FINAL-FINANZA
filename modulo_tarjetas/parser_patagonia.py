@@ -4,8 +4,9 @@ import re
 import sys
 
 # Motor de Digitalización de Alta Precisión - Patagonia 365 💎🏗️🧱🧠
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core_sistema import db_ingesta as ingesta
+# Importación local de Storage (Ownership)
+from . import storage_tarjetas as storage
+from core_sistema import db_ingesta
 
 def normalizar_importe(texto):
     if not texto: return 0.0
@@ -83,11 +84,14 @@ def parse_patagonia_365(file_path):
             header["periodo"] = m_periodo.group(1)
             header["fecha_liquidacion"] = f"{m_periodo.group(1)}-01"
 
-        # 3. PERSISTENCIA
-        liq_id = ingesta.persistir_liquidacion(header)
+        # 3. PERSISTENCIA MODULAR
+        liq_id = storage.save_liquidacion(header)
         if liq_id:
-            ingesta.persistir_liquidacion_detalle(liq_id, fragmentos)
+            storage.save_liquidacion_detalle(liq_id, fragmentos)
             print(f"🧱 Éxito: Liquidación Patagonia {header.get('periodo')} digitalizada con {len(fragmentos)} bits.")
+            
+            # 4. Notificar al Core para actualizar el índice de búsqueda global
+            db_ingesta.update_search_index()
         
     except Exception as e:
         print(f"Error procesando Patagonia: {e}")

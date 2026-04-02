@@ -2,9 +2,9 @@ import pandas as pd
 import os
 import sys
 
-# Añadir path raíz para importar core
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core_sistema import db_ingesta as ingesta
+# Importación local de Storage (Ownership)
+from . import storage_tarjetas as storage
+from core_sistema import db_ingesta
 
 def normalizar_importe(texto):
     if not texto: return 0.0
@@ -38,8 +38,8 @@ def parse_payway_liq(csv_path):
                 "metadata": {"nro_liquidacion": str(row['Nro. Liquidación'])}
             }
             
-            # PASAR AL LADRILLERO (INGESTA)
-            liq_id = ingesta.persistir_liquidacion(data)
+            # PASAR AL DUEÑO DEL DOMINIO (STORAGE LOCAL)
+            liq_id = storage.save_liquidacion(data)
             
             # DIGITALIZACIÓN BIT A BIT: Guardamos el detalle atómico de la fila
             if liq_id:
@@ -50,9 +50,12 @@ def parse_payway_liq(csv_path):
                     "monto_neto": data["total_neto"],
                     "metadata_raw": row.to_dict()
                 }]
-                ingesta.persistir_liquidacion_detalle(liq_id, detalle)
+                storage.save_liquidacion_detalle(liq_id, detalle)
             
         print(f"🧱 Se procesaron {len(df)} días de liquidación Payway con bit-by-bit.")
+        
+        # 3. Notificar al Core para actualizar el índice de búsqueda global
+        db_ingesta.update_search_index()
 
     except Exception as e:
         print(f"Error procesando Payway Liq: {e}")

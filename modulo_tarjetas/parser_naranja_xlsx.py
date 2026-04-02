@@ -4,8 +4,9 @@ import sys
 import re
 
 # Parser Naranja XLSX (Digitalización Bit a Bit) 🏗️🧱🧠⚖️🚀
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core_sistema import db_ingesta as ingesta
+# Importación local de Storage (Ownership)
+from . import storage_tarjetas as storage
+from core_sistema import db_ingesta
 
 def normalizar_importe(val):
     if pd.isna(val) or val is None: return 0.0
@@ -62,8 +63,8 @@ def parse_naranja_xlsx(file_path):
                 "metadata": row.to_dict()
             }
 
-            # Persistencia Capa 1
-            liq_id = ingesta.persistir_liquidacion(header)
+            # Persistencia Modular (Ownership)
+            liq_id = storage.save_liquidacion(header)
             
             # Capa 2: Fragmentos Atómicos (Cada columna es un detalle)
             fragmentos = []
@@ -77,9 +78,12 @@ def parse_naranja_xlsx(file_path):
                     })
             
             if liq_id:
-                ingesta.persistir_liquidacion_detalle(liq_id, fragmentos)
+                storage.save_liquidacion_detalle(liq_id, fragmentos)
         
         print(f"🧱 Éxito: XLSX Naranja procesado. {len(df)} liquidaciones diarias ingresadas.")
+        
+        # Sincronizar FTS5 al terminar el archivo
+        db_ingesta.update_search_index()
 
     except Exception as e:
         print(f"Error procesando Naranja XLSX: {e}")
