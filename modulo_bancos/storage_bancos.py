@@ -50,3 +50,22 @@ def save_movimiento_banco(lista_movimientos: list):
         return agregados
     finally:
         conn.close()
+
+def get_sueldos(anio):
+    """Consulta especializada para detectar haberes/sueldos (Solo lectura)."""
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    try:
+        # Filtro de lógica de negocio: SUELDOS o PINO SUB SA en la descripción
+        params = [f"%{anio}", "%SUELDOS%", "%PINO SUB SA%"]
+        query = """
+            SELECT fecha, descripcion, importe 
+            FROM bancos_movimientos 
+            WHERE (descripcion LIKE ? OR descripcion LIKE ?) 
+            AND fecha LIKE ? 
+            ORDER BY substr(fecha, 7, 4) DESC, substr(fecha, 4, 2) DESC, substr(fecha, 1, 2) DESC
+        """
+        rows = conn.execute(query, ("%SUELDOS%", "%PINO SUB SA%", f"%{anio}%")).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()

@@ -93,6 +93,12 @@ async def importar_bancos(req: ImportRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/bancos/sueldos")
+async def get_sueldos_bancarios(anio: str = "2026"):
+    """Consulta de sueldos delegada al dominio de bancos."""
+    from modulo_bancos import storage_bancos
+    return storage_bancos.get_sueldos(anio)
+
 @app.get("/facturas/buscar")
 async def buscar_facturas(q: str):
     return facturas.buscar_global(q)
