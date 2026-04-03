@@ -14,7 +14,7 @@ def get_base_marca(m):
     return m
 
 def get_db_connection():
-    return sqlite3.connect('erp_nicoletti.db')
+    return sqlite3.connect(DB_PATH, timeout=30.0)
 
 def resumen_ejecutivo(anio):
     """Estadísticas consolidadas de todas las tarjetas por año/periodo."""

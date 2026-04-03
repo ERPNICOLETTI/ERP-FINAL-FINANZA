@@ -4,10 +4,12 @@ import os
 # CORE SISTEMA - ORQUESTADOR DE BASE DE DATOS Y BÚSQUEDA GLOBAL 🧠🏗️⚖️
 # Este archivo coordina el esquema modular y mantiene el índice FTS5.
 
-DB_PATH = 'erp_nicoletti.db'
+# Determinamos la raíz del proyecto para una DB única
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'erp_nicoletti.db')
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(DB_PATH, timeout=30.0)
 
 def initialize_all():
     """Llamada central para inicializar toda la estructura del ERP."""

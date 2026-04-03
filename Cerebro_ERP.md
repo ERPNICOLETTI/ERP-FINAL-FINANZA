@@ -27,19 +27,19 @@ Para modificar o entender el comportamiento del sistema, consulta la **Neurona**
 
 ### 💳 Tarjetas (Recaudación)
 Reglas de Payway, Naranja, liquidaciones, aranceles y cruce de cupones.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_tarjetas/NEURONA.md](file:///c:/Users/essao/OneDrive/Escritorio/ERP%20FINAL/modulo_tarjetas/NEURONA.md)
+👉 **LEER OBLIGATORIAMENTE**: [modulo_tarjetas/NEURONA.md](modulo_tarjetas/NEURONA.md)
 
 ### 🏦 Bancos (Tesorería)
 Reglas de conciliación bancaria, extractos de Chubut, Credicoop, Hipotecario y detección de cuentas.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_bancos/NEURONA.md](file:///c:/Users/essao/OneDrive/Escritorio/ERP%20FINAL/modulo_bancos/NEURONA.md)
+👉 **LEER OBLIGATORIAMENTE**: [modulo_bancos/NEURONA.md](modulo_bancos/NEURONA.md)
 
 ### 🧾 Compras (Fiscal)
 Reglas de ARCA/AFIP, plataforma CALIM, Libro IVA y digitalización de facturas.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_compras/NEURONA.md](file:///c:/Users/essao/OneDrive/Escritorio/ERP%20FINAL/modulo_compras/NEURONA.md)
+👉 **LEER OBLIGATORIAMENTE**: [modulo_compras/NEURONA.md](modulo_compras/NEURONA.md)
 
 ### ⚙️ Core e Infraestructura
 Para entender la orquestación del sistema, el motor de búsqueda 360 y el esquema global.
-👉 **LEER OBLIGATORIAMENTE**: [DB_ARCHITECTURE.md](file:///c:/Users/essao/OneDrive/Escritorio/ERP%20FINAL/DB_ARCHITECTURE.md)
+👉 **LEER OBLIGATORIAMENTE**: [DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)
 👉 **REVISAR**: `core_sistema/reset_database.py` (Script de reconstrucción total).
 
 ---

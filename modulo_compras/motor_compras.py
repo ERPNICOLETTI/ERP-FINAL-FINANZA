@@ -1,10 +1,14 @@
 import sqlite3
 import pandas as pd
+import os
 
 # Lógica del Motor de Facturación (ARCA/CALIM) 🧾🏗️🧠
+# Determinar la ruta a la base de datos central en la raíz
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'erp_nicoletti.db')
 
 def get_db_connection():
-    return sqlite3.connect('erp_nicoletti.db')
+    return sqlite3.connect(DB_PATH, timeout=30.0)
 
 def resumen_facturacion(anio):
     """Estadísticas de facturas por año."""

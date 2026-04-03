@@ -3,10 +3,11 @@ import os
 import shutil
 import re
 
-# Configuración de rutas
-SOURCE_DIR = r"C:\Users\essao\OneDrive\Escritorio\Escritorio\GestorFacturas\static\facturas_archivadas"
-DEST_DIR = r"c:\Users\essao\OneDrive\Escritorio\ERP FINAL\static\facturas_archivadas"
-DB_PATH = r"c:\Users\essao\OneDrive\Escritorio\ERP FINAL\erp_nicoletti.db"
+# Configuración de rutas - Relativas a la raíz del proyecto
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SOURCE_DIR = os.path.join(BASE_DIR, "static", "facturas_origen")  # TODO: Configurar carpeta de origen real
+DEST_DIR = os.path.join(BASE_DIR, "static", "facturas_archivadas")
+DB_PATH = os.path.join(BASE_DIR, "erp_nicoletti.db")
 
 def sync():
     if not os.path.exists(SOURCE_DIR):

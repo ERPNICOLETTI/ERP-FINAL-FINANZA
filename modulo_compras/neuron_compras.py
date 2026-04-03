@@ -1,17 +1,78 @@
-import sys
+import os
+import shutil
+import pandas as pd
+from . import storage_compras as storage
+from . import importador_afip, importador_calim
 
-# NEURONA COMPRAS - Especialista en Facturación (ARCA/AFIP, CALIM) 🧾🧠
+# NEURONA COMPRAS - Especialista en Facturación (ARCA/AFIP, CALIM) 🧾🧠🔍
 
-def handle_command(cmd, args, query_api):
+def detectar_y_procesar(file_path):
+    """Detecta el tipo de reporte fiscal y lanza el importador."""
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    # 1. AFIP (CSV)
+    if ext == '.csv':
+        try:
+            # AFIP usa UTF-8 o Latin-1
+            with open(file_path, 'r', encoding='utf-8') as f:
+                header = f.readline().lower()
+                if "fecha de emisión" in header or "cuit" in header:
+                    print(f"🔍 [DETECTIVE] Identificado: REPORTE AFIP (CSV)")
+                    importador_afip.parse_afip_csv(file_path)
+                    return True
+        except:
+            pass
+
+    # 2. CALIM (EXCEL)
+    elif ext in ['.xlsx', '.xls']:
+        try:
+            # Peek rápido
+            df_peek = pd.read_excel(file_path, nrows=5, engine='calamine')
+            content_str = df_peek.to_string().lower()
+            if "total" in content_str and ("proveedor" in content_str or "cuil/cuit" in content_str):
+                print(f"🔍 [DETECTIVE] Identificado: REPORTE CALIM (EXCEL)")
+                importador_calim.parse_calim_excel(file_path)
+                return True
+        except:
+            pass
+            
+    print(f"⚠️ [DETECTIVE] No se pudo identificar el reporte fiscal: {os.path.basename(file_path)}")
+    return False
+
+def ejecutar_scan():
+    """Escanea la carpeta crudos de compras y procesa."""
+    path_crudos = os.path.join(os.path.dirname(__file__), "crudos")
+    path_procesados = os.path.join(path_crudos, "procesados")
+    
+    if not os.path.exists(path_procesados):
+        os.makedirs(path_procesados)
+        
+    print(f"🚀 [COMPRAS] Iniciando escaneo fiscal en {path_crudos}...")
+    archivos = [f for f in os.listdir(path_crudos) if os.path.isfile(os.path.join(path_crudos, f))]
+    
+    count = 0
+    for f in archivos:
+        if f == ".gitkeep": continue
+        full_path = os.path.join(path_crudos, f)
+        if detectar_y_procesar(full_path):
+            shutil.move(full_path, os.path.join(path_procesados, f))
+            count += 1
+            
+    print(f"✅ [COMPRAS] Scan finalizado. {count} reportes procesados.")
+
     if cmd == "help" or cmd == "--help":
         print("\n🧬 NEURONA FACTURAS - Comandos disponibles:")
+        print("   -> scan                | Escaneo automático de carpeta crudos.")
         print("   -> resumen [anio]      | Balance Ventas vs Compras.")
         print("   -> buscar <termino>    | Buscar comprobantes en DB (Proveedor/Cuit/Número).")
-        print("   -> importar <AFIP|CALIM> <path> | Inyección de datos desde archivos oficiales.")
+        print("   -> importar <AFIP|CALIM> <path> | Importación manual.")
         print("   -> sync                | Sincronizar archivos físicos y base de datos.")
         return
 
-    if cmd == "resumen":
+    if cmd == "scan":
+        ejecutar_scan()
+
+    elif cmd == "resumen":
         anio = args[0] if len(args) > 0 else "2026"
         res = query_api("summary", params={"anio": anio})
         if res:

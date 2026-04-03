@@ -4,10 +4,12 @@ import os
 
 # STORAGE TARJETAS - Dueño de tablas Payway, Naranja y Patagonia 💳🧱🧠
 
-DB_PATH = 'erp_nicoletti.db'
+# Determinar la ruta a la base de datos central en la raíz
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'erp_nicoletti.db')
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(DB_PATH, timeout=30.0)
 
 def init_db_tarjetas():
     """Crea las tablas pertenecientes al dominio de Tarjetas."""
@@ -29,23 +31,25 @@ def init_db_tarjetas():
             UNIQUE(lote, cupon, fecha_compra, monto_bruto)
         )
     ''')
+    # --- TABLA MAESTRA DE LIQUIDACIONES ---
+    # Centraliza Payway, Patagonia 365 y Naranja con desglose fiscal.
     conn.execute('''
         CREATE TABLE IF NOT EXISTS liquidaciones_tarjetas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fuente TEXT, -- Payway, Patagonia365, Naranja
-            tipo TEXT,   -- DIARIA, MENSUAL
+            fuente TEXT,          -- PAYWAY, PATAGONIA365, NARANJA
+            marca TEXT,           -- VISA, MASTER, AMEX, NARANJA, 365
+            tipo TEXT,            -- DIARIA, MENSUAL
             fecha_liquidacion TEXT,
-            periodo TEXT, -- YYYY-MM
-            marca TEXT,
+            periodo TEXT,         -- YYYY-MM
             establecimiento TEXT,
-            total_bruto REAL,
+            total_bruto REAL,     -- MONTO ANTES DE DESCUENTOS
             costo_arancel REAL,
             costo_financiero REAL,
-            iva_21 REAL,
-            iva_105 REAL,
+            iva_21 REAL,          -- IVA 21% DESGLOSADO
+            iva_105 REAL,         -- IVA 10.5% DESGLOSADO
             retenciones REAL,
-            total_neto REAL,
-            metadata TEXT,
+            total_neto REAL,      -- LO QUE SE DEPÓSITA REALMENTE
+            metadata TEXT,        -- JSON CON INFO EXTRA
             UNIQUE(fuente, fecha_liquidacion, periodo, marca, establecimiento, total_neto)
         )
     ''')

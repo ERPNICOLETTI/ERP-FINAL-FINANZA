@@ -1,16 +1,70 @@
-import sys
+import os
+import shutil
+import pandas as pd
+from . import storage_bancos as storage
+from . import parser_chubut, parser_hipotecario_usd
 
-# NEURONA BANCOS - Especialista en Tesorería (Extractos y Conciliación) 🏦🧠
+# NEURONA BANCOS - Especialista en Tesorería 🏦🧠🔍
 
-def handle_command(cmd, args, query_api):
+def detectar_y_procesar(file_path):
+    """Detecta el banco por contenido y lanza el parser adecuado."""
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    if ext in ['.xlsx', '.xls']:
+        try:
+            # Peek al contenido
+            df_peek = pd.read_excel(file_path, nrows=10, header=None)
+            content_str = df_peek.to_string().lower()
+            
+            if "chubut" in content_str or "tipo y nº de cuenta" in content_str:
+                print(f"🔍 [DETECTIVE] Identificado: BANCO CHUBUT")
+                parser_chubut.parse_chubut_excel(file_path)
+                return True
+            
+            if "hipotecario" in content_str or "ca_usd" in content_str or "ca dolares" in content_str:
+                print(f"🔍 [DETECTIVE] Identificado: BANCO HIPOTECARIO (USD)")
+                parser_hipotecario_usd.parse_hipotecario_usd(file_path)
+                return True
+                
+        except Exception as e:
+            print(f"⚠️ Error en detección: {e}")
+            
+    print(f"⚠️ [DETECTIVE] No se pudo identificar el banco en: {os.path.basename(file_path)}")
+    return False
+
+def ejecutar_scan():
+    """Escanea la carpeta crudos de bancos y procesa lo nuevo."""
+    path_crudos = os.path.join(os.path.dirname(__file__), "crudos")
+    path_procesados = os.path.join(path_crudos, "procesados")
+    
+    if not os.path.exists(path_procesados):
+        os.makedirs(path_procesados)
+        
+    print(f"🚀 [BANCOS] Iniciando escaneo de extractos en {path_crudos}...")
+    archivos = [f for f in os.listdir(path_crudos) if os.path.isfile(os.path.join(path_crudos, f))]
+    
+    count = 0
+    for f in archivos:
+        if f == ".gitkeep": continue
+        full_path = os.path.join(path_crudos, f)
+        if detectar_y_procesar(full_path):
+            shutil.move(full_path, os.path.join(path_procesados, f))
+            count += 1
+            
+    print(f"✅ [BANCOS] Scan finalizado. {count} extractos procesados.")
+
     if cmd == "help" or cmd == "--help":
         print("\n🧬 NEURONA BANCOS - Comandos disponibles:")
-        print("   -> importar <BANCO> <pathTransfer> | Importar extractos (CHUBUT, HIPOTECARIO, CREDICOOP).")
+        print("   -> scan                     | Escaneo automático de carpeta crudos.")
+        print("   -> importar <BANCO> <path>  | Importación manual (CHUBUT, HIPOTECARIO).")
         print("   -> sueldos [anio]           | Listado de haberes y sueldos detectados.")
-        print("   -> audit                    | Cruce de Bancos vs Tarjetas (Próximamente).")
+        print("   -> audit                    | Cruce de Bancos vs Tarjetas.")
         return
 
-    if cmd == "importar":
+    if cmd == "scan":
+        ejecutar_scan()
+
+    elif cmd == "importar":
         if len(args) < 2:
             print("Uso: python cerebro.py bancos importar <BANCO> <PATH_ARCHIVO>")
         else:

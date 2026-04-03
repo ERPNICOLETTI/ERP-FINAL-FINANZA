@@ -1,17 +1,103 @@
 import sys
+import os
+import glob
+import shutil
+import pandas as pd
+from . import storage_tarjetas as storage
+from . import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
-# NEURONA TARJETAS - Especialista en Recaudación (Payway, Naranja, Patagonia) 💳🧠
+# NEURONA TARJETAS - Detective de Liquidaciones 💳🧠🔍
+# Esta neurona identifica archivos crudos y decide qué parser usar.
+
+def detectar_y_procesar(file_path):
+    """Detecta el tipo de archivo por contenido (blind to extension) y lanza el parser."""
+    ext = os.path.splitext(file_path)[1].lower()
+    basename = os.path.basename(file_path).upper()
+    
+    # --- PRUEBA PDF (O ARCHIVOS PESADOS SIN EXTENSIÓN) ---
+    # Si es PDF o no tiene extensión o dice PDF en el nombre:
+    if ext == '.pdf' or not ext or 'PDF' in basename:
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                first_page_text = (pdf.pages[0].extract_text() or "").lower()
+                
+                # 1. ¿ES PAYWAY? (Prisma / Liquidación de Comercio / Resumen)
+                is_payway = any(k in first_page_text for k in ["resumen mensual", "prisma medios", "establec", "liquid", "pago"])
+                if is_payway:
+                    print(f"🔍 [DETECTIVE] Identificado: PAYWAY PDF (Prisma)")
+                    parser_payway_liq.parse_payway_liq(file_path)
+                    return True
+                
+                # 2. ¿ES PATAGONIA 365? (Banco Patagonia)
+                if "banco patagonia" in first_page_text or "patagonia 365" in first_page_text:
+                    print(f"🔍 [DETECTIVE] Identificado: PATAGONIA 365 PDF")
+                    parser_patagonia.parse_patagonia_365(file_path)
+                    return True
+        except Exception as e:
+            print(f"❌ Error interno en Detective PDF: {e}")
+
+    # --- PRUEBA CSV / TEXTO ---
+    try:
+        with open(file_path, 'r', encoding='latin1', errors='ignore') as f:
+            head = f.read(1000).lower()
+            if "pago" in head and "marca" in head and "bruto" in head:
+                print(f"🔍 [DETECTIVE] Identificado: PAYWAY CSV")
+                parser_payway_liq.parse_payway_liq(file_path)
+                return True
+    except Exception as e:
+        pass
+
+    # --- PRUEBA EXCEL ---
+    if ext in ['.xlsx', '.xls']:
+        try:
+            df_peek = pd.read_excel(file_path, nrows=5)
+            content_str = df_peek.to_string().lower()
+            if "naranja" in content_str or "monto bruto" in content_str:
+                print(f"🔍 [DETECTIVE] Identificado: NARANJA XLSX")
+                parser_naranja_xlsx.parse_naranja_xlsx(file_path)
+                return True
+        except Exception as e:
+            pass
+
+    print(f"⚠️ [DETECTIVE] No se pudo identificar el archivo: {os.path.basename(file_path)}")
+    return False
+
+def ejecutar_scan():
+    """Escanea la carpeta crudos, detecta e ingesta."""
+    path_crudos = os.path.join(os.path.dirname(__file__), "crudos")
+    path_procesados = os.path.join(path_crudos, "procesados")
+    
+    if not os.path.exists(path_procesados):
+        os.makedirs(path_procesados)
+        
+    print(f"🚀 [TARJETAS] Iniciando escaneo de crudos en {path_crudos}...")
+    archivos = [f for f in os.listdir(path_crudos) if os.path.isfile(os.path.join(path_crudos, f))]
+    
+    count = 0
+    for f in archivos:
+        if f == ".gitkeep": continue
+        full_path = os.path.join(path_crudos, f)
+        if detectar_y_procesar(full_path):
+            # shutil.move(full_path, os.path.join(path_procesados, f)) # Desactivado temporalmente a pedido del usuario
+            count += 1
+            
+    print(f"✅ [TARJETAS] Scan finalizado. {count} archivos procesados.")
 
 def handle_command(cmd, args, query_api):
     if cmd == "help" or cmd == "--help":
         print("\n🧬 NEURONA TARJETAS - Comandos disponibles:")
+        print("   -> scan                | Escaneo automático de carpeta crudos.")
         print("   -> resumen [anio]      | Consolidado de todas las liquidaciones.")
         print("   -> importar <src> <p>  | Importar PDF/CSV (PAYWAY, PATAGONIA365, NARANJA).")
         print("   -> audit               | Cruce de ventas diarias vs depósitos.")
         print("   -> cupon <id/numero>   | Detalle técnico de un cupón.")
         return
 
-    if cmd == "resumen":
+    if cmd == "scan":
+        ejecutar_scan()
+
+    elif cmd == "resumen":
         anio = args[0] if len(args) > 0 else "2026"
         res = query_api("summary", params={"anio": anio})
         if res:
@@ -51,7 +137,6 @@ def handle_command(cmd, args, query_api):
             res = query_api(f"tarjetas/cupon/{cid}")
             if res and 'error' not in res:
                 print(f"\nDETALLE CUPON")
-                # Manejamos dinámicamente las claves para evitar KeyError si la estructura cambia
                 for k, v in res.items():
                     if k != 'metadata':
                         print(f"   - {k.replace('_', ' ').capitalize()}: {v}")

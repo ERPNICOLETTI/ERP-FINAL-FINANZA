@@ -3,8 +3,8 @@ import re
 import sqlite3
 import shutil
 
-# Config
-WORKSPACE = r"C:\Users\essao\OneDrive\Escritorio\ERP FINAL"
+# Config - Ruta relativa a la raíz del proyecto
+WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARCHIVE_ROOT = os.path.join(WORKSPACE, "static", "archivadas")
 DB_PATH = os.path.join(WORKSPACE, "erp_nicoletti.db")
 
