@@ -1,51 +1,85 @@
 import pandas as pd
-import sqlite3
 import os
-import sys
+import logging
+import hashlib
+import json
+from . import storage_bancos as storage
 
-def parse_credicoop_joaquin_final(file_path, db_path):
-    print(f"🏦 [AUDITORÍA VISUAL] EXTRAIENDO CREDICOOP SEGÚN IMAGEN...")
+# Parser Banco Credicoop (Joaquín) - Phase 3 🏦🏗️🧱🧠⚖️
+# Esta versión implementa el Diseño Híbrido y el archivado legal.
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def calculate_sha256(file_path):
+    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def procesar_archivo(file_path):
+    """Función principal (Phase 3): Ingesta el extracto de Credicoop y retorna (success, info)."""
+    if not os.path.exists(file_path):
+        logger.error(f"⚠️ El archivo no existe: {file_path}")
+        return False, None
+
+    logger.info(f"🏦 Analizando extracto Credicoop (Joaquín): {os.path.basename(file_path)}")
+    file_hash = calculate_sha256(file_path)
     
     try:
-        # Cargamos el Excel
         df = pd.read_excel(file_path)
-        
-        # Sincronizamos nombres de columnas con la imagen:
-        # 'Fecha', 'Concepto', 'NÂ° de comprobante', 'Monto', 'Saldo', 'Cod.'
-        
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        
-        count = 0
-        for i, row in df.iterrows():
+        last_id = None
+        first_date = "2026-01-01"
+        movimientos = []
+
+        for idx, row in df.iterrows():
             try:
                 fecha = str(row['Fecha']).strip()
                 if "nan" in fecha.lower(): continue
+                if idx == 0: first_date = fecha
                 
-                concepto = str(row['Concepto']).strip()
-                # El monto en la imagen es float, pero por las dudas limpiamos
-                monto = float(row['Monto'])
-                comprobante = str(row['NÂ° de comprobante']).strip()
-                
-                # Inyectar en tabla unificada con etiqueta JOA_CREDICOOP
-                cur.execute('''
-                    INSERT OR IGNORE INTO bancos_movimientos (banco, cuenta, fecha, descripcion, codigo_movimiento, importe)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', ('CREDICOOP', 'CA_JOAQUIN_9087', fecha, concepto, comprobante, monto))
-                
-                if cur.rowcount > 0:
-                    count += 1
+                # Diseño Híbrido: Empaquetado de fila
+                mov_data = {
+                    "banco": "CREDICOOP",
+                    "cuenta": "CA_JOAQUIN_9087",
+                    "fecha": fecha,
+                    "descripcion": str(row['Concepto']).strip(),
+                    "tipo_movimiento": str(row.get('Cod.', '')).strip(),
+                    "importe": float(row['Monto']),
+                    "hash_archivo": file_hash,
+                    "row_dump": row.to_dict()
+                }
+                movimientos.append(mov_data)
+
             except Exception as e:
+                logger.warning(f"⚠️ Error en fila {idx}: {e}")
                 continue
-                
-        conn.commit()
-        conn.close()
-        print(f"🧱 Éxito: {count} registros de CREDICOOP validados e inyectados.")
+
+        if movimientos:
+            agregados, last_id = storage.save_movimiento_banco(movimientos, file_hash)
+            if last_id:
+                info = {
+                    "modulo": "BANCOS",
+                    "anio": first_date[:4] if first_date else "2026",
+                    "mes": first_date[5:7] if first_date else "01",
+                    "entidad": "BANCO_CREDICOOP",
+                    "db_table": "bancos_movimientos",
+                    "id_insertado": last_id
+                }
+                return True, info
+        
+        logger.warning(f"🚫 Archivo Credicoop omitido: {os.path.basename(file_path)}")
+        return False, None
 
     except Exception as e:
-        print(f"❌ Error en auditoría visual: {e}")
+        logger.error(f"❌ Error en parser Credicoop: {e}")
+        return False, None
 
 if __name__ == "__main__":
-    WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-    DB_PATH = os.path.join(WORKSPACE, "erp_nicoletti.db")
-    parse_credicoop_joaquin_final(sys.argv[1], DB_PATH)
+    import sys
+    if len(sys.argv) > 1:
+        procesar_archivo(sys.argv[1])
+    else:
+        logger.warning("Uso: python parser_credicoop_joaquin.py <absolute_path>")

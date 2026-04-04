@@ -1,0 +1,346 @@
+DATABASE SCHEMA
+===============
+
+--- TABLE: bancos_movimientos ---
+CREATE TABLE bancos_movimientos (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            banco           TEXT,
+            cuenta          TEXT,
+            fecha           TEXT,
+            descripcion     TEXT,
+            tipo_movimiento TEXT,
+            importe         REAL DEFAULT 0,
+            saldo           REAL,
+            hash_archivo    TEXT,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(banco, cuenta, fecha, descripcion, tipo_movimiento, importe)
+        )
+
+Columns:
+  id (INTEGER) PK
+  banco (TEXT) 
+  cuenta (TEXT) 
+  fecha (TEXT) 
+  descripcion (TEXT) 
+  tipo_movimiento (TEXT) 
+  importe (REAL) 
+  saldo (REAL) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: core_registro_ingestas ---
+CREATE TABLE core_registro_ingestas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo          TEXT,
+            tipo            TEXT,
+            nombre_fuente   TEXT,
+            hash_sha256     TEXT UNIQUE,
+            fecha_proceso   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Columns:
+  id (INTEGER) PK
+  modulo (TEXT) 
+  tipo (TEXT) 
+  nombre_fuente (TEXT) 
+  hash_sha256 (TEXT) 
+  fecha_proceso (TIMESTAMP) 
+
+--- TABLE: cupones_tarjetas ---
+CREATE TABLE cupones_tarjetas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fuente          TEXT,
+            fecha_compra    TEXT,
+            fecha_pago      TEXT,
+            lote            TEXT,
+            cupon           TEXT,
+            marca           TEXT,
+            monto_bruto     REAL DEFAULT 0,
+            hash_archivo    TEXT,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(fuente, lote, cupon, fecha_compra, monto_bruto)
+        )
+
+Columns:
+  id (INTEGER) PK
+  fuente (TEXT) 
+  fecha_compra (TEXT) 
+  fecha_pago (TEXT) 
+  lote (TEXT) 
+  cupon (TEXT) 
+  marca (TEXT) 
+  monto_bruto (REAL) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: facturas ---
+CREATE TABLE facturas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha           TEXT,
+            tipo_comprobante TEXT,
+            punto_venta     TEXT,
+            numero_completo TEXT,
+            cuit_proveedor  TEXT,
+            proveedor       TEXT,
+            neto_gravado    REAL DEFAULT 0,
+            iva_21          REAL DEFAULT 0,
+            iva_105         REAL DEFAULT 0,
+            iva_27          REAL DEFAULT 0,
+            percepciones    REAL DEFAULT 0,
+            imp_internos    REAL DEFAULT 0,
+            monto_total     REAL DEFAULT 0,
+            moneda          TEXT DEFAULT 'ARS',
+            hash_archivo    TEXT UNIQUE,
+            origen          TEXT DEFAULT 'MANUAL',
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Columns:
+  id (INTEGER) PK
+  fecha (TEXT) 
+  tipo_comprobante (TEXT) 
+  punto_venta (TEXT) 
+  numero_completo (TEXT) 
+  cuit_proveedor (TEXT) 
+  proveedor (TEXT) 
+  neto_gravado (REAL) 
+  iva_21 (REAL) 
+  iva_105 (REAL) 
+  iva_27 (REAL) 
+  percepciones (REAL) 
+  imp_internos (REAL) 
+  monto_total (REAL) 
+  moneda (TEXT) 
+  hash_archivo (TEXT) 
+  origen (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: iva_desglosado ---
+CREATE TABLE iva_desglosado (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo_origen   TEXT,
+            fuente          TEXT,
+            fecha           TEXT,
+            neto_gravado    REAL DEFAULT 0,
+            iva_105         REAL DEFAULT 0,
+            iva_21          REAL DEFAULT 0,
+            descripcion     TEXT,
+            extern_id       INTEGER,
+            hash_archivo    TEXT,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Columns:
+  id (INTEGER) PK
+  modulo_origen (TEXT) 
+  fuente (TEXT) 
+  fecha (TEXT) 
+  neto_gravado (REAL) 
+  iva_105 (REAL) 
+  iva_21 (REAL) 
+  descripcion (TEXT) 
+  extern_id (INTEGER) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: libroiva ---
+CREATE TABLE libroiva (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            periodo         TEXT UNIQUE,
+            debito_fiscal   REAL DEFAULT 0,
+            credito_fiscal  REAL DEFAULT 0,
+            saldo_tecnico   REAL DEFAULT 0,
+            saldo_libre     REAL DEFAULT 0,
+            hash_archivo    TEXT UNIQUE,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Columns:
+  id (INTEGER) PK
+  periodo (TEXT) 
+  debito_fiscal (REAL) 
+  credito_fiscal (REAL) 
+  saldo_tecnico (REAL) 
+  saldo_libre (REAL) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: liquidaciones_detalles ---
+CREATE TABLE liquidaciones_detalles (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            liquidacion_id  INTEGER,
+            fecha           TEXT,
+            descripcion     TEXT,
+            monto_bruto     REAL DEFAULT 0,
+            arancel         REAL DEFAULT 0,
+            financiero      REAL DEFAULT 0,
+            iva             REAL DEFAULT 0,
+            retenciones     REAL DEFAULT 0,
+            monto_neto      REAL DEFAULT 0,
+            metadata_cruda  TEXT DEFAULT '{}',
+            FOREIGN KEY(liquidacion_id) REFERENCES liquidaciones_tarjetas(id)
+        )
+
+Columns:
+  id (INTEGER) PK
+  liquidacion_id (INTEGER) 
+  fecha (TEXT) 
+  descripcion (TEXT) 
+  monto_bruto (REAL) 
+  arancel (REAL) 
+  financiero (REAL) 
+  iva (REAL) 
+  retenciones (REAL) 
+  monto_neto (REAL) 
+  metadata_cruda (TEXT) 
+
+--- TABLE: liquidaciones_tarjetas ---
+CREATE TABLE liquidaciones_tarjetas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fuente          TEXT,
+            marca           TEXT,
+            tipo            TEXT DEFAULT 'MENSUAL',
+            fecha_liquidacion TEXT,
+            periodo         TEXT,
+            establecimiento TEXT,
+            total_bruto     REAL DEFAULT 0,
+            costo_arancel   REAL DEFAULT 0,
+            costo_financiero REAL DEFAULT 0,
+            iva_21          REAL DEFAULT 0,
+            iva_105         REAL DEFAULT 0,
+            retenciones     REAL DEFAULT 0,
+            total_neto      REAL DEFAULT 0,
+            hash_archivo    TEXT UNIQUE,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Columns:
+  id (INTEGER) PK
+  fuente (TEXT) 
+  marca (TEXT) 
+  tipo (TEXT) 
+  fecha_liquidacion (TEXT) 
+  periodo (TEXT) 
+  establecimiento (TEXT) 
+  total_bruto (REAL) 
+  costo_arancel (REAL) 
+  costo_financiero (REAL) 
+  iva_21 (REAL) 
+  iva_105 (REAL) 
+  retenciones (REAL) 
+  total_neto (REAL) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: payway_records ---
+CREATE TABLE payway_records (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fuente          TEXT,
+            fecha_compra    TEXT,
+            fecha_pago      TEXT,
+            lote            TEXT,
+            cupon           TEXT,
+            marca           TEXT,
+            monto_bruto     REAL DEFAULT 0,
+            matching_tx_id  INTEGER, -- Relación con bancos_movimientos
+            hash_archivo    TEXT,
+            metadata_cruda  TEXT DEFAULT '{}',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(fuente, lote, cupon, fecha_compra, monto_bruto)
+        )
+
+Columns:
+  id (INTEGER) PK
+  fuente (TEXT) 
+  fecha_compra (TEXT) 
+  fecha_pago (TEXT) 
+  lote (TEXT) 
+  cupon (TEXT) 
+  marca (TEXT) 
+  monto_bruto (REAL) 
+  matching_tx_id (INTEGER) 
+  hash_archivo (TEXT) 
+  metadata_cruda (TEXT) 
+  created_at (TIMESTAMP) 
+
+--- TABLE: search_index ---
+CREATE VIRTUAL TABLE search_index USING fts5(
+                source,
+                record_id,
+                nombre,
+                monto,
+                fecha,
+                extra,
+                metadata_texto
+            )
+
+Columns:
+  source () 
+  record_id () 
+  nombre () 
+  monto () 
+  fecha () 
+  extra () 
+  metadata_texto () 
+
+--- TABLE: search_index_config ---
+CREATE TABLE 'search_index_config'(k PRIMARY KEY, v) WITHOUT ROWID
+
+Columns:
+  k () PK
+  v () 
+
+--- TABLE: search_index_content ---
+CREATE TABLE 'search_index_content'(id INTEGER PRIMARY KEY, c0, c1, c2, c3, c4, c5, c6)
+
+Columns:
+  id (INTEGER) PK
+  c0 () 
+  c1 () 
+  c2 () 
+  c3 () 
+  c4 () 
+  c5 () 
+  c6 () 
+
+--- TABLE: search_index_data ---
+CREATE TABLE 'search_index_data'(id INTEGER PRIMARY KEY, block BLOB)
+
+Columns:
+  id (INTEGER) PK
+  block (BLOB) 
+
+--- TABLE: search_index_docsize ---
+CREATE TABLE 'search_index_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
+
+Columns:
+  id (INTEGER) PK
+  sz (BLOB) 
+
+--- TABLE: search_index_idx ---
+CREATE TABLE 'search_index_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
+
+Columns:
+  segid () PK
+  term () PK
+  pgno () 
+
+--- TABLE: sqlite_sequence ---
+CREATE TABLE sqlite_sequence(name,seq)
+
+Columns:
+  name () 
+  seq () 
+

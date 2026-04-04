@@ -1,25 +1,42 @@
 # 🧬 NEURONA: MÓDULO BANCOS (Tesorería) 🏦🧠
+# Versión 4.0 - Diseño Híbrido y Conciliación Multibanco
 
-Esta neurona es la **"Cámara Acorazada"** del sistema. Registra cada peso que entra o sale de las cuentas bancarias de la empresa.
+Esta neurona es la **"Cámara Acorazada"** del sistema, registrando cada extracto de Chubut, Credicoop e Hipotecario.
 
-## 🛰️ Flujo de Datos al Milímetro
+---
 
-1.  **Extracción de Homebanking**: Se descargan los Excel/CSV (Chubut, Hipotecario, Credicoop).
-2.  **Modularidad de Banco**: Cada banco tiene su propio parser especializado:
-    -   `parser_chubut.py`: Para Excel de movimientos históricos.
-    -   `parser_hipotecario.py`: Para archivos `.xls` de Home Banking.
-    -   `parser_credicoop_joaquin.py`: Especializado para la cuenta de Joaquín (CA 9087).
-3.  **Unificación Bancaria**: Todos los registros terminan en la tabla `bancos_movimientos`.
+## 🏛️ Patrón Repositorio (Regla Inquebrantable)
+> [!CAUTION]
+> **Prohibición de SQL Directo**: Ningún parser bancario puede importar `sqlite3`. 
+> El acceso a datos se realiza exclusivamente mediante `storage_bancos.py`.
+
+### Ejemplo de Uso del Repositorio:
+```python
+from . import storage_bancos as storage
+
+# Inyectar lote de movimientos con hash de archivo
+agregados, last_id = storage.save_movimiento_banco(lista_movs, file_hash)
+
+# Actualizar ruta tras archivado legal (Obligatorio)
+storage.update_record_path(last_id, "/ruta/final/en/archivo/legal.xlsx")
+```
+
+---
+
+## 🛰️ Flujo de Datos 4.0
+1.  **Ingesta**: Los Excel de Homebanking se arrojan en `/inbox/`.
+2.  **Modularidad Híbrida**: Los parsers (`chubut`, `hipotecario`, `credicoop`) extraen columnas duras y guardan la fila original de Excel en el JSON de `metadata_cruda`.
+3.  **Detección de IVA**: Los parsers informan automáticamente al `modulo_compras` ante la detección de IVA bancario/mora.
+4.  **Archivado**: El archivo original se mueve a `static/archivadas/BANCOS/` con trazabilidad por micro-hash.
+
+---
 
 ## 🧱 Tablas Clave
-- `bancos_movimientos`: Tabla única para todos los bancos.
-  - Campos Críticos: `banco` (CHUBUT|HIPOTECARIO|CREDICOOP), `fecha`, `descripcion`, `importe`.
+- `bancos_movimientos`: Tabla unificada.
+- **Idempotencia**: `UNIQUE(banco, cuenta, fecha, descripcion, tipo_movimiento, importe)` + `INSERT OR IGNORE`.
 
-## ⚠️ Reglas de Oro (No romper)
-- **Evitar Duplicados**: El `INSERT OR IGNORE` en la DB es vital. No quitarlo; de lo contrario, importar dos veces el mismo extracto duplicará los montos de caja.
-- **Códigos de Movimiento**: Cada banco llama a las operaciones de forma distinta. No intentar unificar descripciones; guardar el string original para búsquedas futuras.
-- **Conciliación**: El módulo debe permitir cruzar estos movimientos con las liquidaciones de tarjetas (`modulo_tarjetas`) para cerrar el círculo del dinero.
+---
 
 ## 🛠️ Comandos de Neurona
-- `importar <banco> <path>`: Procesa el extracto y lo mete en la tabla unificada.
-- `audit`: (En desarrollo) Cruce de extracto vs liquidaciones de tarjetas.
+- `get_sueldos [anio]`: Filtro inteligente para detectar pago de haberes.
+- `procesar_archivo(path)`: Firma estándar para el orquestador global.

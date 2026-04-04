@@ -1,24 +1,44 @@
 # 🧬 NEURONA: MÓDULO TARJETAS (Recaudación) 💳🧠
+# Versión 4.0 - Diseño Híbrido y Persistencia Blindada
 
-Esta neurona es responsable de toda la lógica de **ingesta, normalización y auditoría** de transacciones con tarjeta de crédito y débito.
+Esta neurona es responsable de la **ingesta, normalización y auditoría** de transacciones con tarjeta.
 
-## 🛰️ Flujo de Datos al Milímetro
+---
 
-1.  **Ingesta Física**: Los archivos (PDF de Payway, Excel de Patagonia, XLSX de Naranja) se reciben vía API o CLI.
-2.  **Parsing Dinámico**: Cada fuente tiene su propio parser (`parser_payway_liq.py`, `parser_naranja_xlsx.py`, etc.) que extrae montos brutos, netos, aranceles e impuestos.
-3.  **Unificación en DB**: Todos los datos convergen en la tabla `liquidaciones_tarjetas`.
-4.  **Auditoría 360**: Se cruzan las ventas diarias de los POS (`payway_records`) contra las liquidaciones reales del banco para detectar falta de depósitos.
+## 🏛️ Patrón Repositorio (Regla Inquebrantable)
+> [!CAUTION]
+> **Prohibición de SQL Directo**: Está terminantemente prohibido importar `sqlite3` o ejecutar SQL en cualquier archivo de lógica o parsing.
+> Toda la persistencia debe delegarse exclusivamente a `storage_tarjetas.py`.
 
-## 🧱 Tablas Clave
-- `payway_records`: Registro individual de cada cupón/ticket pasado por el posnet.
-- `liquidaciones_tarjetas`: Resumen consolidado de lo que el banco depositó efectivamente.
+### Ejemplo de Uso del Repositorio:
+```python
+from . import storage_tarjetas as storage
 
-## ⚠️ Reglas de Oro (No romper)
-- **Normalización de Importes**: Los importes siempre deben ser `float`. Ojo con las comas y puntos en los Excels argentinos.
-- **Tipos de Liquidación**: Se debe diferenciar entre `DIARIA` (Payway) y `MENSUAL/OTRO` (Naranja/Patagonia) para que la auditoría no dé falsos positivos.
-- **Base Ingesta**: Siempre usar `core_sistema.db_ingesta` para asegurar integridad referencial.
+# Guardar una liquidación con metadata híbrida
+liq_id = storage.save_liquidacion({
+    "fuente": "PAYWAY",
+    "total_bruto": 1500.50,
+    "metadata_cruda": json_dump_ocr  # Diseño Híbrido
+})
+```
 
-## 🛠️ Comandos de Neurona
+---
+
+## 🛰️ Flujo de Datos 4.0
+1.  **Inbox Central**: Los archivos PDF/Excel se reciben en `/inbox/`.
+2.  **Parsing Híbrido**: El parser extrae las "Columnas Duras" (monto, fecha) y empaqueta el resto en un JSON para la columna `metadata_cruda`.
+3.  **Firma Estándar**: El parser retorna `(True, info_dict)` al orquestador para gatillar el archivado legal.
+4.  **Auditoría 360**: Cruce de `payway_records` (POS) vs `liquidaciones_tarjetas` (Banco).
+
+---
+
+## 🧱 Estructura de Datos
+- `payway_records`: Cupones individuales. **Clave Unique**: `(fecha_compra, cupon, lote, marca, monto_bruto)`.
+- `liquidaciones_tarjetas`: Resumen bancario. Indexado en **FTS5** vía metadata cruda.
+
+---
+
+## 🛠️ Comandos y Herramientas
 - `resumen [anio]`: Visión gerencial de ingresos por marca.
-- `audit`: El "detective" que busca dinero perdido en el aire.
-- `importar <fuente> <path>`: La puerta de entrada de nuevos datos.
+- `audit`: El detective que busca dinero no depositado.
+- `procesar_archivo(path)`: Punto de entrada para el orquestador global.

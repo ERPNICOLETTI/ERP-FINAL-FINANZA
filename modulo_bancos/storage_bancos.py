@@ -72,15 +72,25 @@ def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
                 ))
                 if cursor.rowcount > 0:
                     agregados += 1
+                    last_id = cursor.lastrowid
             except sqlite3.IntegrityError:
                 pass  # Movimiento duplicado
         conn.commit()
-        return agregados
+        return agregados, last_id
     except Exception as e:
         logger.warning(f"Error guardando movimientos bancarios: {e}")
-        return 0
+        return 0, None
     finally:
         conn.close()
+
+
+def update_record_path(record_id, new_path):
+    """Actualiza la ruta física del archivo tras el archivado legal."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE bancos_movimientos SET path_archivo = ? WHERE id = ?", (new_path, record_id))
+    conn.commit()
+    conn.close()
 
 
 def get_sueldos(anio):

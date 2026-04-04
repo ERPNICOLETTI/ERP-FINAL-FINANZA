@@ -1,18 +1,18 @@
 import os
-import sys
+import logging
+import hashlib
+import json
 import pandas as pd
 from datetime import datetime
-
-# Importaciones Modulares (Ownership)
 from . import storage_compras as storage
-from core_sistema import db_ingesta, checksum_service
 
-# Setup utf-8 output for windows
-if sys.stdout.encoding != 'utf-8':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# IMPORTADOR CALIM (EXCEL/CALAMINE) - Phase 3 🏗️🧱🧠⚖️🚀
+# Esta versión implementa el Diseño Híbrido y el archivado legal.
 
-# Diccionario Inverso para mapear nombres de CALIM al Código de AFIP
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Mapeo CALIM a AFIP
 CALIM_TO_AFIP_CODIGO = {
     'Factura A': 1, 'Nota de Débito A': 2, 'Nota de Crédito A': 3,
     'Factura B': 6, 'Nota de Débito B': 7, 'Nota de Crédito B': 8,
@@ -20,84 +20,100 @@ CALIM_TO_AFIP_CODIGO = {
     'Factura M': 51, 'Nota de Débito M': 52, 'Nota de Crédito M': 53
 }
 
-def parse_calim_excel(file_path):
-    """
-    IMPORTADOR ROBUSTO DE CALIM (Excel).
-    """
-    print(f"🧾 Analizando Excel de CALIM: {os.path.basename(file_path)}")
-    
-    # 1. CONTROL DE DUPLICADOS
-    es_nuevo, hash_val = checksum_service.validar_y_registrar("COMPRAS", "FILE", os.path.basename(file_path), file_path)
-    if not es_nuevo:
-        print(f"🚫 SALTADO: Ya procesado.")
-        return
+def calculate_sha256(file_path):
+    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
+def parse_money(val):
+    if pd.isna(val) or val is None: return 0.0
+    val = str(val).replace('$', '').replace('.', '').replace(',', '.').strip()
+    try: return float(val)
+    except: return 0.0
+
+def procesar_archivo(file_path):
+    """Función principal (Phase 3): Ingesta el Excel de CALIM y retorna (success, info)."""
+    if not os.path.exists(file_path):
+        logger.error(f"⚠️ El archivo no existe: {file_path}")
+        return False, None
+
+    logger.info(f"🧾 Analizando Excel de CALIM: {os.path.basename(file_path)}")
+    file_hash = calculate_sha256(file_path)
+    
     try:
-        # Usamos calamine para bypassear los Excel rotos de CALIM
+        # CALIM suele enviar Excels con errores de formato, calamine es más robusto
         df = pd.read_excel(file_path, engine='calamine')
         df = df.dropna(subset=['Numero', 'Total'])
         
-        registros_procesados = 0
-        
+        last_id = None
+        first_row_date = "2026-01-01"
+
         for idx, row in df.iterrows():
             try:
-                # 1. Interpretar Fecha
                 fecha_raw = str(row['Fecha']).strip()
                 fecha_emision = datetime.strptime(fecha_raw, "%d/%m/%Y").strftime("%Y-%m-%d") if '/' in fecha_raw else fecha_raw
-                
-                # 2. Interpretar Montos
-                def parse_money(val):
-                    if pd.isna(val): return 0.0
-                    val = str(val).replace('$', '').replace('.', '').replace(',', '.').strip()
-                    try: return float(val)
-                    except: return 0.0
-                        
+                if idx == 0: first_row_date = fecha_emision
+
                 neto_gravado = parse_money(row.get('Neto'))
                 monto_iva = parse_money(row.get('Iva'))
                 monto_total = parse_money(row['Total'])
                 tipo_nombre = str(row['Tipo']).strip()
                 
-                # Ajuste de signos
-                if 'Crédito' in tipo_nombre:
-                    neto_gravado, monto_iva, monto_total = -abs(neto_gravado), -abs(monto_iva), -abs(monto_total)
-                else:
-                    neto_gravado, monto_iva, monto_total = abs(neto_gravado), abs(monto_iva), abs(monto_total)
-                    
-                # 3. Formatear la llave única
+                # Formatear el número (Código-PV-Número)
                 tipo_codigo = CALIM_TO_AFIP_CODIGO.get(tipo_nombre, 0)
                 codigo_str = str(tipo_codigo).zfill(3)
-                num_raw = str(row['Numero']).split('-')
-                pv = num_raw[0].strip().zfill(5) if len(num_raw) == 2 else "00000"
-                n = num_raw[1].strip().zfill(8) if len(num_raw) == 2 else str(row['Numero']).strip().zfill(8)
+                num_parts = str(row['Numero']).split('-')
+                pv = num_parts[0].strip().zfill(pv_len := 5) if len(num_parts) == 2 else "00000"
+                n = num_parts[1].strip().zfill(8) if len(num_parts) == 2 else str(row['Numero']).strip().zfill(8)
                 numero_completo = f"{codigo_str}-{pv}-{n}"
                 
-                # 4. Inserción mediante Storage Modular
+                # Diseño Híbrido: Empaquetar fila completa
                 factura_data = {
                     "numero_completo": numero_completo,
                     "tipo_operacion": 'COMPRA' if 'Compra' in os.path.basename(file_path) else 'VENTA',
                     "tipo_comprobante": tipo_nombre,
                     "proveedor": str(row['Proveedor']).strip(),
-                    "fecha_emision": fecha_emision,
+                    "fecha": fecha_emision,
                     "neto_gravado": neto_gravado,
                     "monto_iva": monto_iva,
                     "monto_total": monto_total,
-                    "status": "CONCILIADO_CALIM"
+                    "hash_archivo": file_hash,
+                    "origen": "CALIM_EXCEL",
+                    "status": "CONCILIADO_CALIM",
+                    "row_dump": row.to_dict()
                 }
-                storage.save_factura(factura_data)
-                registros_procesados += 1
+
+                f_id = storage.save_factura(factura_data)
+                if f_id: last_id = f_id
                     
             except Exception as e:
-                print(f"⚠️ Error en fila {idx}: {e}")
+                logger.warning(f"⚠️ Error en fila {idx}: {e}")
 
-        print(f"✨ Éxito: {registros_procesados} comprobantes de CALIM sincronizados.")
-        db_ingesta.update_search_index()
+        if last_id:
+            info = {
+                "modulo": "COMPRAS",
+                "anio": first_row_date[:4],
+                "mes": first_row_date[5:7],
+                "entidad": "CALIM_ESTUDIO",
+                "db_table": "facturas",
+                "id_insertado": last_id
+            }
+            return True, info
+        else:
+            logger.warning(f"🚫 Archivo CALIM omitido (sin facturas nuevas): {os.path.basename(file_path)}")
+            return False, None
         
     except Exception as e:
-        print(f"❌ Error fatal procesando CALIM: {e}")
+        logger.error(f"❌ Error fatal procesando CALIM: {e}")
+        return False, None
 
 if __name__ == "__main__":
+    import sys
     if len(sys.argv) > 1:
         for f in sys.argv[1:]:
-            parse_calim_excel(f)
+            procesar_archivo(f)
     else:
-        print("💡 Uso: python importador_calim.py <ruta_archivo>")
+        logger.warning("Uso: python importador_calim.py <absolute_path>")

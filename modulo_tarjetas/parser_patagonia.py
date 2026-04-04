@@ -1,19 +1,30 @@
 import pdfplumber
 import os
 import re
-import sys
+import logging
+import hashlib
+import json
+from . import storage_tarjetas as storage
 
 # Motor de Digitalización de Alta Precisión - Patagonia 365 💎🏗️🧱🧠
-# Importación local de Storage (Ownership)
-from . import storage_tarjetas as storage
-from core_sistema import db_ingesta
+# Esta versión implementa el Diseño Híbrido y el archivado legal.
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def calculate_sha256(file_path):
+    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
 def normalizar_importe(texto):
+    """Limpia strings de moneda y los convierte a float."""
     if not texto: return 0.0
-    # Limpiar solo caracteres válidos para números: dígitos, punto y coma
     texto = "".join(c for c in str(texto) if c in "0123456789.,-")
     if not texto: return 0.0
-    
     if "," in texto and "." in texto:
         if texto.rfind(",") > texto.rfind("."): texto = texto.replace(".", "").replace(",", ".")
         else: texto = texto.replace(",", "")
@@ -21,51 +32,38 @@ def normalizar_importe(texto):
     try: return float(texto)
     except: return 0.0
 
-def parse_patagonia_365(file_path):
-    print(f"💎 PROCESANDO PATAGONIA (ALTA PRECISIÓN): {os.path.basename(file_path)}")
+def procesar_archivo(file_path):
+    """Función principal (Phase 3): Ingesta el PDF de Patagonia y retorna (success, info)."""
+    if not os.path.exists(file_path):
+        logger.error(f"⚠️ El archivo no existe: {file_path}")
+        return False, None
+
+    logger.info(f"💎 PROCESANDO PATAGONIA (ALTA PRECISIÓN): {os.path.basename(file_path)}")
+    file_hash = calculate_sha256(file_path)
     
-    header = {"fuente": "PATAGONIA365", "tipo": "MENSUAL", "marca": "PATAGONIA 365", "total_bruto": 0.0, "total_neto": 0.0}
+    header = {
+        "fuente": "PATAGONIA365", 
+        "tipo": "MENSUAL", 
+        "marca": "PATAGONIA 365", 
+        "total_bruto": 0.0, 
+        "total_neto": 0.0,
+        "hash_archivo": file_hash,
+        "path_archivo": file_path
+    }
+    
+    text_full = ""
     fragmentos = []
 
     try:
         with pdfplumber.open(file_path) as pdf:
-            text_full = ""
             for i, page in enumerate(pdf.pages):
                 page_text = page.extract_text() or ""
                 text_full += page_text + "\n"
-                
-                lines = page_text.split("\n")
-                for line in lines:
-                    clean_line = line.strip()
-                    if not clean_line: continue
-                    
-                    # 1. CAPTURA DE LIQUIDACIONES DIARIAS (BITS)
-                    # Formato: 07192356 06/02/2026 27/01/2026 74.900,00 2.247,00 5.992,00 0,00 1.101,03 65.559,97
-                    m_liq = re.search(r'^(\d{8})\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)$', clean_line)
-                    if m_liq:
-                        frag = {
-                            "fecha": m_liq.group(2),
-                            "descripcion": f"Liq {m_liq.group(1)} (Present. {m_liq.group(3)})",
-                            "monto_bruto": normalizar_importe(m_liq.group(4)),
-                            "arancel": normalizar_importe(m_liq.group(5)),
-                            "financiero": normalizar_importe(m_liq.group(6)),
-                            "iva": normalizar_importe(m_liq.group(7)),
-                            "retenciones": normalizar_importe(m_liq.group(8)),
-                            "monto_neto": normalizar_importe(m_liq.group(9)),
-                            "metadata_raw": {"nro_liq": m_liq.group(1), "pagina": i+1}
-                        }
-                        fragmentos.append(frag)
-                    else:
-                        # Guardamos cualquier otra línea como "ruido útil"
-                        fragmentos.append({
-                            "fecha": None,
-                            "descripcion": clean_line,
-                            "monto_bruto": 0.0,
-                            "metadata_raw": {"pagina": i+1, "raw_text": clean_line}
-                        })
+        
+        # Regla Fase 2: Incluir texto completo para Buscador 360
+        header["texto_completo_ocr"] = text_full
 
-        # 2. CAPTURA DE TOTALES DEL HEADER (ALTA PRECISIÓN)
-        # Buscar "664.400,00 19.932,00 57.607,00 0,00 Monto Presentado"
+        # Capture Totales (Alta Precisión)
         m_totales = re.search(r'([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+Monto Presentado', text_full)
         if m_totales:
             header["total_bruto"] = normalizar_importe(m_totales.group(1))
@@ -73,32 +71,41 @@ def parse_patagonia_365(file_path):
             header["costo_financiero"] = normalizar_importe(m_totales.group(3))
             header["iva_21"] = normalizar_importe(m_totales.group(4))
 
-        # Buscar el Neto Final ($ 576.626,54)
         m_neto = re.search(r'\$\s*([\d\.,]+)', text_full)
         if m_neto: 
             header["total_neto"] = normalizar_importe(m_neto.group(1))
 
-        # Buscar el Periodo
         m_periodo = re.search(r'Periodo Liquidado:\s+(\d{4}-\d{2})', text_full)
         if m_periodo:
             header["periodo"] = m_periodo.group(1)
             header["fecha_liquidacion"] = f"{m_periodo.group(1)}-01"
+        else:
+            header["fecha_liquidacion"] = "2026-01-01"
 
-        # 3. PERSISTENCIA MODULAR
+        # 3. Persistencia en Dominio Tarjetas
         liq_id = storage.save_liquidacion(header)
+        
         if liq_id:
-            storage.save_liquidacion_detalle(liq_id, fragmentos)
-            print(f"🧱 Éxito: Liquidación Patagonia {header.get('periodo')} digitalizada con {len(fragmentos)} bits.")
-            
-            # 4. Notificar al Core para actualizar el índice de búsqueda global
-            db_ingesta.update_search_index()
+            info = {
+                "modulo": "TARJETAS",
+                "anio": header.get("fecha_liquidacion", "2026-01")[:4],
+                "mes": header.get("fecha_liquidacion", "2026-01")[5:7],
+                "entidad": "PATAGONIA365",
+                "db_table": "liquidaciones_tarjetas",
+                "id_insertado": liq_id
+            }
+            return True, info
+        else:
+            logger.warning(f"🚫 Archivo omitido (Hash existente): {os.path.basename(file_path)}")
+            return False, None
         
     except Exception as e:
-        print(f"Error procesando Patagonia: {e}")
+        logger.error(f"❌ Error crítico procesando Patagonia 365: {e}")
+        return False, None
 
 if __name__ == "__main__":
-    import glob
-    # Procesar todos los de la carpeta downloads que coincidan
-    archivos = glob.glob(r"C:\Users\essao\Downloads\LiqMensual*.pdf")
-    for a in archivos:
-        parse_patagonia_365(a)
+    import sys
+    if len(sys.argv) > 1:
+        procesar_archivo(sys.argv[1])
+    else:
+        logger.warning("Uso: python parser_patagonia.py <absolute_path>")

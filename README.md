@@ -1,32 +1,29 @@
 # 🧠 ERP Final - Inteligencia Financiera Modular 💳🏦🧾🦾
+# Versión 4.0 - Ecosistema de Ingesta Inteligente
 
-Bienvenido al repositorio central de **ERP Final**. Este sistema está construido bajo una arquitectura de **Monolito Modular (DDD / Vertical Slicing)** para asegurar mantenibilidad y aislamiento total de datos.
-
----
-
-## 🚀 Inicio Rápido (Quick Start)
-
-1.  **Instalar dependencias**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-2.  **Levantar el Motor (API)**:
-    ```bash
-    python erp_api.py
-    ```
-3.  **Abrir el Cerebro (CLI)**:
-    ```bash
-    python cerebro.py
-    ```
+Bienvenido al repositorio central de **ERP Final**. Este sistema utiliza una arquitectura de **Monolito Modular (Vertical Slicing)** con un motor de **Ingesta Híbrida** (Relacional + JSON) y cumplimiento legal automatizado.
 
 ---
 
-## 🏛️ LEER ANTES DE TOCAR (Arquitectura)
+## 🚀 Flujo de Trabajo v4.0 (Soltar y Procesar)
 
-Cualquier cambio en este repositorio debe respetar la estructura modular. El punto de entrada para entender "cómo se hace qué" es:
+A diferencia de versiones anteriores, el sistema ahora centraliza la entrada de datos:
 
-👉 **[Cerebro_ERP.md](Cerebro_ERP.md)**: El "Tronco Cerebral" (Reglas de Oro y Mapa de Neuronas).
-👉 **[DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)**: La "Biblia de Datos" (Propiedad de Tablas y Esquema).
+1.  **Depositar**: Arroja tus archivos (PDF Payway, Excel Bancos, CSV AFIP) en la carpeta `/inbox/`.
+2.  **Procesar**: Ejecuta el orquestador:
+    ```bash
+    python erp_master.py
+    ```
+3.  **Resultado**: El sistema identifica el archivo, extrae los datos, los indexa en el **Buscador 360** y mueve el documento original al **Archivo Legal** (`static/archivadas/`).
+
+---
+
+## 🏛️ Documentación Maestra (Arquitectura)
+
+Cualquier cambio en este repositorio debe respetar la estructura modular y el **Patrón Repositorio** (acceso a DB solo vía `storage_*.py`).
+
+👉 **[Cerebro_ERP.md](Cerebro_ERP.md)**: Reglas de Oro, Flujo de Ingesta y Mapa de Neuronas.
+👉 **[DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)**: Diseño Híbrido, Idempotencia y FTS5.
 
 ---
 
@@ -40,4 +37,4 @@ Cada módulo tiene su propio manual interno:
 ---
 
 > [!CAUTION]
-> **AVISO PARA ASISTENTES IA**: El incumplimiento de las leyes de aislamiento modular (ej. accesos directos cross-module) se considera una falla arquitectónica grave. Busca siempre la **NEURONA.md** del módulo correspondiente antes de proponer código.
+> **AVISO PARA ASISTENTES IA**: Está prohibido el uso de `sqlite3` fuera de los archivos `storage_*.py`. El incumplimiento de las leyes de aislamiento modular se considera una falla arquitectónica crítica.

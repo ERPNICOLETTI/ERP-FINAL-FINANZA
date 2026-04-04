@@ -60,6 +60,7 @@ def ejecutar_scan():
             
     print(f"✅ [COMPRAS] Scan finalizado. {count} reportes procesados.")
 
+def handle_command(cmd, args, query_api):
     if cmd == "help" or cmd == "--help":
         print("\n🧬 NEURONA FACTURAS - Comandos disponibles:")
         print("   -> scan                | Escaneo automático de carpeta crudos.")
@@ -90,7 +91,8 @@ def ejecutar_scan():
             if res:
                 print(f"\nRESULTADOS BUSQUEDA: {termino}")
                 for f in res[:5]:
-                    print(f"   - {f['fecha_emision']} | {f['proveedor'][:25]:<25} | $ {f['monto_total']:>10,.2f}")
+                    # Nota: Usamos 'fecha' que es el nombre en el nuevo Storage
+                    print(f"   - {f['fecha']} | {f['proveedor'][:25]:<25} | $ {f['monto_total']:>10,.2f}")
                 print()
 
     elif cmd == "importar":

@@ -1,26 +1,45 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
+# Versión 4.0 - Diseño Híbrido y Archivador Legal
 
-Esta neurona es responsable del **ciclo de vida de los comprobantes**: desde la descarga en ARCA (AFIP) hasta el envío al estudio contable (CALIM) y el archivo físico.
+Esta neurona gestiona el **ciclo de vida fiscal** de los comprobantes y su conciliación contable.
 
-## 🛰️ Flujo de Datos al Milímetro
+---
 
-1.  **Ingesta AFIP**: Se importan los CSV de "Mis Comprobantes recibidos". Las facturas entran con estado `SOLO_AFIP`.
-2.  **Importación CALIM**: Se importan los Excel del contador. Se hace match por `numero_completo`. Si existe, el estado pasa a `CONCILIADO_CALIM`.
-3.  **Sincronización de Archivos**: Un script recorre la carpeta física de facturas.
-    - Si el PDF existe y está bien nombrado, se marca como `ARCHIVADO`.
-    - Si el nombre está mal, el `organizador_carpetas.py` lo normaliza por CUIT y Fecha.
+## 🏛️ Patrón Repositorio (Regla Inquebrantable)
+> [!CAUTION]
+> **Prohibición de SQL Directo**: Ningún archivo de este módulo (parsers o lógica) puede importar `sqlite3`.
+> Toda la persistencia debe pasar por `storage_compras.py`.
+
+### Ejemplo de Uso del Repositorio:
+```python
+from . import storage_compras as storage
+
+# Guardar factura con volcado de fila completo (Diseño Híbrido)
+storage.save_factura({
+    "numero_completo": "001-00005-00007365",
+    "proveedor": "TELECOM SA",
+    "monto_total": 45000.00,
+    "row_dump": row.to_dict()  # Metadata cruda JSON
+})
+```
+
+---
+
+## 🛰️ Flujo de Datos 4.0 (Ingesta e Inbox)
+1.  **Entrada Centralizada**: Los CSV de AFIP y Excels de CALIM se depositan en `/inbox/`.
+2.  **Parsing Híbrido**: El `importador_afip.py` y `importador_calim.py` extraen columnas duras y guardan la fila original en el JSON de metadata.
+3.  **Archivado Legal**: Tras la inserción, el `archiver_service.py` mueve el archivo a `static/archivadas/COMPRAS/YYYY/MM/ARCA_AFIP/`.
+4.  **Sincronización**: Match por `numero_completo` entre fuentes AFIP y CALIM.
+
+---
 
 ## 🧱 Tablas Clave
-- `facturas`: Tabla maestra que guarda facturas, notas de crédito y débito.
-- Campos Críticos: `status` (controla si está en AFIP, CALIM o Archivado) y `path_archivo`.
+- `facturas`: Tabla maestra digitalizada. 
+- **Idempotencia**: `UNIQUE(cuit_proveedor, punto_venta, numero_completo, tipo_comprobante)` + `INSERT OR IGNORE`.
 
-## ⚠️ Reglas de Oro (No romper)
-- **Integridad del Número**: No modificar el formato del punto de venta y número (ej: 0001-00001234). Es la clave primaria lógica.
-- **Diferencia de Céntimos**: CALIM y AFIP a veces difieren por céntimos. El sistema debe ser tolerante en el match de montos, pero estricto en el número de comprobante.
-- **Relaciones de Carpeta**: La ruta física debe seguir el patrón `CUIT/AÑO/MES/FACTURA.pdf`.
+---
 
-## 🛠️ Comandos de Neurona
-- `resumen [anio]`: Total de IVA Ventas vs IVA Compras.
-- `buscar <termino>`: Detective de facturas por Cuit, Proveedor o Número.
-- `sync`: El "bibliotecario" que ordena los archivos PDF y limpia la DB.
-- `importar <AFIP|CALIM> <path>`: Inyección manual de datos.
+## 🛠️ Comandos y Herramientas
+- `resumen [anio]`: Análisis de IVA Ventas vs IVA Compras.
+- `buscar <termino>`: Búsqueda 360 vía FTS5 (indexa metadata JSON).
+- `procesar_archivo(path)`: Firma estándar para el orquestador.

@@ -1,11 +1,24 @@
 import pandas as pd
 import os
-import sys
-
-# Importaciones Modulares (Ownership)
+import logging
+import hashlib
+import json
 from . import storage_bancos as storage
-from core_sistema import db_ingesta, checksum_service
 from modulo_compras import storage_compras
+
+# Parser Banco Hipotecario USD (Joaquín) - Phase 3 🏗️🧱🧠⚖️🚀
+# Esta versión implementa el Diseño Híbrido y el archivado legal.
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def calculate_sha256(file_path):
+    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
 def normalizar_importe_usd(val):
     if pd.isna(val) or val is None: return 0.0
@@ -14,18 +27,15 @@ def normalizar_importe_usd(val):
     try: return float(s)
     except: return 0.0
 
-def parse_hipotecario_usd(file_path):
-    """
-    EXTRACTOR ROBUSTO PARA BANCO HIPOTECARIO USD (Área Joaquín).
-    """
-    print(f"💵 Analizando extracto Hipotecario USD: {os.path.basename(file_path)}")
-    
-    # 1. CONTROL DE DUPLICADOS
-    es_nuevo, hash_val = checksum_service.validar_y_registrar("BANCOS", "FILE", os.path.basename(file_path), file_path)
-    if not es_nuevo:
-        print(f"🚫 SALTADO: Ya procesado.")
-        return
+def procesar_archivo(file_path):
+    """Función principal (Phase 3): Ingesta el extracto de Hipotecario USD y retorna (success, info)."""
+    if not os.path.exists(file_path):
+        logger.error(f"⚠️ El archivo no existe: {file_path}")
+        return False, None
 
+    logger.info(f"💵 Analizando extracto Hipotecario USD: {os.path.basename(file_path)}")
+    file_hash = calculate_sha256(file_path)
+    
     try:
         df = pd.read_excel(file_path, header=None)
         
@@ -38,24 +48,26 @@ def parse_hipotecario_usd(file_path):
                 break
         
         if header_idx == -1:
-            raise ValueError("No se pudo detectar la cabecera en el Excel del Hipotecario.")
+            logger.error("❌ No se pudo detectar la cabecera en el Excel USD.")
+            return False, None
 
-        # Mapeo de nombres de columnas a mayúsculas para evitar líos
         column_names = [str(c).strip().upper() for c in df.iloc[header_idx]]
         df_movs = df.iloc[header_idx + 1:].copy()
         df_movs.columns = column_names
         
         movimientos = []
+        last_id = None
+        first_date = "2026-01-01"
+
         for _, row in df_movs.iterrows():
             raw_fecha = row.get('FECHA')
             if pd.isna(raw_fecha): continue
             
             try:
-                # Normalización de fecha robusta
                 fecha_dt = pd.to_datetime(raw_fecha, dayfirst=True)
                 fecha_iso = fecha_dt.strftime('%Y-%m-%d')
-            except:
-                continue
+                if not movimientos: first_date = fecha_iso
+            except: continue
 
             desc = str(row.get('DESCRIPCIÓN', row.get('CONCEPTO', 'MOVIMIENTO USD'))).strip()
             importe = normalizar_importe_usd(row.get('IMPORTE', 0))
@@ -66,39 +78,43 @@ def parse_hipotecario_usd(file_path):
                     "cuenta": "CA_USD_2646",
                     "fecha": fecha_iso,
                     "descripcion": desc,
-                    "codigo_movimiento": f"HIP_USD_{fecha_iso}_{abs(importe)}",
+                    "tipo_movimiento": "CA_USD",
                     "importe": importe,
-                    "metadata": {"archivo": os.path.basename(file_path)}
+                    "hash_archivo": file_hash,
+                    "row_dump": row.to_dict()
                 })
                 
-                # Reporte de IVA Bancario (Si aplica a USD, lo detectamos)
+                # IVA Bancario
                 if "iva" in desc.lower() and "21" in desc.lower():
                     storage_compras.registrar_impuesto({
-                        "modulo": "BANCOS",
-                        "fuente": "HIPOTECARIO_USD",
-                        "fecha": fecha_iso,
-                        "neto_gravado": 0,
-                        "iva_105": 0,
-                        "iva_21": abs(importe),
-                        "descripcion": f"IVA Bancario USD: {desc}",
-                        "extern_id": None
+                        "modulo": "BANCOS", "fuente": "HIPOTECARIO_USD", "fecha": fecha_iso,
+                        "neto_gravado": 0, "iva_21": abs(importe), "iva_105": 0,
+                        "descripcion": f"IVA Bancario USD: {desc}", "hash_archivo": file_hash
                     })
 
         if movimientos:
-            agregados = storage.save_movimiento_banco(movimientos)
-            print(f"✨ Éxito: {agregados} movimientos en USD ingresados correctamente.")
-        else:
-            print("⚠️ No se encontraron movimientos válidos.")
-            
-        db_ingesta.update_search_index()
+            agregados, last_id = storage.save_movimiento_banco(movimientos, file_hash)
+            if last_id:
+                info = {
+                    "modulo": "BANCOS",
+                    "anio": first_date[:4],
+                    "mes": first_date[5:7],
+                    "entidad": "BANCO_HIPOTECARIO_USD",
+                    "db_table": "bancos_movimientos",
+                    "id_insertado": last_id
+                }
+                return True, info
+        
+        logger.warning(f"🚫 Archivo Hipotecario USD omitido: {os.path.basename(file_path)}")
+        return False, None
 
     except Exception as e:
-        print(f"❌ Error en Hipotecario USD: {e}")
+        logger.error(f"❌ Error en Hipotecario USD: {e}")
+        return False, None
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Uso: python parser_hipotecario_usd.py <ruta_excel>")
+    import sys
+    if len(sys.argv) > 1:
+        procesar_archivo(sys.argv[1])
     else:
-        WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-        DB_PATH = os.path.join(WORKSPACE, "erp_nicoletti.db")
-        ingesta_hipotecario_usd(sys.argv[1], DB_PATH)
+        logger.warning("Uso: python parser_hipotecario_usd.py <absolute_path>")

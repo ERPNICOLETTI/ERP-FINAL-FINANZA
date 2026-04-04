@@ -1,58 +1,63 @@
 # 🗄️ Arquitectura de Base de Datos - ERP FINAL (Modular DDD) 🏗️🧱🧠
+# Versión 4.0 - Diseño Híbrido y Persistencia Blindada
 
-Este documento detalla la estructura lógica de `erp_nicoletti.db`. Siguiendo los principios de **Domain-Driven Design (DDD)** y **Vertical Slicing**, la base de datos está dividida en dominios autónomos.
+Este documento detalla la estructura lógica de `erp_nicoletti.db`. Siguiendo los principios de **Domain-Driven Design (DDD)** y **Vertical Slicing**, la base de datos está dividida en dominios autónomos que no comparten estado directo.
 
 ---
 
-## 🏛️ Propiedad de los Datos (Data Ownership)
+## 🏛️ Propiedad de los Datos (Data Ownership) - Patrón Repositorio
 
-La regla de oro es: **Ningún módulo puede consultar o modificar tablas que no le pertenecen.** Si un módulo necesita datos de otro, debe hacerlo a través de una función de servicio del módulo dueño.
+La regla de oro inquebrantable es: **Ningún módulo puede importar `sqlite3` ni ejecutar SQL directo sobre tablas ajenas.** 
+
+-   La persistencia se delega exclusivamente a los archivos `storage_*.py` de cada módulo.
+-   La comunicación cross-module se realiza mediante funciones de servicio (Ej: `modulo_compras.storage_compras.save_factura()`).
 
 ### 💳 1. Dominio Tarjetas (`modulo_tarjetas`)
 *Dueño absoluto de la recaudación por POS y tarjetas.*
--   **`payway_records`**: Cupones individuales (Ventas brutas).
--   **`liquidaciones_tarjetas`**: Cabecera de lo depositado por el banco.
--   **`liquidaciones_detalles`**: Desglose bit-a-bit de cada liquidación.
+-   **`payway_records`**: Cupones individuales.
+-   **`liquidaciones_tarjetas`**: Cabeceras disciplinadas de depósitos bancarios.
 
 ### 🧾 2. Dominio Compras (`modulo_compras`)
 *Dueño de la facturación fiscal y conciliación contable.*
--   **`facturas`**: Tabla maestra de comprobantes (ARCA/AFIP).
--   **`facturas_calim`**: Datos importados del estudio contable.
--   **`libroiva`**: Declaraciones juradas mensuales.
+-   **`facturas`**: Tabla maestra de comprobantes (AFIP/CALIM). Incluye `row_dump` en JSON.
 
 ### 🏦 3. Dominio Bancos (`modulo_bancos`)
 *Dueño de la tesorería y el flujo de caja real.*
--   **`bancos_movimientos`**: Extractos bancarios unificados.
-
-### 🧠 4. Dominio Core (`core_sistema`)
-*Orquestador de infraestructura y búsqueda global.*
--   **`search_index`**: Tabla virtual **FTS5** (Full-Text Search). Unifica la visibilidad de todos los módulos.
+-   **`bancos_movimientos`**: Extractos bancarios unificados de Chubut, Credicoop e Hipotecario.
 
 ---
 
-## 🛠️ El Ciclo de Vida del Dato (Ingesta Híbrida)
+## 🛠️ Diseño Híbrido (Relacional + Documental)
 
-El sistema utiliza un **Diseño Híbrido (Relacional + Documental)** para garantizar que no se pierda ni un bit de información durante el parseo.
+Para garantizar la integridad total y no perder datos en el proceso de normalización, implementamos el **Diseño Híbrido**:
 
-1.  **Columnas Duras (Normalizadas)**:
-    -   Solo lo esencial para cálculos: `id`, `fecha`, `monto_total`, `tipo_comprobante`, `hash_archivo`.
-2.  **Columna Blanda (JSON `metadata_cruda`)**:
-    -   Un volcado total de la información cruda del archivo en formato JSON. Si un dato no tiene columna propia, **debe** ir aquí.
+1.  **Columnas Duras (Tipadas)**: Campos esenciales para cálculos y cruces (id, fecha, monto, cuit, hash_archivo).
+2.  **Columna Blanda (`metadata_cruda`)**: Columna de tipo `TEXT` que almacena un objeto JSON con el volcado absoluto de la fuente (OCR completo en PDFs o diccionario de la fila en Excels).
 
-### 🛡️ Protocolo de Idempotencia (Anti-Duplicados)
-- Todo registro debe incluir un `hash_archivo` (SHA-256) generado por `checksum_service.py`.
-- Las tablas deben definir este hash como `UNIQUE`.
-- Al insertar, se debe usar `INSERT OR IGNORE` para evitar colisiones sin romper el flujo catastróficamente.
-
-### 🔍 Visibilidad 360 (Buscador Global)
-- Tras cada ingesta, el módulo **está obligado** a notificar al Core.
-- El Core actualiza la tabla virtual `search_index` (FTS5).
-- El buscador indexa tanto las columnas duras como el texto dentro del JSON de `metadata_cruda`.
+### 🔍 Buscador 360 (Indexación FTS5)
+La tabla virtual `search_index` (FTS5) en el Core indexa automáticamente el contenido de la columna `metadata_cruda`. Esto permite buscar facturas por cualquier palabra clave que aparezca en el PDF original, incluso si no tiene una columna propia en la DB.
 
 ---
 
-## 🚫 Restricciones de Integridad
--   **Aislamiento**: Prohibido hacer `SELECT * FROM facturas` desde el `modulo_bancos`. Usar servicios de `modulo_compras`.
--   **Unicidad**: Uso obligatorio de `hash_archivo` Único para garantizar que un PDF/Excel no se "chupe" dos veces.
--   **Trazabilidad**: Todo registro debe tener un `path_archivo` o `hash_archivo` para rastrear el origen físico.
--   **Tipado**: Todos los montos monetarios deben ser `REAL` y las fechas en formato ISO `YYYY-MM-DD`.
+## 🛡️ Protocolo de Idempotencia y Id (Anti-Duplicados)
+
+El sistema utiliza una **Estrategia de Doble Capa** para evitar la duplicación de datos sin bloquear la ingesta legítima.
+
+### 1. Nivel Archivo (Preventivo)
+La tabla `core_registro_ingestas` almacena el `hash_sha256` (HEX UNIQUE) de cada archivo procesado. 
+-   **Acción**: Si el hash ya existe, el Orquestador rechaza el archivo de entrada inmediatamente.
+
+### 2. Nivel Fila (Row-Level Dedup)
+En las tablas transaccionales (`facturas`, `payway_records`), el `hash_archivo` **NO es UNIQUE**, ya que múltiples filas pertenecen al mismo archivo.
+-   **Regla**: Se utilizan restricciones `UNIQUE` multi-columna (Ej: `UNIQUE(fecha, cupon, lote, monto)`) junto con `INSERT OR IGNORE`.
+-   **Efecto**: Si se suben dos archivos con solapamiento de fechas, el sistema solo descarta las filas individuales repetidas, preservando la continuidad del archivo.
+
+---
+
+## 🏛️ Trazabilidad Física y Archivamiento
+Todo registro debe mantener un puntero a su origen físico:
+-   `path_archivo`: Ruta absoluta final en el servidor (ubicación en `static/archivadas/`).
+-   `hash_archivo`: Vínculo lógico con la ingesta original.
+
+> [!TIP]
+> **Snippet de Actualización de Ruta**: Tras el archivado legal, es obligatorio llamar a `update_record_path(id, new_path)` para que la DB no pierda el rastro del archivo PDF/Excel.

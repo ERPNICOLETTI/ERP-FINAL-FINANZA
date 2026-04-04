@@ -1,48 +1,59 @@
 # 🧠 Cerebro ERP - Tronco Cerebral (Índice Maestro) 🦾🏗️🧬
+# Versión 4.0 - Ingesta Autónoma y Cumplimiento Legal
 
 Este documento es el **punto de entrada definitivo** para entender la arquitectura y operación del ERP. Cualquier desarrollador o IA que trabaje en este proyecto **DEBE** seguir las reglas maestras aquí descritas.
 
 ---
 
-## 🏛️ 1. Visión Global: Monolito Modular
-El sistema está diseñado bajo una arquitectura de **Monolito Modular (Vertical Slicing)**. 
-Cada dominio de negocio (Tarjetas, Compras, Bancos) es una unidad autónoma y autosuficiente. El sistema no es una maraña de cables, sino un conjunto de "cajas negras" bien definidas.
+## 🏛️ 1. Arquitectura: Monolito Modular (Vertical Slicing)
+El sistema se organiza en dominios autónomos (Tarjetas, Compras, Bancos). Zero acoplamiento directo entre bases de datos de distintos módulos.
 
 ---
 
 ## ⚖️ 2. Reglas de Oro Arquitectónicas (Inquebrantables)
 
+### 🛡️ Aislamiento de Dominios (Patrón Repositorio)
 > [!IMPORTANT]
-> **Aislamiento de Dominios**: Está terminantemente prohibido que un módulo acceda directamente a las tablas o archivos de persistencia de otro módulo. La comunicación entre dominios debe hacerse a través de interfaces de servicio (Funciones de Storage o API interna).
+> **Prohibición de SQL Directo**: Ninguna "Neurona" de lógica puede importar `sqlite3`. Toda persistencia debe realizarse a través de las funciones del archivo `storage_*.py` de su propio módulo.
 
--   **Persistencia Local**: Cada módulo gestiona su propia base de datos lógica a través de su respectivo archivo `storage_*.py`. El dominio es el único dueño de su esquema SQL.
--   **Crudos Locales**: Cada módulo tiene su propia carpeta `crudos/`. Los archivos de origen (PDF, CSV, XLSX) deben depositarse en el módulo correspondiente. El Core solo orquesta la llamada, pero el módulo "manda" en sus archivos.
--   **Orquestación Central**: El `core_sistema` actúa como el "Hub". Su responsabilidad es coordinar la inicialización, la infraestructura y mantener el motor de búsqueda global **FTS5** (`search_index`). No debe contener lógica ni persistencia de negocio.
+### 📥 Flujo "Soltar e Ingerir" (Inbox Universal)
+El sistema ha migrado de carpetas "crudos" locales a un **Inbox Centralizado**:
+1.  **Entrada**: El usuario deposita cualquier archivo (PDF, CSV, XLSX) en la carpeta `/inbox/`.
+2.  **Orquestación**: `erp_master.py` escanea el inbox y despacha al parser correcto basándose en la firma del archivo.
+3.  **Parsers Híbridos**: Los parsers extraen datos y devuelven un objeto estandarizado `(success, info)`.
+4.  **Archivado Legal**: `core_sistema/archiver_service.py` mueve el archivo a su ubicación permanente en `static/archivadas/` con una jerarquía legal, aplicando micro-hashes para evitar colisiones.
 
 ---
 
 ## 🧬 3. Mapa de Neuronas (Donde vive el conocimiento)
 
-Para modificar o entender el comportamiento del sistema, consulta la **Neurona** correspondiente. **No modifiques código sin antes leer la documentación de su dominio.**
+Consulta el manual específico de cada dominio antes de realizar cambios:
 
 ### 💳 Tarjetas (Recaudación)
-Reglas de Payway, Naranja, liquidaciones, aranceles y cruce de cupones.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_tarjetas/NEURONA.md](modulo_tarjetas/NEURONA.md)
+Reglas de Payway, Naranja, Patagonia, aranceles y cruce de cupones.
+👉 **Manual**: [modulo_tarjetas/NEURONA.md](modulo_tarjetas/NEURONA.md)
 
 ### 🏦 Bancos (Tesorería)
-Reglas de conciliación bancaria, extractos de Chubut, Credicoop, Hipotecario y detección de cuentas.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_bancos/NEURONA.md](modulo_bancos/NEURONA.md)
+Extractos de Chubut, Credicoop, Hipotecario (Pesos/USD) y conciliación.
+👉 **Manual**: [modulo_bancos/NEURONA.md](modulo_bancos/NEURONA.md)
 
 ### 🧾 Compras (Fiscal)
-Reglas de ARCA/AFIP, plataforma CALIM, Libro IVA y digitalización de facturas.
-👉 **LEER OBLIGATORIAMENTE**: [modulo_compras/NEURONA.md](modulo_compras/NEURONA.md)
+ARCA/AFIP, plataforma CALIM, Libro IVA y digitalización híbrida.
+👉 **Manual**: [modulo_compras/NEURONA.md](modulo_compras/NEURONA.md)
 
 ### ⚙️ Core e Infraestructura
-Para entender la orquestación del sistema, el motor de búsqueda 360 y el esquema global.
-👉 **LEER OBLIGATORIAMENTE**: [DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)
-👉 **REVISAR**: `core_sistema/reset_database.py` (Script de reconstrucción total).
+Motor de búsqueda 360, Archivador Legal y esquema global.
+👉 **Manual**: [DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)
 
 ---
 
-> [!CAUTION]
-> **AVISO PARA IAs**: Si estás leyendo esto para realizar cambios, detente. Busca el archivo `NEURONA.md` del módulo que vas a modificar. Ignorar las reglas de aislamiento modular resultará en una degradación inaceptable de la arquitectura.
+## ⚙️ 4. API de Parsers (Interface Estándar)
+Todos los parsers deben implementar la función:
+`procesar_archivo(filepath) -> (bool, dict)`
+
+El diccionario de retorno `info` **debe** contener:
+- `modulo`: 'TARJETAS' | 'COMPRAS' | 'BANCOS'
+- `entidad`: Nombre del proveedor/banco (ej: 'PAYWAY').
+- `anio` / `mes`: Para la jerarquía de archivado.
+- `db_table`: Nombre de la tabla de destino.
+- `id_insertado`: El ID generado para actualizar la ruta del archivo.

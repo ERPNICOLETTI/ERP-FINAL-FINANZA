@@ -106,7 +106,7 @@ def update_search_index():
                    monto_bruto, fecha_compra,
                    COALESCE(marca, ''),
                    COALESCE(metadata_cruda, '')
-            FROM cupones_tarjetas
+            FROM payway_records
 
             UNION ALL
 
@@ -121,5 +121,18 @@ def update_search_index():
         print("✅ [CORE] Índice FTS5 actualizado con metadata cruda.")
     except Exception as e:
         logger.warning(f"Error actualizando search_index: {e}")
+    finally:
+        conn.close()
+def search_360(term):
+    """Buscador global usando FTS5 (Movido de erp_master.py)."""
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    try:
+        rows = cur.execute("SELECT * FROM search_index WHERE search_index MATCH ? ORDER BY rank LIMIT 15", (term,)).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.warning(f"Error en búsqueda FTS5: {e}")
+        return []
     finally:
         conn.close()

@@ -1,60 +1,95 @@
 import pandas as pd
-import sqlite3
 import os
-import sys
-from core_sistema import db_ingesta as ingesta
+import logging
+import hashlib
+import json
+from . import storage_bancos as storage
 
-def ingesta_hipotecario(file_path, db_path):
-    print(f"💎 PROCESANDO BANCO HIPOTECARIO (ÁREA JOAQUÍN)...")
+# Parser Banco Hipotecario (Joaquín) - Phase 3 🏦🏗️🧱🧠⚖️
+# Esta versión implementa el Diseño Híbrido y el archivado legal.
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def calculate_sha256(file_path):
+    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def clean_amount(val):
+    if pd.isna(val) or val is None: return 0.0
+    val_str = str(val).replace('.', '').replace(',', '.')
+    try: return float(val_str)
+    except: return 0.0
+
+def procesar_archivo(file_path):
+    """Función principal (Phase 3): Ingesta el extracto de Hipotecario y retorna (success, info)."""
+    if not os.path.exists(file_path):
+        logger.error(f"⚠️ El archivo no existe: {file_path}")
+        return False, None
+
+    logger.info(f"💎 PROCESANDO BANCO HIPOTECARIO (ÁREA JOAQUÍN): {os.path.basename(file_path)}")
+    file_hash = calculate_sha256(file_path)
     
     try:
         # El archivo tiene basura en las primeras filas, saltamos hasta donde aparecen los datos reales
         df = pd.read_excel(file_path, skiprows=4)
-        
-        # Renombramos columnas basándonos en la inspección
         df.columns = ['fecha', 'descripcion', 'importe', 'saldo']
-        
-        # Limpiar filas vacías o que no son datos
         df = df.dropna(subset=['fecha', 'descripcion', 'importe'])
         
-        # Conectar a la DB
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        
-        count = 0
-        for _, row in df.iterrows():
+        last_id = None
+        first_date = "2026-01-01"
+        movimientos = []
+
+        for idx, row in df.iterrows():
             try:
                 fecha = str(row['fecha']).strip()
-                desc = str(row['descripcion']).strip()
+                if idx == 0: first_date = fecha
                 
-                # Manejar conversión de importe con comas y puntos (Formato AR)
-                val_str = str(row['importe']).replace('.', '').replace(',', '.')
-                importe = float(val_str)
-                
-                # Conectar a la DB e insertar
-                conn = sqlite3.connect(db_path)
-                cur = conn.cursor()
-                cur.execute('''
-                    INSERT OR IGNORE INTO bancos_movimientos (banco, cuenta, fecha, descripcion, codigo_movimiento, importe)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', ('HIPOTECARIO', 'CA_JOAQUIN', fecha, desc, '', importe))
-                if cur.rowcount > 0:
-                    count += 1
-                conn.commit()
-                conn.close()
+                # Diseño Híbrido: Empaquetar fila
+                mov_data = {
+                    "banco": "HIPOTECARIO",
+                    "cuenta": "CA_JOAQUIN",
+                    "fecha": fecha,
+                    "descripcion": str(row['descripcion']).strip(),
+                    "tipo_movimiento": "CA_PESOS",
+                    "importe": clean_amount(row['importe']),
+                    "saldo": clean_amount(row['saldo']),
+                    "hash_archivo": file_hash,
+                    "row_dump": row.to_dict()
+                }
+                movimientos.append(mov_data)
+
             except Exception as e:
-                # Si una fila falla (ej: encabezados), se ignora
+                logger.warning(f"⚠️ Error en fila {idx}: {e}")
                 continue
+
+        if movimientos:
+            agregados, last_id = storage.save_movimiento_banco(movimientos, file_hash)
+            if last_id:
+                info = {
+                    "modulo": "BANCOS",
+                    "anio": first_date[:4] if first_date else "2026",
+                    "mes": first_date[5:7] if first_date else "01",
+                    "entidad": "BANCO_HIPOTECARIO",
+                    "db_table": "bancos_movimientos",
+                    "id_insertado": last_id
+                }
+                return True, info
         
-        print(f"🧱 Éxito: {count} movimientos nuevos del Hipotecario (JOA) ingresados.")
-        
+        logger.warning(f"🚫 Archivo Hipotecario omitido: {os.path.basename(file_path)}")
+        return False, None
+
     except Exception as e:
-        print(f"❌ Error fatal: {e}")
+        logger.error(f"❌ Error en Hipotecario: {e}")
+        return False, None
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Uso: python parser_hipotecario.py <ruta_excel>")
+    import sys
+    if len(sys.argv) > 1:
+        procesar_archivo(sys.argv[1])
     else:
-        WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-        DB_PATH = os.path.join(WORKSPACE, "..", "erp_nicoletti.db")
-        ingesta_hipotecario(sys.argv[1], DB_PATH)
+        logger.warning("Uso: python parser_hipotecario.py <absolute_path>")
