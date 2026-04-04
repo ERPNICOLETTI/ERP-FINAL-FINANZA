@@ -25,11 +25,11 @@ storage.save_factura({
 
 ---
 
-## 🛰️ Flujo de Datos 4.0 (Ingesta e Inbox)
-1.  **Entrada Centralizada**: Los CSV de AFIP y Excels de CALIM se depositan en `/inbox/`.
-2.  **Parsing Híbrido**: El `importador_afip.py` y `importador_calim.py` extraen columnas duras y guardan la fila original en el JSON de metadata.
-3.  **Archivado Legal**: Tras la inserción, el `archiver_service.py` mueve el archivo a `static/archivadas/COMPRAS/YYYY/MM/ARCA_AFIP/`.
-4.  **Sincronización**: Match por `numero_completo` entre fuentes AFIP y CALIM.
+## 🛰️ Flujo de Datos 4.5 (Ingesta, Vinculación Visual y Carga Manual)
+1.  **Ingesta AFIP/Calim**: Los CSV/Excels se depositan en `/inbox/` y se procesan automáticamente extrayendo columnas duras (neto, iva21) y guardando la fila en `meta_json`.
+2.  **Vinculación Visual (CLI/Frontend)**: Se sube una evidencia fotográfica (PDF/Foto), se ingresa el número de comprobante y, si hace match en DB, se archiva automáticamente en `static/archivadas/COMPRAS/YYYY/MM/NombreProveedor/`.
+3.  **Carga Manual con Fuzzy Search**: Si el comprobante no existe (ej: Gasto manual tipo ticket), se busca al proveedor usando búsqueda difusa en el **Maestro de Proveedores**. Si no existe, se crea. 
+4.  **Archivado Automático**: Tras la carga, la evidencia se renombra usando el formato `YYYYMMDD_NombreProveedor_PV-NUM.ext` y se actualiza `tiene_foto = 1` en la DB.
 
 ---
 
