@@ -24,6 +24,10 @@ def init_db_bancos():
     conn = get_db_connection()
     print("🧱 [BANCOS] Construyendo tablas Golden Master (Híbrido)...")
 
+    # [CAUTION] Si ya existe, se intentará migrar o recrear. 
+    # El usuario ha solicitado una limpieza pre-test.
+    conn.execute('DROP TABLE IF EXISTS bancos_movimientos')
+    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS bancos_movimientos (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +42,7 @@ def init_db_bancos():
             hash_archivo    TEXT,
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(banco, cuenta, fecha, descripcion, tipo_movimiento, importe)
+            UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)
         )
     ''')
 
@@ -47,7 +51,7 @@ def init_db_bancos():
 
 
 def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
-    """Guarda masivamente movimientos bancarios con volcado híbrido v4.0."""
+    """Guarda masivamente movimientos bancarios con volcado híbrido v4.0. Retorna (agregados, last_id)."""
     conn = get_db_connection()
     agregados = 0
     last_id = None
@@ -68,17 +72,30 @@ def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
                 ''', (
                     b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'),
                     b.get('fecha'), b.get('descripcion'),
-                    b.get('tipo_movimiento', b.get('codigo_movimiento')),
+                    b.get('tipo_movimiento', b.get('codigo_movimiento', 'MOV')),
                     b.get('importe', 0), b.get('saldo'),
                     b.get('hash_archivo', hash_archivo),
                     b.get('path_archivo'),
                     json.dumps(metadata, ensure_ascii=False, default=str)
                 ))
+                
+                row_id = cursor.lastrowid
+                
+                # Fallback on IGNORE
+                if row_id == 0 or row_id is None:
+                    res = conn.execute('''
+                        SELECT id FROM bancos_movimientos 
+                        WHERE banco = ? AND cuenta = ? AND fecha = ? AND descripcion = ? AND importe = ? AND saldo = ?
+                    ''', (b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'), b.get('fecha'), b.get('descripcion'), b.get('importe', 0), b.get('saldo'))).fetchone()
+                    if res: row_id = res['id']
+
                 if cursor.rowcount > 0:
                     agregados += 1
-                    last_id = cursor.lastrowid
+                
+                last_id = row_id
+
             except sqlite3.IntegrityError:
-                pass  # Movimiento duplicado
+                pass  # Duplicado
         conn.commit()
         return agregados, last_id
     except Exception as e:

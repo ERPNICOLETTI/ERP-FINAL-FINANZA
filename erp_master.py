@@ -101,7 +101,7 @@ class ERPMaster:
                     success, info = parser_patagonia.procesar_archivo(filepath)
 
                 # 2. MODULO COMPRAS (AFIP / CALIM / LIBRO IVA)
-                elif ("AFIP" in f_upper or "VENTAS" in f_upper or "COMPRAS" in f_upper) and f_upper.endswith(".CSV"):
+                elif ("AFIP" in f_upper or "VENTAS" in f_upper or "COMPRAS" in f_upper or "COMPROBANTES_CONSULTA_CSV" in f_upper) and f_upper.endswith(".CSV"):
                     from modulo_compras import importador_afip
                     success, info = importador_afip.procesar_archivo(filepath)
                 
@@ -118,6 +118,10 @@ class ERPMaster:
                     from modulo_bancos import parser_chubut
                     success, info = parser_chubut.procesar_archivo(filepath)
                 
+                elif "CREDICOOP" in f_upper and f_upper.endswith(".XLSX"):
+                    from modulo_bancos import parser_credicoop_joaquin
+                    success, info = parser_credicoop_joaquin.procesar_archivo(filepath)
+
                 elif "HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX"):
                     if "USD" in f_upper:
                         from modulo_bancos import parser_hipotecario_usd

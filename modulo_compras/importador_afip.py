@@ -54,10 +54,17 @@ def procesar_archivo(file_path):
         for idx, row in df.iterrows():
             try:
                 fecha_emision_raw = str(row['Fecha de Emisión']).strip()
-                # AFIP usa DD/MM/AAAA, normalizamos a ISO
+                # AFIP usa DD/MM/AAAA o YYYY-MM-DD
                 import re
-                m_f = re.search(r'(\d{2})/(\d{2})/(\d{4})', fecha_emision_raw)
-                fecha_iso = f"{m_f.group(3)}-{m_f.group(2)}-{m_f.group(1)}" if m_f else "2026-01-01"
+                fecha_iso = "2026-01-01"
+                m_iso = re.search(r'(\d{4})-(\d{2})-(\d{2})', fecha_emision_raw)
+                m_slash = re.search(r'(\d{2})/(\d{2})/(\d{4})', fecha_emision_raw)
+                
+                if m_iso:
+                    fecha_iso = f"{m_iso.group(1)}-{m_iso.group(2)}-{m_iso.group(3)}"
+                elif m_slash:
+                    fecha_iso = f"{m_slash.group(3)}-{m_slash.group(2)}-{m_slash.group(1)}"
+                
                 if idx == 0: first_row_date = fecha_iso
 
                 tipo_codigo = int(float(str(row['Tipo de Comprobante'])))
@@ -68,17 +75,19 @@ def procesar_archivo(file_path):
                 codigo_str = str(tipo_codigo).zfill(3)
                 numero_completo = f"{codigo_str}-{pv}-{num}"
                 
-                if 'Denominación Receptor' in row.index:
+                # Unificación de Columnas CUIT/Entidad (Soporte Multi-Formato)
+                if 'Denominación Receptor' in row.index or 'Receptor' in row.index:
                     tipo_operacion = 'VENTA'
-                    doc_entity = str(row['Nro. Doc. Receptor']).strip() if not pd.isna(row.get('Nro. Doc. Receptor')) else ""
-                    denom_entity = str(row['Denominación Receptor']).strip() if not pd.isna(row.get('Denominación Receptor')) else "Consumidor Final"
+                    doc_entity = str(row.get('Nro. Doc. Receptor', row.get('CUIT Receptor', ''))).strip()
+                    denom_entity = str(row.get('Denominación Receptor', 'Consumidor Final')).strip()
                 else:
                     tipo_operacion = 'COMPRA'
-                    doc_entity = str(row['Nro. Doc. Emisor']).strip() if not pd.isna(row.get('Nro. Doc. Emisor')) else ""
-                    denom_entity = str(row['Denominación Emisor']).strip() if not pd.isna(row.get('Denominación Emisor')) else "Proveedor"
+                    # Probar varios nombres de columna para CUIT y Denominacion (Emisor)
+                    doc_entity = str(row.get('Nro. Doc. Emisor', row.get('CUIT Emisor', ''))).strip()
+                    denom_entity = str(row.get('Denominación Emisor', row.get('Nombre Emisor', 'Proveedor'))).strip()
 
-                neto_gravado = clean_amount(row.get('Imp. Neto Gravado Total', '0'))
-                monto_iva = clean_amount(row.get('Total IVA', '0'))
+                neto_gravado = clean_amount(row.get('Imp. Neto Gravado Total', row.get('Imp. Neto Gravado', '0')))
+                monto_iva = clean_amount(row.get('Total IVA', row.get('Importe IVA', '0')))
                 monto_total = clean_amount(row.get('Imp. Total', '0'))
 
                 # Diseño Híbrido: Todo el resto de la fila al JSON
@@ -88,7 +97,7 @@ def procesar_archivo(file_path):
                     "tipo_comprobante": tipo_nombre,
                     "proveedor": denom_entity,
                     "cuit_proveedor": doc_entity,
-                    "fecha": fecha_iso, # Corregido a 'fecha' según storage
+                    "fecha": fecha_iso,
                     "neto_gravado": neto_gravado,
                     "monto_iva": monto_iva,
                     "monto_total": monto_total,

@@ -93,7 +93,7 @@ def init_db_compras():
 
 
 def save_factura(f: dict):
-    """Guarda una factura con volcado híbrido v4.0."""
+    """Guarda una factura con volcado híbrido v4.0. Retorna el ID del registro."""
     conn = get_db_connection()
     try:
         columnas_duras = {
@@ -104,7 +104,7 @@ def save_factura(f: dict):
         }
         metadata = {k: v for k, v in f.items() if k not in columnas_duras}
 
-        conn.execute('''
+        cursor = conn.execute('''
             INSERT OR IGNORE INTO facturas (
                 fecha, tipo_comprobante, punto_venta, numero_completo,
                 cuit_proveedor, proveedor, neto_gravado, iva_21, iva_105,
@@ -122,9 +122,23 @@ def save_factura(f: dict):
             f.get('path_archivo'), f.get('hash_archivo'), f.get('origen', 'MANUAL'),
             json.dumps(metadata, ensure_ascii=False, default=str)
         ))
+        
+        last_id = cursor.lastrowid
+        
+        # Fallback si ya existía (INSERT OR IGNORE no retorna ID en colisión)
+        if last_id == 0 or last_id is None:
+            res = conn.execute('''
+                SELECT id FROM facturas 
+                WHERE cuit_proveedor = ? AND punto_venta = ? AND numero_completo = ? AND tipo_comprobante = ?
+            ''', (f.get('cuit_proveedor'), f.get('punto_venta'), f.get('numero_completo'), f.get('tipo_comprobante'))).fetchone()
+            if res:
+                last_id = res['id']
+
         conn.commit()
+        return last_id
     except Exception as e:
         logger.warning(f"Error guardando factura: {e}")
+        return None
     finally:
         conn.close()
 
