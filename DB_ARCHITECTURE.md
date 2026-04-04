@@ -30,16 +30,29 @@ La regla de oro es: **Ningún módulo puede consultar o modificar tablas que no 
 
 ---
 
-## 🛠️ El Ciclo de Vida del Dato
+## 🛠️ El Ciclo de Vida del Dato (Ingesta Híbrida)
 
-1.  **Inicialización**: Cada módulo tiene una función `init_db_*()` dentro de su propio `storage_*.py`.
-2.  **Reset Total**: El script central `reset_database.py` elimina el archivo `.db` y llama a la orquestación del **Core** para reconstruir el esquema modular.
-3.  **Ingesta Aislada**: Los parsers guardan datos usando su **Storage Local** (ej. `storage_tarjetas.save_liquidacion()`).
-4.  **Sincronización Search**: Al finalizar una ingesta, el módulo notifica al Core mediante `db_ingesta.update_search_index()` para que el buscador global refleje los nuevos datos.
+El sistema utiliza un **Diseño Híbrido (Relacional + Documental)** para garantizar que no se pierda ni un bit de información durante el parseo.
+
+1.  **Columnas Duras (Normalizadas)**:
+    -   Solo lo esencial para cálculos: `id`, `fecha`, `monto_total`, `tipo_comprobante`, `hash_archivo`.
+2.  **Columna Blanda (JSON `metadata_cruda`)**:
+    -   Un volcado total de la información cruda del archivo en formato JSON. Si un dato no tiene columna propia, **debe** ir aquí.
+
+### 🛡️ Protocolo de Idempotencia (Anti-Duplicados)
+- Todo registro debe incluir un `hash_archivo` (SHA-256) generado por `checksum_service.py`.
+- Las tablas deben definir este hash como `UNIQUE`.
+- Al insertar, se debe usar `INSERT OR IGNORE` para evitar colisiones sin romper el flujo catastróficamente.
+
+### 🔍 Visibilidad 360 (Buscador Global)
+- Tras cada ingesta, el módulo **está obligado** a notificar al Core.
+- El Core actualiza la tabla virtual `search_index` (FTS5).
+- El buscador indexa tanto las columnas duras como el texto dentro del JSON de `metadata_cruda`.
 
 ---
 
 ## 🚫 Restricciones de Integridad
 -   **Aislamiento**: Prohibido hacer `SELECT * FROM facturas` desde el `modulo_bancos`. Usar servicios de `modulo_compras`.
--   **Unicidad**: Cada dominio define sus propias claves `UNIQUE` para evitar duplicados en ingestas repetidas.
--   **Tipado**: Todos los montos monetarios deben ser `REAL` (Float) y las fechas en formato ISO `YYYY-MM-DD`.
+-   **Unicidad**: Uso obligatorio de `hash_archivo` Único para garantizar que un PDF/Excel no se "chupe" dos veces.
+-   **Trazabilidad**: Todo registro debe tener un `path_archivo` o `hash_archivo` para rastrear el origen físico.
+-   **Tipado**: Todos los montos monetarios deben ser `REAL` y las fechas en formato ISO `YYYY-MM-DD`.
