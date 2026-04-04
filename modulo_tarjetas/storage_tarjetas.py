@@ -3,8 +3,8 @@ import json
 import os
 import logging
 
-# STORAGE TARJETAS - Dueño de tablas Payway, Naranja, Patagonia 💳🧱🧠
-# Diseño Híbrido: Columnas Duras + metadata_cruda (JSON) + hash_archivo
+# STORAGE TARJETAS - v4.0 GOLDEN MASTER 💳🧱🧠⚖️
+# Diseño Híbrido: Columnas Duras + metadata_cruda (JSON) + path_archivo
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ def get_db_connection():
 
 
 def init_db_tarjetas():
-    """Crea las tablas del dominio Tarjetas con diseño híbrido."""
+    """Crea las tablas del dominio Tarjetas con diseño híbrido v4.0."""
     conn = get_db_connection()
-    print("🧱 [TARJETAS] Inicializando tablas (Diseño Híbrido)...")
+    print("🧱 [TARJETAS] Construyendo tablas Golden Master (Híbrido)...")
 
     # ── Liquidaciones (Cabecera) ───────────────────────────────────
     conn.execute('''
@@ -41,7 +41,8 @@ def init_db_tarjetas():
             iva_105         REAL DEFAULT 0,
             retenciones     REAL DEFAULT 0,
             total_neto      REAL DEFAULT 0,
-            hash_archivo    TEXT, -- REMOVIDO UNIQUE: Idempotencia por core_registro_ingestas
+            path_archivo    TEXT, -- [NUEVO v4.0]
+            hash_archivo    TEXT,
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -66,7 +67,7 @@ def init_db_tarjetas():
     ''')
 
     # ── Payway Records (Cupones / Ventas Individuales) ──────────────
-    # Reemplaza a 'cupones_tarjetas' para coherencia con DB_ARCHITECTURE.md
+    # Reemplaza permanentemente a 'cupones_tarjetas'
     conn.execute('''
         CREATE TABLE IF NOT EXISTS payway_records (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +79,7 @@ def init_db_tarjetas():
             marca           TEXT,
             monto_bruto     REAL DEFAULT 0,
             matching_tx_id  INTEGER, -- Relación con bancos_movimientos
+            path_archivo    TEXT, -- [v4.0]
             hash_archivo    TEXT,
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -90,13 +92,13 @@ def init_db_tarjetas():
 
 
 def save_liquidacion(data: dict):
-    """Persistencia híbrida de cabecera de liquidación."""
+    """Persistencia híbrida v4.0 de cabecera de liquidación."""
     conn = get_db_connection()
     try:
         columnas_duras = {
             'fuente', 'marca', 'tipo', 'fecha_liquidacion', 'periodo',
             'establecimiento', 'total_bruto', 'costo_arancel', 'costo_financiero',
-            'iva_21', 'iva_105', 'retenciones', 'total_neto', 'hash_archivo'
+            'iva_21', 'iva_105', 'retenciones', 'total_neto', 'hash_archivo', 'path_archivo'
         }
         metadata = {k: v for k, v in data.items() if k not in columnas_duras}
 
@@ -104,8 +106,8 @@ def save_liquidacion(data: dict):
             INSERT OR IGNORE INTO liquidaciones_tarjetas (
                 fuente, marca, tipo, fecha_liquidacion, periodo, establecimiento,
                 total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
-                retenciones, total_neto, hash_archivo, metadata_cruda
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                retenciones, total_neto, hash_archivo, path_archivo, metadata_cruda
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data.get('fuente', 'DESCONOCIDA').upper(),
             data.get('marca'), data.get('tipo', 'MENSUAL').upper(),
@@ -115,11 +117,12 @@ def save_liquidacion(data: dict):
             data.get('costo_financiero', 0), data.get('iva_21', 0),
             data.get('iva_105', 0), data.get('retenciones', 0),
             data.get('total_neto', 0), data.get('hash_archivo'),
+            data.get('path_archivo'),
             json.dumps(metadata, ensure_ascii=False, default=str)
         ))
 
         last_id = cursor.lastrowid
-        if last_id == 0:
+        if last_id == 0 or last_id is None:
             res = conn.execute(
                 "SELECT id FROM liquidaciones_tarjetas WHERE hash_archivo = ?",
                 (data.get('hash_archivo'),)
@@ -137,14 +140,14 @@ def save_liquidacion(data: dict):
 
 
 def save_payway_records(lista_cupones: list, hash_archivo: str = None):
-    """Persistencia masiva de registros de Payway."""
+    """Persistencia masiva de registros de Payway v4.0."""
     conn = get_db_connection()
     try:
         agregados = 0
         for c in lista_cupones:
             columnas_duras = {
                 'fuente', 'fecha_compra', 'fecha_pago', 'lote',
-                'cupon', 'marca', 'monto_bruto', 'hash_archivo', 'matching_tx_id'
+                'cupon', 'marca', 'monto_bruto', 'hash_archivo', 'path_archivo', 'matching_tx_id'
             }
             metadata = {k: v for k, v in c.items() if k not in columnas_duras}
 
@@ -152,13 +155,15 @@ def save_payway_records(lista_cupones: list, hash_archivo: str = None):
                 conn.execute('''
                     INSERT OR IGNORE INTO payway_records (
                         fuente, fecha_compra, fecha_pago, lote, cupon,
-                        marca, monto_bruto, hash_archivo, matching_tx_id, metadata_cruda
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        marca, monto_bruto, hash_archivo, path_archivo, 
+                        matching_tx_id, metadata_cruda
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     c.get('fuente', 'PAYWAY'), c.get('fecha_compra'),
                     c.get('fecha_pago'), c.get('lote'), c.get('cupon'),
                     c.get('marca'), c.get('monto_bruto', 0),
                     c.get('hash_archivo', hash_archivo),
+                    c.get('path_archivo'),
                     c.get('matching_tx_id'),
                     json.dumps(metadata, ensure_ascii=False, default=str)
                 ))
@@ -174,8 +179,24 @@ def save_payway_records(lista_cupones: list, hash_archivo: str = None):
         conn.close()
 
 
+def update_record_path(record_id, new_path, table="payway_records"):
+    """Actualiza la ruta física del archivo tras el archivado legal v4.0."""
+    conn = get_db_connection()
+    try:
+        # Validación básica de tabla para evitar inyecciones
+        if table not in ["payway_records", "liquidaciones_tarjetas"]:
+            raise ValueError(f"Tabla no permitida: {table}")
+            
+        conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"Error actualizando path en {table}: {e}")
+    finally:
+        conn.close()
+
+
 def get_resumen_tarjetas(anio=None):
-    """Estadísticas consolidadas (Movido de logica_tarjetas.py)."""
+    """Estadísticas consolidadas v4.0."""
     conn = get_db_connection()
     cur = conn.cursor()
     params = [f"{anio}%"] if anio else []
@@ -210,10 +231,9 @@ def get_resumen_tarjetas(anio=None):
 
 
 def get_cupon_detalle(cupon_id):
-    """Busca detalle de un cupón (Movido de logica_tarjetas.py)."""
+    """Busca detalle de un cupón v4.0."""
     conn = get_db_connection()
     cur = conn.cursor()
-    # Padding para cupones Payway que suelen ser de 8 dígitos
     q_pad = str(cupon_id).zfill(8)
     row = cur.execute("""
         SELECT * FROM payway_records 
@@ -229,41 +249,3 @@ def get_cupon_detalle(cupon_id):
             pass
         return res
     return None
-
-
-def get_data_auditoria():
-    """Extrae datos crudos para el cruce 360 (Movido de logica_tarjetas.py)."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    records = cur.execute("SELECT fecha_compra as fecha, marca, monto_bruto FROM payway_records").fetchall()
-    liquidaciones = cur.execute("""
-        SELECT fecha_liquidacion as fecha, marca, total_bruto, fuente 
-        FROM liquidaciones_tarjetas WHERE tipo = 'DIARIA'
-    """).fetchall()
-    
-    conn.close()
-    return {
-        "records": [dict(r) for r in records],
-        "liquidaciones": [dict(r) for r in liquidaciones]
-    }
-def get_unmatched_payway_records():
-    """Busca ventas en Payway que no tienen match en movimientos bancarios (Movido de erp_master.py)."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    rows = cur.execute("""
-        SELECT id, fecha_compra, cupon, monto_bruto 
-        FROM payway_records 
-        WHERE matching_tx_id IS NULL AND monto_bruto > 0 
-        ORDER BY fecha_compra DESC LIMIT 50
-    """).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def update_record_path(record_id, new_path):
-    """Actualiza la ruta física del archivo tras el archivado legal."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE payway_records SET path_archivo = ? WHERE id = ?", (new_path, record_id))
-    conn.commit()
-    conn.close()

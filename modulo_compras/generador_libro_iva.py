@@ -1,16 +1,12 @@
 import os
 import sys
 import pdfplumber
-import sqlite3
 import re
+import hashlib
+from . import storage_compras as storage
 
-# Setup utf-8
-if sys.stdout.encoding != 'utf-8':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE, 'erp_nicoletti.db')
+# GENERADOR/PARSER LIBRO IVA - v4.0 GOLDEN MASTER 🧾🏗️⚖️🚀
+# Refactorizado para cumplir con el Patrón Repositorio y el flujo Inbox.
 
 def parse_money(m_str):
     try:
@@ -19,8 +15,9 @@ def parse_money(m_str):
     except:
         return 0.0
 
-def procesar_dj_iva(filepath):
-    print(f"[{os.path.basename(filepath)}] Digitalizando Declaración Jurada F.2051...")
+def procesar_archivo(filepath):
+    """Parsea el PDF F.2051 y lo guarda en la DB vía Repository Pattern."""
+    print(f"📄 [LIBRO IVA] Digitalizando Declaración Jurada F.2051: {os.path.basename(filepath)}")
     
     periodo = None
     debito = 0.0
@@ -29,68 +26,66 @@ def procesar_dj_iva(filepath):
     saldo_ld = 0.0
     
     try:
+        # 1. Generar Hash para Idempotencia
+        with open(filepath, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+
+        # 2. Extracción de Datos
         with pdfplumber.open(filepath) as pdf:
             text = '\n'.join([page.extract_text() for page in pdf.pages if page.extract_text()])
             
-            # Buscar período (Ej: Período\n202601)
-            # Como la extracción de PDF a veces pega las palabras: "Período\n202601"
+            # Período (Ej: 202601 -> 2026-01)
             match_per = re.search(r'Período[^\d]*(\d{6})', text)
             if match_per:
                 p_raw = match_per.group(1)
-                periodo = f"{p_raw[:4]}-{p_raw[4:]}" # 202601 -> 2026-01
+                periodo = f"{p_raw[:4]}-{p_raw[4:]}"
             
-            # Recorrer línea por línea buscando los valores clave
             for line in text.split('\n'):
                 if "Total del débito fiscal del período" in line:
-                    m_str = line.split('$')[-1]
-                    debito = parse_money(m_str)
+                    debito = parse_money(line.split('$')[-1])
                 elif "Total del crédito fiscal del período" in line:
-                    m_str = line.split('$')[-1]
-                    credito = parse_money(m_str)
+                    credito = parse_money(line.split('$')[-1])
                 elif "Saldo técnico a favor del contribuyente" in line and "$" in line:
-                    # Capturamos el último que aparezca por si repiten
-                    m_str = line.split('$')[-1]
-                    saldo_tecnico = parse_money(m_str)
+                    saldo_tecnico = parse_money(line.split('$')[-1])
                 elif "Saldo de libre disponibilidad a favor del contribuyente del período" in line:
-                    m_str = line.split('$')[-1]
-                    saldo_ld = parse_money(m_str)
+                    saldo_ld = parse_money(line.split('$')[-1])
                     
             if not periodo:
-                print(f"Error: No pudimos encontrar el 'Período' en {filepath}.")
-                return
-                
-            conn = sqlite3.connect(DB_PATH)
-            cur = conn.cursor()
+                return False, {"error": "No se encontró el período fiscal en el PDF"}
             
-            # Upsert a la tabla libroiva
-            cur.execute('''
-                INSERT INTO libroiva (
-                    periodo, debito_fiscal, credito_fiscal, saldo_tecnico, saldo_libre_disponibilidad
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(periodo) DO UPDATE SET
-                    debito_fiscal = excluded.debito_fiscal,
-                    credito_fiscal = excluded.credito_fiscal,
-                    saldo_tecnico = excluded.saldo_tecnico,
-                    saldo_libre_disponibilidad = excluded.saldo_libre_disponibilidad
-            ''', (periodo, debito, credito, saldo_tecnico, saldo_ld))
+            # 3. Persistencia vía Storage (Sin SQL directo)
+            success = storage.save_libro_iva({
+                "periodo": periodo,
+                "debito_fiscal": debito,
+                "credito_fiscal": credito,
+                "saldo_tecnico": saldo_tecnico,
+                "saldo_libre_disponibilidad": saldo_ld,
+                "hash_archivo": file_hash,
+                "path_archivo": filepath,
+                "metadata": {"source": "F.2051_PDF", "full_text_length": len(text)}
+            })
             
-            conn.commit()
-            conn.close()
-            
-            print(f"✅ ¡Guardado Exitoso! Período [ {periodo} ]")
-            print(f"   -> Débito (Ventas): $ {debito:,.2f}")
-            print(f"   -> Crédito (Compras): $ {credito:,.2f}")
-            print(f"   -> Saldo Técnico: $ {saldo_tecnico:,.2f}")
-            print(f"   -> Libre Disponib.: $ {saldo_ld:,.2f}")
-            print("---------------------------------------------------------")
-            
+            if success:
+                return True, {
+                    "modulo": "COMPRAS",
+                    "entidad": "AFIP_DJ",
+                    "anio": periodo[:4],
+                    "mes": periodo[5:],
+                    "db_table": "libroiva",
+                    "info": f"Libro IVA {periodo} procesado correctamente"
+                }
+            else:
+                return False, {"error": "Fallo en persistencia del Libro IVA"}
+
     except Exception as e:
-        print(f"Error procesando el PDF: {e}")
+        return False, {"error": f"Error procesando Libro IVA: {e}"}
 
 if __name__ == "__main__":
+    # Retrocompatibilidad CLI
     if len(sys.argv) < 2:
-        print("💡 Uso: python import/parser_libroiva.py <archivos.pdf>")
+        print("Uso: python generador_libro_iva.py <archivos.pdf>")
         sys.exit(1)
         
-    for file in sys.argv[1:]:
-        procesar_dj_iva(file)
+    for f in sys.argv[1:]:
+        success, info = procesar_archivo(f)
+        print(f"Resultado: {success} | {info}")

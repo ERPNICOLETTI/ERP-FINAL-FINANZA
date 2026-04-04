@@ -1,5 +1,5 @@
 # 🗄️ Arquitectura de Base de Datos - ERP FINAL (Modular DDD) 🏗️🧱🧠
-# Versión 4.0 - Diseño Híbrido y Persistencia Blindada
+# Versión 4.0 - GOLDEN MASTER 💎
 
 Este documento detalla la estructura lógica de `erp_nicoletti.db`. Siguiendo los principios de **Domain-Driven Design (DDD)** y **Vertical Slicing**, la base de datos está dividida en dominios autónomos que no comparten estado directo.
 
@@ -7,23 +7,24 @@ Este documento detalla la estructura lógica de `erp_nicoletti.db`. Siguiendo lo
 
 ## 🏛️ Propiedad de los Datos (Data Ownership) - Patrón Repositorio
 
-La regla de oro inquebrantable es: **Ningún módulo puede importar `sqlite3` ni ejecutar SQL directo sobre tablas ajenas.** 
+La regla de oro inquebrantable de la v4.0 es: **Ningún módulo puede importar `sqlite3` ni ejecutar SQL directo sobre tablas ajenas.** 
 
--   La persistencia se delega exclusivamente a los archivos `storage_*.py` de cada módulo.
+-   La persistencia se delega exclusivamente a los archivos `storage_*.py` de cada módulo (Capa de Infraestructura).
 -   La comunicación cross-module se realiza mediante funciones de servicio (Ej: `modulo_compras.storage_compras.save_factura()`).
 
 ### 💳 1. Dominio Tarjetas (`modulo_tarjetas`)
 *Dueño absoluto de la recaudación por POS y tarjetas.*
--   **`payway_records`**: Cupones individuales.
--   **`liquidaciones_tarjetas`**: Cabeceras disciplinadas de depósitos bancarios.
+-   **`payway_records`**: Registros individuales de ventas. Clave Única: `(fecha_compra, cupon, lote, marca, monto_bruto)`.
+-   **`liquidaciones_tarjetas`**: Cabeceras de depósitos bancarios.
 
 ### 🧾 2. Dominio Compras (`modulo_compras`)
 *Dueño de la facturación fiscal y conciliación contable.*
--   **`facturas`**: Tabla maestra de comprobantes (AFIP/CALIM). Incluye `row_dump` en JSON.
+-   **`facturas`**: Tabla maestra de comprobantes (AFIP/CALIM). Clave Única: `(cuit_proveedor, punto_venta, numero_completo, tipo_comprobante)`.
+-   **`libroiva`**: Declaraciones Juradas consolidadas (F.2051).
 
 ### 🏦 3. Dominio Bancos (`modulo_bancos`)
 *Dueño de la tesorería y el flujo de caja real.*
--   **`bancos_movimientos`**: Extractos bancarios unificados de Chubut, Credicoop e Hipotecario.
+-   **`bancos_movimientos`**: Extractos bancarios unificados. Clave Única: `(banco, cuenta, fecha, descripcion, tipo_movimiento, importe)`.
 
 ---
 
@@ -31,33 +32,50 @@ La regla de oro inquebrantable es: **Ningún módulo puede importar `sqlite3` ni
 
 Para garantizar la integridad total y no perder datos en el proceso de normalización, implementamos el **Diseño Híbrido**:
 
-1.  **Columnas Duras (Tipadas)**: Campos esenciales para cálculos y cruces (id, fecha, monto, cuit, hash_archivo).
-2.  **Columna Blanda (`metadata_cruda`)**: Columna de tipo `TEXT` que almacena un objeto JSON con el volcado absoluto de la fuente (OCR completo en PDFs o diccionario de la fila en Excels).
+1.  **Columnas Duras (Tipadas)**: Campos esenciales para cálculos (id, fecha, monto, cuit).
+2.  **Columna Blanda (`metadata_cruda`)**: Objeto JSON con el volcado absoluto de la fuente.
+
+### 🖼️ Ejemplo de `metadata_cruda` (JSON):
+```json
+{
+  "texto_ocr_completo": "RESUMEN DE PAGO... PRISMA MEDIOS... ESTABLECIMIENTO: 1234567... TOTAL: $1500.50",
+  "datos_adicionales": {
+    "terminal_id": "POS-001",
+    "autorizacion": "987654",
+    "nombre_comercio": "NICOLETTI SA"
+  }
+}
+```
 
 ### 🔍 Buscador 360 (Indexación FTS5)
-La tabla virtual `search_index` (FTS5) en el Core indexa automáticamente el contenido de la columna `metadata_cruda`. Esto permite buscar facturas por cualquier palabra clave que aparezca en el PDF original, incluso si no tiene una columna propia en la DB.
+La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido de la columna `metadata_cruda`.
+```sql
+-- Ejemplo de búsqueda global por cualquier término en el JSON
+SELECT * FROM search_index WHERE content MATCH 'terminal_id:POS-001';
+```
 
 ---
 
-## 🛡️ Protocolo de Idempotencia y Id (Anti-Duplicados)
+## 🛡️ Idempotencia de Doble Capa
 
-El sistema utiliza una **Estrategia de Doble Capa** para evitar la duplicación de datos sin bloquear la ingesta legítima.
-
-### 1. Nivel Archivo (Preventivo)
-La tabla `core_registro_ingestas` almacena el `hash_sha256` (HEX UNIQUE) de cada archivo procesado. 
--   **Acción**: Si el hash ya existe, el Orquestador rechaza el archivo de entrada inmediatamente.
-
-### 2. Nivel Fila (Row-Level Dedup)
-En las tablas transaccionales (`facturas`, `payway_records`), el `hash_archivo` **NO es UNIQUE**, ya que múltiples filas pertenecen al mismo archivo.
--   **Regla**: Se utilizan restricciones `UNIQUE` multi-columna (Ej: `UNIQUE(fecha, cupon, lote, monto)`) junto con `INSERT OR IGNORE`.
--   **Efecto**: Si se suben dos archivos con solapamiento de fechas, el sistema solo descarta las filas individuales repetidas, preservando la continuidad del archivo.
+1.  **Capa Archivo**: `core_registro_ingestas` rechaza archivos duplicados mediante el hash SHA256 del binario.
+2.  **Capa Fila**: Las tablas transaccionales usan `INSERT OR IGNORE` sobre restricciones `UNIQUE` multi-columna. Esto permite subir archivos solapados sin duplicar transacciones individuales.
 
 ---
 
 ## 🏛️ Trazabilidad Física y Archivamiento
-Todo registro debe mantener un puntero a su origen físico:
--   `path_archivo`: Ruta absoluta final en el servidor (ubicación en `static/archivadas/`).
+Todo registro mantiene un puntero a su origen:
+-   `path_archivo`: Ubicación final en `static/archivadas/` (gestionado por `archiver_service.py`).
 -   `hash_archivo`: Vínculo lógico con la ingesta original.
 
-> [!TIP]
-> **Snippet de Actualización de Ruta**: Tras el archivado legal, es obligatorio llamar a `update_record_path(id, new_path)` para que la DB no pierda el rastro del archivo PDF/Excel.
+---
+
+## 🔩 Mantenimiento: Reconstrucción FTS5
+Si agregas nuevas tablas o experimentas inconsistencias en el buscador, puedes reconstruir el índice global con esta consulta SQL:
+```sql
+-- Borrar y re-indexar todo
+DELETE FROM search_index;
+INSERT INTO search_index(source, record_id, content)
+SELECT 'FACTURAS', id, metadata_cruda FROM facturas;
+-- Repetir para cada tabla de interés...
+```

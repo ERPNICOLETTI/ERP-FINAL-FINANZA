@@ -3,8 +3,8 @@ import json
 import os
 import logging
 
-# STORAGE COMPRAS - Dueño de tablas de Facturación (ARCA, CALIM) 🧾🧱🧠
-# Diseño Híbrido: Columnas Duras + metadata_cruda (JSON) + hash_archivo
+# STORAGE COMPRAS - v4.0 GOLDEN MASTER 🧾🧱🧠⚖️
+# Diseño Híbrido: Columnas Duras + metadata_cruda (JSON) + path_archivo
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ def get_db_connection():
 
 
 def init_db_compras():
-    """Crea las tablas del dominio Compras con diseño híbrido."""
+    """Crea las tablas del dominio Compras con diseño híbrido v4.0."""
     conn = get_db_connection()
-    print("🧱 [COMPRAS] Inicializando tablas (Diseño Híbrido)...")
+    print("🧱 [COMPRAS] Construyendo tablas Golden Master (Híbrido)...")
 
     # ── Tabla Maestra de Facturas ──────────────────────────────────
     # Unificada para ARCA (AFIP) y CALIM
@@ -45,8 +45,8 @@ def init_db_compras():
             moneda          TEXT DEFAULT 'ARS',
             tipo_operacion  TEXT DEFAULT 'COMPRA', -- COMPRA o VENTA
             status          TEXT DEFAULT 'SOLO_AFIP', -- SOLO_AFIP, CONCILIADO_CALIM, ARCHIVADO
-            path_archivo    TEXT,
-            hash_archivo    TEXT, -- REMOVIDO UNIQUE: La idempotencia es por Fila y por core_registro_ingestas
+            path_archivo    TEXT, -- [v4.0]
+            hash_archivo    TEXT, -- [v4.0] NO UNIQUE: La idempotencia es por Fila
             origen          TEXT DEFAULT 'MANUAL',
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -62,7 +62,8 @@ def init_db_compras():
             debito_fiscal   REAL DEFAULT 0,
             credito_fiscal  REAL DEFAULT 0,
             saldo_tecnico   REAL DEFAULT 0,
-            saldo_libre     REAL DEFAULT 0,
+            saldo_libre_disponibilidad REAL DEFAULT 0,
+            path_archivo    TEXT, -- [NUEVO v4.0]
             hash_archivo    TEXT UNIQUE,
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -92,10 +93,9 @@ def init_db_compras():
 
 
 def save_factura(f: dict):
-    """Guarda una factura con volcado híbrido (duras + JSON)."""
+    """Guarda una factura con volcado híbrido v4.0."""
     conn = get_db_connection()
     try:
-        # Columnas duras según esquema
         columnas_duras = {
             'fecha', 'tipo_comprobante', 'punto_venta', 'numero_completo',
             'cuit_proveedor', 'proveedor', 'neto_gravado', 'iva_21', 'iva_105',
@@ -123,82 +123,88 @@ def save_factura(f: dict):
             json.dumps(metadata, ensure_ascii=False, default=str)
         ))
         conn.commit()
-    except sqlite3.IntegrityError:
-        logger.info(f"Factura duplicada (hash): {f.get('numero_completo')}")
     except Exception as e:
         logger.warning(f"Error guardando factura: {e}")
     finally:
         conn.close()
 
 
+def save_libro_iva(data: dict):
+    """Persistencia del Libro IVA v4.0 (Patrón Repositorio)."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO libroiva (
+                periodo, debito_fiscal, credito_fiscal, saldo_tecnico, 
+                saldo_libre_disponibilidad, path_archivo, hash_archivo, metadata_cruda
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(periodo) DO UPDATE SET
+                debito_fiscal = excluded.debito_fiscal,
+                credito_fiscal = excluded.credito_fiscal,
+                saldo_tecnico = excluded.saldo_tecnico,
+                saldo_libre_disponibilidad = excluded.saldo_libre_disponibilidad,
+                path_archivo = excluded.path_archivo,
+                hash_archivo = excluded.hash_archivo,
+                metadata_cruda = excluded.metadata_cruda
+        ''', (
+            data.get('periodo'), data.get('debito_fiscal', 0),
+            data.get('credito_fiscal', 0), data.get('saldo_tecnico', 0),
+            data.get('saldo_libre_disponibilidad', 0), 
+            data.get('path_archivo'), data.get('hash_archivo'),
+            json.dumps(data.get('metadata', {}), ensure_ascii=False, default=str)
+        ))
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.warning(f"Error guardando Libro IVA: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def update_record_path(record_id, new_path, table="facturas"):
+    """Actualiza la ruta física del archivo tras el archivado legal v4.0."""
+    conn = get_db_connection()
+    try:
+        if table not in ["facturas", "libroiva"]:
+            raise ValueError(f"Tabla no permitida: {table}")
+        conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"Error actualizando path en {table}: {e}")
+    finally:
+        conn.close()
+
+
 def get_resumen_facturacion(anio=None):
-    """Estadísticas de facturas por año (Movido de motor_compras.py)."""
+    """Estadísticas de facturas v4.0."""
     conn = get_db_connection()
     params = [f"{anio}%"] if anio else []
     where = " WHERE fecha LIKE ?" if anio else ""
-    
     cur = conn.cursor()
     count = cur.execute(f"SELECT COUNT(*) FROM facturas {where}", params).fetchone()[0] or 0
     ventas = cur.execute(f"SELECT SUM(monto_total) FROM facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'VENTA'", params).fetchone()[0] or 0.0
     compras = cur.execute(f"SELECT SUM(monto_total) FROM facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'COMPRA'", params).fetchone()[0] or 0.0
-    
     conn.close()
-    return {
-        "total_count": count,
-        "monto_ventas": ventas,
-        "monto_compras": compras
-    }
+    return {"total_count": count, "monto_ventas": ventas, "monto_compras": compras}
 
 
 def buscar_facturas(termino):
-    """Busca en facturas por proveedor, numero o id (Movido de motor_compras.py)."""
+    """Busca en facturas v4.0."""
     conn = get_db_connection()
     cur = conn.cursor()
-    
     q = f"%{termino}%"
     rows = cur.execute("""
         SELECT * FROM facturas 
-        WHERE numero_completo LIKE ? 
-           OR proveedor LIKE ? 
-           OR cuit_proveedor LIKE ?
+        WHERE numero_completo LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?
         ORDER BY fecha DESC LIMIT 20
     """, (q, q, q)).fetchall()
-    
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def get_reporte_discrepancias():
-    """Analiza discrepancias entre fuentes (AFIP vs CALIM) (Movido de motor_compras.py)."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    afip_solo = cur.execute("SELECT * FROM facturas WHERE status = 'SOLO_AFIP'").fetchall()
-    calim_solo = cur.execute("SELECT * FROM facturas WHERE status = 'SOLO_CALIM'").fetchall()
-    
-    conn.close()
-    return {
-        "afip_pendientes_en_calim": [dict(r) for r in afip_solo],
-        "calim_huerfanas_de_afip": [dict(r) for r in calim_solo]
-    }
-
-
-def get_facturas_pendientes_archivo():
-    """Identifica facturas que no han sido archivadas (Movido de erp_master.py)."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    rows = cur.execute("""
-        SELECT numero_completo, proveedor, status, metadata_cruda, fecha
-        FROM facturas 
-        WHERE status != 'ARCHIVADO' 
-        ORDER BY fecha DESC LIMIT 50
-    """).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 def registrar_impuesto(data: dict):
-    """API Interna para registrar IVA desde cualquier módulo."""
+    """API Interna para registrar IVA v4.0."""
     conn = get_db_connection()
     try:
         metadata = {k: v for k, v in data.items()
@@ -221,11 +227,3 @@ def registrar_impuesto(data: dict):
         logger.warning(f"Error registrando IVA: {e}")
     finally:
         conn.close()
-
-def update_record_path(record_id, new_path):
-    """Actualiza la ruta física del archivo tras el archivado legal."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE facturas SET path_archivo = ? WHERE id = ?", (new_path, record_id))
-    conn.commit()
-    conn.close()
