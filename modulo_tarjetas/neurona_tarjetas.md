@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO TARJETAS (Recaudación) 💳🧠
-# Versión 4.0 - Diseño Híbrido y Persistencia Blindada
+# Versión 4.6 - Diseño Híbrido y Persistencia Blindada
 
 Esta neurona es responsable de la **ingesta, normalización y auditoría** de transacciones con tarjeta.
 
@@ -24,8 +24,10 @@ liq_id = storage.save_liquidacion({
 
 ---
 
-## 🛰️ Flujo de Datos 4.0
-1.  **Ingesta (Regla Inbox)**: Los archivos PDF/Excel se reciben estrictamente en `/modulo_tarjetas/inbox_tarjetas/`.
+## 🛰️ Flujo de Datos 4.6 (Ley de Localía)
+1.  **Ingesta de 3 Capas (Visual -> Tránsito -> Archivo)**:
+    - `inbox_tarjetas/`: Interfaz UI tira el PDF/Excel aquí.
+    - `crudos_tarjetas/`: La API lo mueve aquí automáticamente como sala de espera. Orquestador escanea *sólo* aquí.
 2.  **Parsing Híbrido**: El parser extrae las "Columnas Duras" (monto, fecha) y empaqueta el resto en un JSON para la columna `meta_json`.
 3.  **Firma Estándar**: El parser retorna `(True, info_dict)` al orquestador para gatillar el archivado legal.
 4.  **Archivado Legal**: El destino final responde a la jerarquía obligatoria `/modulo_tarjetas/archivos_tarjetas/[Nombre_Entidad_o_Marca]/[Año]/[Mes]/`.
