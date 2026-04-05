@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Query, UploadFile, File
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
 import sys
 from typing import List, Dict, Any
@@ -22,17 +23,43 @@ app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 master = ERPMaster(WORKSPACE)
 
-@app.get("/", response_class=HTMLResponse)
-async def home():
-    return """
-    <html>
-        <head><title>ERP API - Modo Arquitecto DDD</title></head>
-        <body style="font-family: sans-serif; background: #0f172a; color: white; padding: 50px;">
-            <h1 style="color: #38bdf8;">🧠 ERP Central Intelligence API</h1>
-            <p>Estado: <span style="color: #10b981;">ARQUITECTURA DDD IMPLEMENTADA</span></p>
-        </body>
-    </html>
-    """
+import shutil
+
+@app.post("/api/upload/{modulo}")
+async def upload_file(modulo: str, file: UploadFile = File(...)):
+    """Fase de Recepción v4.6 (Tránsito Crudo)."""
+    try:
+        inbox_dir = os.path.join(WORKSPACE, f"modulo_{modulo}", f"inbox_{modulo}")
+        os.makedirs(inbox_dir, exist_ok=True)
+        file_path = os.path.join(inbox_dir, file.filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Traspaso inmediato a la sala de espera Crudos (Mandato de Localía)
+        crudos_dir = os.path.join(WORKSPACE, f"modulo_{modulo}", f"crudos_{modulo}")
+        os.makedirs(crudos_dir, exist_ok=True)
+        crudos_path = os.path.join(crudos_dir, file.filename)
+        shutil.move(file_path, crudos_path)
+            
+        return {"status": "success", "filename": file.filename}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/process")
+async def process_inboxes():
+    """Gatillo Maestro: Invoca la ingesta global del orquestador."""
+    try:
+        master.ingest_inbox()
+        return {"status": "success", "message": "Procesamiento maestro finalizado"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/search")
+async def spotlight_search(q: str):
+    """Busqueda 360 estilo Spotlight sobre FTS5"""
+    results = ingesta.search_360(q)
+    return {"results": results or []}
 
 @app.get("/summary")
 async def get_summary(anio: str = None):
@@ -125,6 +152,10 @@ async def importar_facturas(req: ImportRequest):
 async def sync_data():
     master.setup_schema()
     return {"status": "success", "message": "Estructura y FTS5 actualizados"}
+
+# Montar frontend al final para que no pise las rutas /api/
+os.makedirs(os.path.join(WORKSPACE, "frontend"), exist_ok=True)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

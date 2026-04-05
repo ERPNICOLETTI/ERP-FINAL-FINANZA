@@ -18,20 +18,21 @@ def sanitize_filename(filename):
 
 def archivar_documento(filepath_origen, modulo, anio, mes, entidad):
     """
-    Mueve un archivo procesado de 'inbox/' a la estructura jerárquica legal.
-    Estructura: static/archivadas/{MODULO}/{AÑO}/{MES}/{ENTIDAD}/
+    Mueve un archivo crudo analizado a la estructura jerárquica modular.
+    Estructura v4.6: modulo_{MODULO}/archivos_{MODULO}/{ENTIDAD}/{AÑO}/{MES}/
     """
     if not os.path.exists(filepath_origen):
         raise FileNotFoundError(f"No se encontró el archivo de origen: {filepath_origen}")
 
-    # 1. Definir Directorio Destino
+    # 1. Definir Directorio Destino (Estructura v4.6: módulo -> archivos -> entidad -> año -> mes)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_dir = os.path.join(
-        BASE_DIR, 'static', 'archivadas',
-        modulo.upper(),
+        BASE_DIR, 
+        f'modulo_{modulo.lower()}', 
+        f'archivos_{modulo.lower()}',
+        entidad.upper(),
         str(anio),
-        str(mes).zfill(2),
-        entidad.upper()
+        str(mes).zfill(2)
     )
 
     if not os.path.exists(target_dir):

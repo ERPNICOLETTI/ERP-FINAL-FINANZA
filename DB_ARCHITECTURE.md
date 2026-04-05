@@ -55,6 +55,6 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 ---
 
 ## 🏛️ Trazabilidad Física
-- `path_archivo`: Ubicación final en `static/archivadas/`.
+- `path_archivo`: Ubicación física inmutable en `archivos_[modulo]/`.
 - `hash_archivo`: Vínculo lógico con la ingesta.
 - `tiene_foto`: Booleano para vincular evidencias físicas.

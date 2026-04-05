@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Central Intelligence</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="glow-text">ERP <span>Central Intelligence</span></h1>
+            <p>Ingesta Híbrida v4.5 • Modo Glassmorphism</p>
+            
+            <div class="search-container">
+                <input type="text" id="spotlight-search" placeholder="🔍 Buscar por CUIT, nombre, monto (Búsqueda 360)..." autocomplete="off">
+                <div id="search-results" class="search-dropdown hidden"></div>
+            </div>
+        </header>
+
+        <div class="modules-grid">
+            <div class="dropzone-card" id="dropzone-compras" data-modulo="compras">
+                <h2>🧾 Compras</h2>
+                <div class="drop-area">
+                    <p>Arrastra Facturas (AFIP/CALIM)</p>
+                    <span class="file-counter">0 pendientes</span>
+                </div>
+            </div>
+
+            <div class="dropzone-card" id="dropzone-bancos" data-modulo="bancos">
+                <h2>🏦 Bancos</h2>
+                <div class="drop-area">
+                    <p>Arrastra Extractos (Chubut/Credicoop)</p>
+                    <span class="file-counter">0 pendientes</span>
+                </div>
+            </div>
+
+            <div class="dropzone-card" id="dropzone-tarjetas" data-modulo="tarjetas">
+                <h2>💳 Tarjetas</h2>
+                <div class="drop-area">
+                    <p>Arrastra Liqs. (Payway/Naranja)</p>
+                    <span class="file-counter">0 pendientes</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="trigger-container">
+            <button id="btn-process" class="btn-neon">⚡ Sincronizar Ecosistema ⚡</button>
+            <div id="status-message"></div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

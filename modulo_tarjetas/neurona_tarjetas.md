@@ -28,7 +28,7 @@ liq_id = storage.save_liquidacion({
 1.  **Ingesta (Regla Inbox)**: Los archivos PDF/Excel se reciben estrictamente en `/modulo_tarjetas/inbox_tarjetas/`.
 2.  **Parsing Híbrido**: El parser extrae las "Columnas Duras" (monto, fecha) y empaqueta el resto en un JSON para la columna `meta_json`.
 3.  **Firma Estándar**: El parser retorna `(True, info_dict)` al orquestador para gatillar el archivado legal.
-4.  **Archivado Legal**: El destino final responde a la jerarquía obligatoria `/static/archivadas/tarjetas/[Nombre_Entidad_o_Marca]/[Año]/[Mes]/`.
+4.  **Archivado Legal**: El destino final responde a la jerarquía obligatoria `/modulo_tarjetas/archivos_tarjetas/[Nombre_Entidad_o_Marca]/[Año]/[Mes]/`.
 5.  **Auditoría 360**: Cruce de `payway_records` (POS) vs `liquidaciones_tarjetas` (Banco).
 
 ---

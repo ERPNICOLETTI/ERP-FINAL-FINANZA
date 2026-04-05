@@ -14,7 +14,7 @@ A diferencia de versiones anteriores, el sistema utiliza un **Inbox Descentraliz
     ```bash
     python erp_master.py
     ```
-3.  **Resultado**: El sistema identifica el archivo, extrae los datos, los indexa en el **Buscador 360** y lo archiva bajo la **Regla Legal Centrada en Entidad** dentro de `static/archivadas/`.
+3.  **Resultado**: El sistema identifica el archivo, extrae los datos, los indexa en el **Buscador 360** y lo archiva bajo la **Regla Legal Centrada en Entidad** dentro de `archivos_[modulo]/[Entidad]/[Año]/[Mes]/` (aislamiento local perfecto).
 
 ---
 

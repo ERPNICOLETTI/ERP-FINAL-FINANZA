@@ -7,7 +7,7 @@ from core_sistema import db_ingesta, archiver_service
 from modulo_compras import storage_compras as compras
 from modulo_tarjetas import storage_tarjetas as tarjetas
 
-# ERP MASTER - v4.0 GOLDEN MASTER 🚀🧠⚖️🚀
+# ERP MASTER - v4.5 GOLDEN MASTER 🚀🧠⚖️🚀
 # Orquestador Central: Idempotencia, Ingesta Híbrida y Archivado Legal.
 
 # Configuración de salida UTF-8 para Windows
@@ -26,21 +26,21 @@ class ERPMaster:
         self.setup_inbox_and_archives()
 
     def setup_inbox_and_archives(self):
-        """Auto-genera la infraestructura descentralizada v4.5 (Inboxes y Archivador Legal)."""
-        self.inbox_paths = [
-            os.path.join(self.workspace, 'modulo_compras', 'inbox_compras'),
-            os.path.join(self.workspace, 'modulo_tarjetas', 'inbox_tarjetas'),
-            os.path.join(self.workspace, 'modulo_bancos', 'inbox_bancos'),
-        ]
-        
-        archivos_paths = [
-            os.path.join(self.workspace, 'static', 'archivadas', 'compras'),
-            os.path.join(self.workspace, 'static', 'archivadas', 'tarjetas'),
-            os.path.join(self.workspace, 'static', 'archivadas', 'bancos'),
-        ]
+        """Auto-genera la infraestructura descentralizada v4.6 (Aislamiento Físico)."""
+        modulos = ['compras', 'tarjetas', 'bancos']
+        self.inbox_paths = []
+        self.crudos_paths = []
+        self.archivos_paths = []
 
-        for p in self.inbox_paths + archivos_paths:
-            os.makedirs(p, exist_ok=True)
+        for mod in modulos:
+            base_mod = os.path.join(self.workspace, f'modulo_{mod}')
+            self.inbox_paths.append(os.path.join(base_mod, f'inbox_{mod}'))
+            self.crudos_paths.append(os.path.join(base_mod, f'crudos_{mod}'))
+            self.archivos_paths.append(os.path.join(base_mod, f'archivos_{mod}'))
+
+        for lst in [self.inbox_paths, self.crudos_paths, self.archivos_paths]:
+            for p in lst:
+                os.makedirs(p, exist_ok=True)
 
     def setup_schema(self):
         """Inicialización total de la base de datos v4.0."""
@@ -53,14 +53,12 @@ class ERPMaster:
         print(" REPORTE DE FALENCIAS ERP - v4.0 GOLDEN MASTER")
         print("="*80)
 
-        # Auditoría Tarjetas
         from modulo_tarjetas.storage_tarjetas import get_unmatched_payway_records
         unmatched_payway = get_unmatched_payway_records()
         print("\n[!] ALERTAS TARJETAS (Cupones sin acreditar):")
         for p in unmatched_payway:
             print(f"   -> Fecha: {p['fecha_compra']} | Cupón {p['cupon']} | Monto: ${p['monto_bruto']} | NO EN BANCO")
 
-        # Auditoría Facturación
         from modulo_compras.storage_compras import get_resumen_facturacion
         res = get_resumen_facturacion()
         print("\n[!] BALANCE FISCAL:")
@@ -68,7 +66,7 @@ class ERPMaster:
         print(f"   - Egresos (Compras):  $ {res['monto_compras']:,.2f}\n")
 
     def search(self, term):
-        """Buscador 360 sobre todas las metadata_cruda indexadas."""
+        """Buscador 360 sobre todas las metadata indexadas."""
         print(f"\n🔍 [BÚSQUEDA 360] Resultados para '{term}':")
         results = db_ingesta.search_360(term)
         if not results:
@@ -78,105 +76,106 @@ class ERPMaster:
             print(f"   [{r['source']}] ID:{r['record_id']} | {r['nombre']} | $ {r['monto']} | Fecha: {r['fecha']}")
 
     def ingest_inbox(self):
-        """Procesa el contenido de los inboxes descentralizados asignando parsers dinámicamente."""
+        """Procesa el contenido de la zona Crudos (tránsito) asignando parsers dinámicamente."""
         archivos_totales = 0
-        for inbox_path in self.inbox_paths:
-            if not os.path.exists(inbox_path): continue
-            archivos = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
+        for crudos_path in self.crudos_paths:
+            if not os.path.exists(crudos_path): continue
+            archivos = [f for f in os.listdir(crudos_path) if os.path.isfile(os.path.join(crudos_path, f))]
             if not archivos: continue
             
-            print(f"🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(inbox_path)}...")
+            print(f"\n🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(crudos_path)}...")
             archivos_totales += len(archivos)
 
             for f in archivos:
-                filepath = os.path.join(inbox_path, f)
+                filepath = os.path.join(crudos_path, f)
                 f_upper = f.upper()
                 print(f"\n📦 INGESTANDO: {f}")
-            
-            success = False
-            info = {}
+                
+                success = False
+                info = {}
 
-            try:
-                # --- DESPACHADOR INTELIGENTE v4.0 ---
-                
-                # 1. MODULO TARJETAS
-                if "PAYWAY" in f_upper and f_upper.endswith(".PDF"):
-                    from modulo_tarjetas import parser_payway_liq
-                    success, info = parser_payway_liq.procesar_archivo(filepath)
-                
-                elif "NARANJA" in f_upper and f_upper.endswith(".XLSX"):
-                    from modulo_tarjetas import parser_naranja_xlsx
-                    success, info = parser_naranja_xlsx.procesar_archivo(filepath)
-                
-                elif "LIQMENSAL" in f_upper or "PATAGONIA" in f_upper:
-                    from modulo_tarjetas import parser_patagonia
-                    success, info = parser_patagonia.procesar_archivo(filepath)
-
-                # 2. MODULO COMPRAS (AFIP / CALIM / LIBRO IVA)
-                elif ("AFIP" in f_upper or "VENTAS" in f_upper or "COMPRAS" in f_upper or "COMPROBANTES_CONSULTA_CSV" in f_upper) and f_upper.endswith(".CSV"):
-                    from modulo_compras import importador_afip
-                    success, info = importador_afip.procesar_archivo(filepath)
-                
-                elif "CALIM" in f_upper and f_upper.endswith(".XLSX"):
-                    from modulo_compras import importador_calim
-                    success, info = importador_calim.procesar_archivo(filepath)
-                
-                elif ("LIBRO_IVA" in f_upper or "F2051" in f_upper) and f_upper.endswith(".PDF"):
-                    from modulo_compras import generador_libro_iva
-                    success, info = generador_libro_iva.procesar_archivo(filepath)
-
-                # 3. MODULO BANCOS
-                elif ("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX"):
-                    from modulo_bancos import parser_chubut
-                    success, info = parser_chubut.procesar_archivo(filepath)
-                
-                elif "CREDICOOP" in f_upper and f_upper.endswith(".XLSX"):
-                    from modulo_bancos import parser_credicoop_joaquin
-                    success, info = parser_credicoop_joaquin.procesar_archivo(filepath)
-
-                elif "HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX"):
-                    if "USD" in f_upper:
-                        from modulo_bancos import parser_hipotecario_usd
-                        success, info = parser_hipotecario_usd.procesar_archivo(filepath)
-                    else:
-                        from modulo_bancos import parser_hipotecario
-                        success, info = parser_hipotecario.procesar_archivo(filepath)
-                
-                else:
-                    print(f"❓ [MASTER] Sin parser para: {f}")
-                    continue
-
-                # --- POST-PROCESAMIENTO: ARCHIVADO Y TRAZABILIDAD ---
-                if success and info:
-                    new_path = archiver_service.archivar_documento(
-                        filepath, 
-                        modulo=info['modulo'], 
-                        anio=info['anio'], 
-                        mes=info['mes'], 
-                        entidad=info['entidad']
-                    )
+                try:
+                    # --- DESPACHADOR INTELIGENTE v4.0 ---
                     
-                    if new_path:
-                        # Actualizar puntero físico en la tabla correspondiente
-                        if info['db_table'] == 'liquidaciones_tarjetas':
-                            tarjetas.update_record_path(info.get('id_insertado', 0), new_path)
-                        elif info['db_table'] == 'facturas':
-                            compras.update_record_path(info.get('id_insertado', 0), new_path)
-                        elif info['db_table'] == 'libroiva':
-                            compras.update_record_path(0, new_path, table="libroiva") # Periodo es unique
-                        elif info['db_table'] == 'bancos_movimientos':
-                            from modulo_bancos import storage_bancos
-                            storage_bancos.update_record_path(info.get('id_insertado', 0), new_path)
-                        
-                        print(f"✅ ÉXITO: {f} archivado en {new_path}")
-                else:
-                    print(f"⚠️ RECHAZADO: {f} (Posible duplicado o error de parser)")
+                    # 1. MODULO TARJETAS
+                    if "PAYWAY" in f_upper and f_upper.endswith(".PDF"):
+                        from modulo_tarjetas import parser_payway_liq
+                        success, info = parser_payway_liq.procesar_archivo(filepath)
+                    
+                    elif "NARANJA" in f_upper and f_upper.endswith(".XLSX"):
+                        from modulo_tarjetas import parser_naranja_xlsx
+                        success, info = parser_naranja_xlsx.procesar_archivo(filepath)
+                    
+                    elif "LIQMENSAL" in f_upper or "PATAGONIA" in f_upper:
+                        from modulo_tarjetas import parser_patagonia
+                        success, info = parser_patagonia.procesar_archivo(filepath)
 
-            except Exception as e:
-                print(f"❌ ERROR CRÍTICO [{f}]: {e}")
-                
+                    # 2. MODULO COMPRAS (AFIP / CALIM / LIBRO IVA)
+                    elif ("AFIP" in f_upper or "VENTAS" in f_upper or "COMPRAS" in f_upper or "COMPROBANTES_CONSULTA_CSV" in f_upper) and f_upper.endswith(".CSV"):
+                        from modulo_compras import importador_afip
+                        success, info = importador_afip.procesar_archivo(filepath)
+                    
+                    # MODIFICACIÓN SRE: MATCH EXTENDIDO DE CALIM
+                    elif ("CALIM" in f_upper or "FACTURAS DE COMPRA" in f_upper) and f_upper.endswith(".XLSX"):
+                        from modulo_compras import importador_calim
+                        success, info = importador_calim.procesar_archivo(filepath)
+                    
+                    elif ("LIBRO_IVA" in f_upper or "F2051" in f_upper) and f_upper.endswith(".PDF"):
+                        from modulo_compras import generador_libro_iva
+                        success, info = generador_libro_iva.procesar_archivo(filepath)
+
+                    # 3. MODULO BANCOS
+                    elif ("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX"):
+                        from modulo_bancos import parser_chubut
+                        success, info = parser_chubut.procesar_archivo(filepath)
+                    
+                    elif "CREDICOOP" in f_upper and f_upper.endswith(".XLSX"):
+                        from modulo_bancos import parser_credicoop_joaquin
+                        success, info = parser_credicoop_joaquin.procesar_archivo(filepath)
+
+                    elif "HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX"):
+                        if "USD" in f_upper:
+                            from modulo_bancos import parser_hipotecario_usd
+                            success, info = parser_hipotecario_usd.procesar_archivo(filepath)
+                        else:
+                            from modulo_bancos import parser_hipotecario
+                            success, info = parser_hipotecario.procesar_archivo(filepath)
+                    
+                    else:
+                        print(f"❓ [MASTER] Sin parser para: {f}")
+                        continue
+
+                    # --- POST-PROCESAMIENTO: ARCHIVADO Y TRAZABILIDAD ---
+                    if success and info:
+                        new_path = archiver_service.archivar_documento(
+                            filepath, 
+                            modulo=info['modulo'], 
+                            anio=info['anio'], 
+                            mes=info['mes'], 
+                            entidad=info['entidad']
+                        )
+                        
+                        if new_path:
+                            # Actualizar puntero físico en la tabla correspondiente
+                            if info['db_table'] == 'liquidaciones_tarjetas':
+                                tarjetas.update_record_path(info.get('id_insertado', 0), new_path)
+                            elif info['db_table'] == 'facturas':
+                                compras.update_record_path(info.get('id_insertado', 0), new_path)
+                            elif info['db_table'] == 'libroiva':
+                                compras.update_record_path(0, new_path, table="libroiva") # Periodo es unique
+                            elif info['db_table'] == 'bancos_movimientos':
+                                from modulo_bancos import storage_bancos
+                                storage_bancos.update_record_path(info.get('id_insertado', 0), new_path)
+                            
+                            print(f"✅ ÉXITO: {f} archivado jerárquicamente en {new_path}")
+                    else:
+                        print(f"⚠️ RECHAZADO o YA EXISTE: {f}")
+
+                except Exception as e:
+                    print(f"❌ ERROR CRÍTICO [{f}]: {e}")
+                    
         if archivos_totales == 0:
-            print("📭 Los Inboxes están vacíos. Nada que procesar.")
+            print("📭 Los inboxes descentralizados están vacíos. Nada que procesar.")
 
 if __name__ == "__main__":
     WORKSPACE = os.path.dirname(os.path.abspath(__file__))
@@ -192,9 +191,9 @@ if __name__ == "__main__":
     elif "--ingest" in sys.argv:
         master.ingest_inbox()
     else:
-        print("\n💎 ERP Master v4.0 - GOLDEN MASTER")
+        print("\n💎 ERP Master v4.5 - GOLDEN MASTER")
         print("Comandos:")
         print("  --setup    | Reconstruye la DB desde cero (Planos Perfectos).")
-        print("  --ingest   | Consume todo lo que haya en la carpeta /inbox/.")
+        print("  --ingest   | Consume inboxes de forma descentralizada.")
         print("  --audit    | Reporte analítico de falencias.")
         print("  --search <T>| Búsqueda 360 (indexa contenido JSON).")

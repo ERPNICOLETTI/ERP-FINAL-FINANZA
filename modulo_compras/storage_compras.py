@@ -194,7 +194,7 @@ def buscar_proveedores_fuzzy(termino):
 
 def archivar_evidencia_visual(factura_id, source_path, cuit, nombre_proveedor, fecha, punto_venta, numero):
     """
-    Renombra y mueve archivo a: static/archivadas/COMPRAS/YYYY/MM/NombreProveedor/
+    Renombra y mueve archivo a: archivos_compras/NombreProveedor/YYYY/MM/
     Nombre: YYYYMMDD_NombreProveedor_PV-NUM.ext
     """
     import shutil

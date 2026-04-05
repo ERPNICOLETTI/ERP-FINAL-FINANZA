@@ -20,12 +20,11 @@ El sistema se organiza en dominios autónomos (Tarjetas, Compras, Bancos). Zero 
 > [!IMPORTANT]
 > **Prohibición de SQL Directo**: Ninguna "Neurona" de lógica puede importar `sqlite3`. Toda persistencia debe realizarse a través de las funciones del archivo `storage_*.py` de su propio módulo.
 
-### 📥 Flujo "Soltar e Ingerir" (Inbox Descentralizado)
-El sistema utiliza una arquitectura de **Inbox Descentralizado** para la ingesta:
-1.  **Entrada (Regla Inbox)**: Cada módulo tiene su propia puerta de entrada física obligatoria con el prefijo exacto `inbox_` (ej: `/modulo_compras/inbox_compras/`). **Queda prohibido el uso de la carpeta genérica `/inbox/` en la raíz.**
-2.  **Orquestación**: `erp_master.py` escanea recursivamente estas subcarpetas específicas y despacha al parser correcto basándose en la firma del archivo.
-3.  **Parsers Híbridos**: Los parsers extraen datos y devuelven un objeto estandarizado `(success, info)`.
-4.  **Archivado Legal (Regla Proveedor)**: El destino final de la evidencia abandona la estructura cronológica pura. La jerarquía obligatoria es: `/static/archivadas/[nombre_modulo]/[Nombre_Entidad_o_Proveedor]/[Año]/[Mes]/` (ej: `/static/archivadas/compras/TELECOM_SA/2026/04/`).
+### 📥 Flujo "Soltar e Ingerir" (Ley de Localía v4.6)
+El sistema utiliza una arquitectura de **Aislamiento Físico Total** en tres estadios por módulo:
+1.  **Entrada Visual (`inbox_[modulo]/`)**: Punto de entrada físico inicial desde la UI Frontend.
+2.  **Depósito de Tránsito (`crudos_[modulo]/`)**: Sala de espera física donde la API almacena los documentos antes de ser ingeridos por el Orquestador.
+3.  **Archivado Legal Permanente (`archivos_[modulo]/`)**: Bóveda final, recluida internamente en el módulo. Jerarquía obligatoria: `/modulo_[nombre]/archivos_[nombre]/[Entidad]/[Año]/[Mes]/`. **Queda extinto el uso de la carpeta genérica `/static/` para resguardo operativo**.
 
 ---
 

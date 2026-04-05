@@ -29,7 +29,7 @@ storage.save_factura({
 1.  **Ingesta AFIP/Calim (Regla Inbox)**: Los CSV/Excels se depositan estrictamente en `/modulo_compras/inbox_compras/` y se procesan automáticamente extrayendo columnas duras (neto, iva21) y guardando la fila en `meta_json`.
 2.  **Vinculación Visual (CLI/Frontend)**: Se sube una evidencia fotográfica (PDF/Foto), se ingresa el número de comprobante y, si hace match en DB, se archiva automáticamente bajo la **Regla de Archivado Legal**.
 3.  **Carga Manual con Fuzzy Search**: Si el comprobante no existe (ej: Gasto manual tipo ticket), se busca al proveedor usando búsqueda difusa en el **Maestro de Proveedores**. Si no existe, se crea. 
-4.  **Archivado Automático (Regla Proveedor)**: El destino final de la evidencia utiliza jerarquía obligatoria: `/static/archivadas/compras/[Nombre_Proveedor]/[Año]/[Mes]/`. Se renombra como `YYYYMMDD_NombreProveedor_PV-NUM.ext` y se actualiza `tiene_foto = 1` en la DB.
+4.  **Archivado Automático (Regla Proveedor)**: El destino final de la evidencia utiliza jerarquía obligatoria aislada: `/modulo_compras/archivos_compras/[Nombre_Proveedor]/[Año]/[Mes]/`. Se renombra como `YYYYMMDD_NombreProveedor_PV-NUM.ext` y se actualiza `tiene_foto = 1` en la DB.
 
 ---
 
