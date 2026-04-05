@@ -120,17 +120,6 @@ async def importar_facturas(req: ImportRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/facturas/sync_archivos")
-async def sync_archivos():
-    """Ejecuta el organizador y sincronizador de archivos físicos."""
-    try:
-        from modulo_compras.sincronizador_ficheros import sync
-        from modulo_compras.organizador_carpetas import migrate_folders
-        migrate_folders()
-        sync()
-        return {"status": "success", "message": "Archivos organizados y sincronizados"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 @app.post("/sync")
 async def sync_data():

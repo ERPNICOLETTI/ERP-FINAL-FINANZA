@@ -23,14 +23,24 @@ class ERPMaster:
     
     def __init__(self, workspace_path):
         self.workspace = workspace_path
-        self.inbox_path = os.path.join(self.workspace, 'inbox')
-        self._ensure_inbox()
+        self.setup_inbox_and_archives()
 
-    def _ensure_inbox(self):
-        """Garantiza la existencia del punto de entrada universal."""
-        if not os.path.exists(self.inbox_path):
-            os.makedirs(self.inbox_path)
-            print(f"📁 [MASTER] Creada carpeta de entrada: {self.inbox_path}")
+    def setup_inbox_and_archives(self):
+        """Auto-genera la infraestructura descentralizada v4.5 (Inboxes y Archivador Legal)."""
+        self.inbox_paths = [
+            os.path.join(self.workspace, 'modulo_compras', 'inbox_compras'),
+            os.path.join(self.workspace, 'modulo_tarjetas', 'inbox_tarjetas'),
+            os.path.join(self.workspace, 'modulo_bancos', 'inbox_bancos'),
+        ]
+        
+        archivos_paths = [
+            os.path.join(self.workspace, 'static', 'archivadas', 'compras'),
+            os.path.join(self.workspace, 'static', 'archivadas', 'tarjetas'),
+            os.path.join(self.workspace, 'static', 'archivadas', 'bancos'),
+        ]
+
+        for p in self.inbox_paths + archivos_paths:
+            os.makedirs(p, exist_ok=True)
 
     def setup_schema(self):
         """Inicialización total de la base de datos v4.0."""
@@ -68,18 +78,20 @@ class ERPMaster:
             print(f"   [{r['source']}] ID:{r['record_id']} | {r['nombre']} | $ {r['monto']} | Fecha: {r['fecha']}")
 
     def ingest_inbox(self):
-        """Procesa el contenido del inbox/ asignando parsers dinámicamente."""
-        archivos = [f for f in os.listdir(self.inbox_path) if os.path.isfile(os.path.join(self.inbox_path, f))]
-        if not archivos:
-            print("📭 Inbox vacío. Nada que procesar.")
-            return
+        """Procesa el contenido de los inboxes descentralizados asignando parsers dinámicamente."""
+        archivos_totales = 0
+        for inbox_path in self.inbox_paths:
+            if not os.path.exists(inbox_path): continue
+            archivos = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
+            if not archivos: continue
+            
+            print(f"🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(inbox_path)}...")
+            archivos_totales += len(archivos)
 
-        print(f"🚀 [MASTER] Procesando {len(archivos)} archivos en Inbox...")
-
-        for f in archivos:
-            filepath = os.path.join(self.inbox_path, f)
-            f_upper = f.upper()
-            print(f"\n📦 INGESTANDO: {f}")
+            for f in archivos:
+                filepath = os.path.join(inbox_path, f)
+                f_upper = f.upper()
+                print(f"\n📦 INGESTANDO: {f}")
             
             success = False
             info = {}
@@ -162,6 +174,9 @@ class ERPMaster:
 
             except Exception as e:
                 print(f"❌ ERROR CRÍTICO [{f}]: {e}")
+                
+        if archivos_totales == 0:
+            print("📭 Los Inboxes están vacíos. Nada que procesar.")
 
 if __name__ == "__main__":
     WORKSPACE = os.path.dirname(os.path.abspath(__file__))

@@ -273,10 +273,55 @@ def update_record_path(record_id, new_path, table="facturas"):
     try:
         if table not in ["facturas", "libroiva"]:
             raise ValueError(f"Tabla no permitida: {table}")
-        conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
+        if table == "facturas":
+            conn.execute(f"UPDATE {table} SET path_archivo = ?, tiene_foto = 1 WHERE id = ?", (new_path, record_id))
+        else:
+            conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
         conn.commit()
     except Exception as e:
         logger.warning(f"Error actualizando path en {table}: {e}")
+    finally:
+        conn.close()
+
+
+def get_reporte_discrepancias():
+    """Retorna facturas cruzadas que están en AFIP/Manual pero no en CALIM."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''
+            SELECT id, numero_completo, proveedor, fecha, total, origen, status 
+            FROM facturas 
+            WHERE tipo_operacion = 'COMPRA' AND status = 'SOLO_AFIP'
+            ORDER BY fecha DESC
+        ''').fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_facturas_sin_archivo():
+    """Retorna facturas importadas que aún no tienen evidencia visual vinculada."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''
+            SELECT id, numero_completo, proveedor, fecha, total, origen 
+            FROM facturas 
+            WHERE tiene_foto = 0 OR path_archivo IS NULL
+            ORDER BY fecha DESC
+        ''').fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def update_factura_status(factura_id, status_nuevo):
+    """Actualiza solo el status de una factura."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE facturas SET status = ? WHERE id = ?", (status_nuevo, factura_id))
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"Error actualizando status en factura {factura_id}: {e}")
     finally:
         conn.close()
 

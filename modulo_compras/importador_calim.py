@@ -57,9 +57,9 @@ def procesar_archivo(file_path):
                 fecha_emision = datetime.strptime(fecha_raw, "%d/%m/%Y").strftime("%Y-%m-%d") if '/' in fecha_raw else fecha_raw
                 if idx == 0: first_row_date = fecha_emision
 
-                neto_gravado = parse_money(row.get('Neto'))
-                monto_iva = parse_money(row.get('Iva'))
-                monto_total = parse_money(row['Total'])
+                neto = parse_money(row.get('Neto'))
+                iva21 = parse_money(row.get('Iva'))
+                total = parse_money(row.get('Total'))
                 tipo_nombre = str(row['Tipo']).strip()
                 
                 # Formatear el número (Código-PV-Número)
@@ -70,16 +70,16 @@ def procesar_archivo(file_path):
                 n = num_parts[1].strip().zfill(8) if len(num_parts) == 2 else str(row['Numero']).strip().zfill(8)
                 numero_completo = f"{codigo_str}-{pv}-{n}"
                 
-                # Diseño Híbrido: Empaquetar fila completa
+                # Diseño Híbrido: Empaquetar fila completa en meta_json via row_dump
                 factura_data = {
                     "numero_completo": numero_completo,
                     "tipo_operacion": 'COMPRA' if 'Compra' in os.path.basename(file_path) else 'VENTA',
                     "tipo_comprobante": tipo_nombre,
                     "proveedor": str(row['Proveedor']).strip(),
                     "fecha": fecha_emision,
-                    "neto_gravado": neto_gravado,
-                    "monto_iva": monto_iva,
-                    "monto_total": monto_total,
+                    "neto": neto,
+                    "iva21": iva21,
+                    "total": total,
                     "hash_archivo": file_hash,
                     "origen": "CALIM_EXCEL",
                     "status": "CONCILIADO_CALIM",

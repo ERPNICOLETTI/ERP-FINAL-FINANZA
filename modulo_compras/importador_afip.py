@@ -86,11 +86,15 @@ def procesar_archivo(file_path):
                     doc_entity = str(row.get('Nro. Doc. Emisor', row.get('CUIT Emisor', ''))).strip()
                     denom_entity = str(row.get('Denominación Emisor', row.get('Nombre Emisor', 'Proveedor'))).strip()
 
-                neto_gravado = clean_amount(row.get('Imp. Neto Gravado Total', row.get('Imp. Neto Gravado', '0')))
-                monto_iva = clean_amount(row.get('Total IVA', row.get('Importe IVA', '0')))
-                monto_total = clean_amount(row.get('Imp. Total', '0'))
+                neto = clean_amount(row.get('Imp. Neto Gravado Total', row.get('Imp. Neto Gravado', '0')))
+                iva21 = clean_amount(row.get('IVA 21%', '0'))
+                iva105 = clean_amount(row.get('IVA 10,5%', '0'))
+                iva27 = clean_amount(row.get('IVA 27%', '0'))
+                exento = clean_amount(row.get('Imp. Op. Exentas', '0')) + clean_amount(row.get('Imp. Neto No Gravado', '0'))
+                percepcion_iva = clean_amount(row.get('Otros Tributos', '0'))
+                total = clean_amount(row.get('Imp. Total', '0'))
 
-                # Diseño Híbrido: Todo el resto de la fila al JSON
+                # Diseño Híbrido: Todo el resto de la fila al meta_json mediante row_dump
                 factura_data = {
                     "numero_completo": numero_completo,
                     "tipo_operacion": tipo_operacion,
@@ -98,9 +102,13 @@ def procesar_archivo(file_path):
                     "proveedor": denom_entity,
                     "cuit_proveedor": doc_entity,
                     "fecha": fecha_iso,
-                    "neto_gravado": neto_gravado,
-                    "monto_iva": monto_iva,
-                    "monto_total": monto_total,
+                    "neto": neto,
+                    "iva21": iva21,
+                    "iva105": iva105,
+                    "iva27": iva27,
+                    "exento": exento,
+                    "percepcion_iva": percepcion_iva,
+                    "total": total,
                     "hash_archivo": file_hash,
                     "origen": "AFIP_CSV",
                     "status": "DIGITALIZADO",

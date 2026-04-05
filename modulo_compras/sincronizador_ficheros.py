@@ -1,13 +1,15 @@
-import sqlite3
 import os
 import shutil
 import re
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from modulo_compras import storage_compras
 
 # Configuración de rutas - Relativas a la raíz del proyecto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DIR = os.path.join(BASE_DIR, "static", "facturas_origen")  # TODO: Configurar carpeta de origen real
 DEST_DIR = os.path.join(BASE_DIR, "static", "facturas_archivadas")
-DB_PATH = os.path.join(BASE_DIR, "erp_nicoletti.db")
 
 def sync():
     if not os.path.exists(SOURCE_DIR):
@@ -17,29 +19,19 @@ def sync():
     os.makedirs(DEST_DIR, exist_ok=True)
     os.makedirs(os.path.join(DEST_DIR, 'a_subir'), exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
     files = [f for f in os.listdir(SOURCE_DIR) if os.path.isfile(os.path.join(SOURCE_DIR, f))]
     
     synced_count = 0
     ghost_count = 0
-    already_synced = 0
 
-    # Obtener todas las facturas de la DB para comparar rápido
-    facturas_db = cursor.execute("SELECT id, numero_completo, proveedor, estado_proceso FROM facturas").fetchall()
-    facturas_map = {f['numero_completo'].lstrip('0'): f for f in facturas_db}
+    print("♻️  Iniciando sincronización con Storage de Compras v4.5...")
 
     for filename in files:
         if filename.endswith('.rar') or filename.endswith('.zip'):
             continue
 
-        # Extract bits
-        # Pattern: 20260123_PROVIDER_NAME_12345.pdf
         match_full = re.match(r'^(\d{8})_(.+)_(\d+)\.[^.]+$', filename)
         if not match_full:
-            # Fallback regex
             match_num = re.search(r'_(\d+)\.[^.]+$', filename)
             if not match_num: continue
             num_clean = match_num.group(1).lstrip('0')
@@ -51,45 +43,52 @@ def sync():
             num_clean = match_full.group(3).lstrip('0')
             fecha_guess = fecha_iso
 
-        # 1. Intentar match
-        factura_match = facturas_map.get(num_clean)
+        # Usar patrón repositorio
+        match_facturas = storage_compras.buscar_facturas(num_clean)
+        
+        # Filtramos la que más sentido tenga
+        factura_match = None
+        for f in match_facturas:
+            if num_clean in f['numero_completo']:
+                factura_match = f
+                break
 
         if factura_match:
-            # ENCONTRADA en sistemas
             dest_path = os.path.join(DEST_DIR, filename)
             shutil.copy2(os.path.join(SOURCE_DIR, filename), dest_path)
             
             ruta_web = f"/static/facturas_archivadas/{filename}"
             
-            cursor.execute('UPDATE facturas SET ruta_archivo = ?, estado_proceso = ? WHERE id = ?', 
-                           (ruta_web, "ARCHIVADO", factura_match['id']))
+            # Cero SQL! Usa función de storage
+            storage_compras.update_record_path(factura_match['id'], ruta_web, "facturas")
+            storage_compras.update_factura_status(factura_match['id'], "ARCHIVADO")
+            
             synced_count += 1
-            print(f"✅ Vinculada: {filename}")
+            print(f"✅ Vinculada: {filename} -> ID {factura_match['id']}")
         else:
             # GHOST: No está en AFIP/CALIM pero tengo el archivo
             dest_path = os.path.join(DEST_DIR, 'a_subir', filename)
             shutil.copy2(os.path.join(SOURCE_DIR, filename), dest_path)
-            
             ruta_web = f"/static/facturas_archivadas/a_subir/{filename}"
             
-            # Ver si ya la insertamos
-            exists = cursor.execute('SELECT id FROM facturas WHERE numero_completo = ?', (num_clean,)).fetchone()
-            if not exists:
-                cursor.execute('''
-                    INSERT INTO facturas (numero_completo, esta_en_afip, esta_en_calim, estado_proceso, ruta_archivo, proveedor, fecha_emision)
-                    VALUES (?, 0, 0, 'A_SUBIR', ?, ?, ?)
-                ''', (num_clean, ruta_web, provider_guess, fecha_guess))
-                ghost_count += 1
-                print(f"⚠️  Huérfana (A Subir): {filename}")
-            else:
-                # Si existe pero era huérfana de la corrida anterior, actualizar info
-                cursor.execute('UPDATE facturas SET proveedor = ?, fecha_emision = ? WHERE numero_completo = ? AND esta_en_afip = 0 AND esta_en_calim = 0',
-                               (provider_guess, fecha_guess, num_clean))
-                already_synced += 1
+            # Crear la huérfana directo en BD sin SQL
+            data_huerfana = {
+                "numero_completo": f"000-00000-{num_clean.zfill(8)}",
+                "tipo_operacion": "COMPRA",
+                "tipo_comprobante": "HUERFANA",
+                "proveedor": provider_guess,
+                "fecha": fecha_guess if fecha_guess else "2026-01-01",
+                "neto": 0, "total": 0,
+                "origen": "MANUAL",
+                "status": "A_SUBIR",
+                "tiene_foto": 1,
+                "path_archivo": ruta_web
+            }
+            new_id = storage_compras.save_factura(data_huerfana)
+            ghost_count += 1
+            print(f"⚠️  Huérfana Crada en DB (A Subir): {filename}")
 
-    conn.commit()
-    conn.close()
-    print(f"\nSincronización finalizada.")
+    print(f"\nSincronización finalizada. {synced_count} vinculadas, {ghost_count} huérfanas subidas.")
 
 if __name__ == "__main__":
     sync()

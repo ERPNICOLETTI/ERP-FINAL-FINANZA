@@ -12,16 +12,20 @@ El sistema se organiza en dominios autónomos (Tarjetas, Compras, Bancos). Zero 
 
 ## ⚖️ 2. Reglas de Oro Arquitectónicas (Inquebrantables)
 
+### 🔄 Regla de Evolución Continua (Auto-Mantenimiento)
+> [!IMPORTANT]
+> **REGLA DE EVOLUCIÓN CONTINUA**: Siempre que surjan modificaciones críticas en el código, lógica, bases de datos o arquitectura que deban ser registradas, la IA DEBE modificar proactivamente los archivos instructivos `.md` (neuronas, cerebro, db_architecture) correspondientes para mantener el Zero-Shot Context actualizado para futuras sesiones.
+
 ### 🛡️ Aislamiento de Dominios (Patrón Repositorio)
 > [!IMPORTANT]
 > **Prohibición de SQL Directo**: Ninguna "Neurona" de lógica puede importar `sqlite3`. Toda persistencia debe realizarse a través de las funciones del archivo `storage_*.py` de su propio módulo.
 
-### 📥 Flujo "Soltar e Ingerir" (Inbox Universal)
-El sistema ha migrado de carpetas "crudos" locales a un **Inbox Centralizado**:
-1.  **Entrada**: El usuario deposita cualquier archivo (PDF, CSV, XLSX) en la carpeta `/inbox/`.
-2.  **Orquestación**: `erp_master.py` escanea el inbox y despacha al parser correcto basándose en la firma del archivo.
+### 📥 Flujo "Soltar e Ingerir" (Inbox Descentralizado)
+El sistema utiliza una arquitectura de **Inbox Descentralizado** para la ingesta:
+1.  **Entrada (Regla Inbox)**: Cada módulo tiene su propia puerta de entrada física obligatoria con el prefijo exacto `inbox_` (ej: `/modulo_compras/inbox_compras/`). **Queda prohibido el uso de la carpeta genérica `/inbox/` en la raíz.**
+2.  **Orquestación**: `erp_master.py` escanea recursivamente estas subcarpetas específicas y despacha al parser correcto basándose en la firma del archivo.
 3.  **Parsers Híbridos**: Los parsers extraen datos y devuelven un objeto estandarizado `(success, info)`.
-4.  **Archivado Legal**: `core_sistema/archiver_service.py` mueve el archivo a su ubicación permanente en `static/archivadas/` con una jerarquía legal, aplicando micro-hashes para evitar colisiones.
+4.  **Archivado Legal (Regla Proveedor)**: El destino final de la evidencia abandona la estructura cronológica pura. La jerarquía obligatoria es: `/static/archivadas/[nombre_modulo]/[Nombre_Entidad_o_Proveedor]/[Año]/[Mes]/` (ej: `/static/archivadas/compras/TELECOM_SA/2026/04/`).
 
 ---
 
@@ -31,19 +35,19 @@ Consulta el manual específico de cada dominio antes de realizar cambios:
 
 ### 💳 Tarjetas (Recaudación)
 Reglas de Payway, Naranja, Patagonia, aranceles y cruce de cupones.
-👉 **Manual**: [modulo_tarjetas/NEURONA.md](modulo_tarjetas/NEURONA.md)
+👉 **Manual**: [modulo_tarjetas/neurona_tarjetas.md](modulo_tarjetas/neurona_tarjetas.md)
 
 ### 🏦 Bancos (Tesorería)
 Extractos de Chubut, Credicoop, Hipotecario (Pesos/USD) y conciliación.
-👉 **Manual**: [modulo_bancos/NEURONA.md](modulo_bancos/NEURONA.md)
+👉 **Manual**: [modulo_bancos/neurona_bancos.md](modulo_bancos/neurona_bancos.md)
 
 ### 🧾 Compras (Fiscal)
 ARCA/AFIP, plataforma CALIM, Libro IVA y digitalización híbrida.
-👉 **Manual**: [modulo_compras/NEURONA.md](modulo_compras/NEURONA.md)
+👉 **Manual**: [modulo_compras/neurona_compras.md](modulo_compras/neurona_compras.md)
 
 ### ⚙️ Core e Infraestructura
 Motor de búsqueda 360, Archivador Legal y esquema global.
-👉 **Manual**: [DB_ARCHITECTURE.md](DB_ARCHITECTURE.md)
+👉 **Manual**: [db_architecture.md](db_architecture.md)
 
 ---
 

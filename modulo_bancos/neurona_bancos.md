@@ -24,10 +24,10 @@ storage.update_record_path(last_id, "/ruta/final/en/archivo/legal.xlsx")
 ---
 
 ## 🛰️ Flujo de Datos 4.0
-1.  **Ingesta**: Los Excel de Homebanking se arrojan en `/inbox/`.
-2.  **Modularidad Híbrida**: Los parsers (`chubut`, `hipotecario`, `credicoop`) extraen columnas duras y guardan la fila original de Excel en el JSON de `metadata_cruda`.
+1.  **Ingesta (Regla Inbox)**: Los Excel de Homebanking se arrojan estrictamente en `/modulo_bancos/inbox_bancos/`.
+2.  **Modularidad Híbrida**: Los parsers (`chubut`, `hipotecario`, `credicoop`) extraen columnas duras y guardan la fila original de Excel en el JSON de `meta_json`.
 3.  **Detección de IVA**: Los parsers informan automáticamente al `modulo_compras` ante la detección de IVA bancario/mora.
-4.  **Archivado**: El archivo original se mueve a `static/archivadas/BANCOS/` con trazabilidad por micro-hash.
+4.  **Archivado Legal**: El archivo original se mueve usando la jerarquía obligatoria: `/static/archivadas/bancos/[Nombre_Entidad_Bancaria]/[Año]/[Mes]/` con trazabilidad por micro-hash.
 
 ---
 
