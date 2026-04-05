@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO TARJETAS (Recaudación) 💳🧠
-# Versión 4.6 - Diseño Híbrido y Persistencia Blindada
+# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
 
 Esta neurona es responsable de la **ingesta, normalización y auditoría** de transacciones con tarjeta.
 
@@ -24,11 +24,13 @@ liq_id = storage.save_liquidacion({
 
 ---
 
-## 🛰️ Flujo de Datos 4.6 (Ley de Localía)
-1.  **Ingesta de 3 Capas (Visual -> Tránsito -> Archivo)**:
-    - `inbox_tarjetas/`: Interfaz UI tira el PDF/Excel aquí.
-    - `crudos_tarjetas/`: La API lo mueve aquí automáticamente como sala de espera. Orquestador escanea *sólo* aquí.
-2.  **Parsing Híbrido**: El parser extrae las "Columnas Duras" (monto, fecha) y empaqueta el resto en un JSON para la columna `meta_json`.
+## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
+1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
+    - `inbox_tarjetas/`: Puerta de entrada. El Orquestador escanea aquí.
+    - `crudos_tarjetas/` (Histórico): Los reportes se mueven aquí tras la ingesta exitosa.
+    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox.
+    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió.
+2.  **Archivos de Bóveda**: Reservado para evidencias manuales vinculadas en `/archivos_tarjetas/`.
 3.  **Firma Estándar**: El parser retorna `(True, info_dict)` al orquestador para gatillar el archivado legal.
 4.  **Archivado Legal**: El destino final responde a la jerarquía obligatoria `/modulo_tarjetas/archivos_tarjetas/[Nombre_Entidad_o_Marca]/[Año]/[Mes]/`.
 5.  **Auditoría 360**: Cruce de `payway_records` (POS) vs `liquidaciones_tarjetas` (Banco).

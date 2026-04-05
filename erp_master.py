@@ -76,18 +76,18 @@ class ERPMaster:
             print(f"   [{r['source']}] ID:{r['record_id']} | {r['nombre']} | $ {r['monto']} | Fecha: {r['fecha']}")
 
     def ingest_inbox(self):
-        """Procesa el contenido de la zona Crudos (tránsito) asignando parsers dinámicamente."""
+        """Procesa el contenido de la zona Inbox y lo traslada a Crudos (Histórico) o Archivos (Bóveda)."""
         archivos_totales = 0
-        for crudos_path in self.crudos_paths:
-            if not os.path.exists(crudos_path): continue
-            archivos = [f for f in os.listdir(crudos_path) if os.path.isfile(os.path.join(crudos_path, f))]
+        for inbox_path in self.inbox_paths:
+            if not os.path.exists(inbox_path): continue
+            archivos = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
             if not archivos: continue
             
-            print(f"\n🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(crudos_path)}...")
+            print(f"\n🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(inbox_path)}...")
             archivos_totales += len(archivos)
 
             for f in archivos:
-                filepath = os.path.join(crudos_path, f)
+                filepath = os.path.join(inbox_path, f)
                 f_upper = f.upper()
                 print(f"\n📦 INGESTANDO: {f}")
                 
@@ -152,7 +152,9 @@ class ERPMaster:
                             modulo=info['modulo'], 
                             anio=info['anio'], 
                             mes=info['mes'], 
-                            entidad=info['entidad']
+                            entidad=info['entidad'],
+                            use_vault=False,  # Los reportes masivos van al Histórico (Crudos)
+                            overwrite=True    # Evitamos sufijos en reportes masivos
                         )
                         
                         if new_path:
@@ -170,6 +172,10 @@ class ERPMaster:
                             print(f"✅ ÉXITO: {f} archivado jerárquicamente en {new_path}")
                     else:
                         print(f"⚠️ RECHAZADO o YA EXISTE: {f}")
+                        # Si es un duplicado idéntico por hash, lo eliminamos del inbox
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                            print(f"🧹 Duplicado por Hash eliminado de Inbox: {f}")
 
                 except Exception as e:
                     print(f"❌ ERROR CRÍTICO [{f}]: {e}")

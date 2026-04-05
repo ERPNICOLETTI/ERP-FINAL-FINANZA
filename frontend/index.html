@@ -20,8 +20,11 @@
         </header>
 
         <div class="modules-grid">
-            <div class="dropzone-card" id="dropzone-compras" data-modulo="compras">
-                <h2>🧾 Compras</h2>
+            <div class="dropzone-card" id="card-compras" data-modulo="compras">
+                <div class="card-header">
+                    <h2>🧾 Compras</h2>
+                    <button class="btn-entry" onclick="app.showModule('compras')">📁 Abrir Bóveda</button>
+                </div>
                 <div class="drop-area">
                     <p>Arrastra Facturas (AFIP/CALIM)</p>
                     <span class="file-counter">0 pendientes</span>
@@ -48,6 +51,67 @@
         <div class="trigger-container">
             <button id="btn-process" class="btn-neon">⚡ Sincronizar Ecosistema ⚡</button>
             <div id="status-message"></div>
+        </div>
+
+        <!-- VISTA MÓDULO: COMPRAS (Bóveda) -->
+        <section id="view-compras" class="module-view hidden">
+            <div class="view-header">
+                <button class="btn-back" onclick="app.showDashboard()">⬅ Volver al Dashboard</button>
+                <h2>Bóveda de Gestión de Compras</h2>
+            </div>
+            
+            <div class="filter-pills">
+                <button class="pill active" data-filter="all">Todas (<span id="count-all">0</span>)</button>
+                <button class="pill pending" data-filter="pending">Pendientes 🔴 (<span id="count-pending">0</span>)</button>
+                <button class="pill completed" data-filter="completed">Listas 🟢 (<span id="count-completed">0</span>)</button>
+            </div>
+
+            <div class="table-container glass">
+                <table id="table-compras">
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Proveedor</th>
+                            <th>Comprobante</th>
+                            <th>Monto</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-compras">
+                        <!-- Se llena vía JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SIDEBAR DE VINCULACIÓN -->
+        <div id="sidebar-vincular" class="sidebar hidden">
+            <div class="sidebar-content glass">
+                <button class="btn-close" onclick="app.closeSidebar()">×</button>
+                <h3>Detalle del Comprobante</h3>
+                <div id="sidebar-details">
+                    <!-- Se llena vía JS -->
+                </div>
+                
+                <hr>
+                
+                <div class="correction-zone">
+                    <label>Ajuste de Comprobante:</label>
+                    <div class="row">
+                        <input type="text" id="edit-pv" placeholder="P.V. (5 dígitos)">
+                        <input type="text" id="edit-num" placeholder="Número (8 dígitos)">
+                    </div>
+                    <button id="btn-save-fields" class="btn-small">💾 Guardar Cambios</button>
+                </div>
+
+                <div class="dropzone-sidebar" id="dropzone-sidebar">
+                    <p>Arrastra la Foto o PDF aquí para vincular físicamente</p>
+                    <input type="file" id="file-vincular" class="hidden">
+                </div>
+                
+                <div id="sidebar-status"></div>
+            </div>
         </div>
     </div>
     

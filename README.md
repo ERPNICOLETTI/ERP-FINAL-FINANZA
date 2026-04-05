@@ -1,20 +1,17 @@
-# 🧠 ERP Final - Inteligencia Financiera Modular 💳🏦🧾🦾
-# Versión 4.5 - Ecosistema de Ingesta Inteligente
+# CEREBRO ERP FINAL - Versión 4.6.2 (Consolidación)
+# Sistema de Ingesta Inteligente
 
 Bienvenido al repositorio central de **ERP Final**. Este sistema utiliza una arquitectura de **Monolito Modular (Vertical Slicing)** con un motor de **Ingesta Híbrida** (Relacional + JSON) y cumplimiento legal automatizado.
 
 ---
 
-## 🚀 Flujo de Trabajo v4.5 (Ingesta Descentralizada)
+## 🏛️ El Flujo de "Zelosa Custodia" v4.6.2
 
-A diferencia de versiones anteriores, el sistema utiliza un **Inbox Descentralizado**:
-
-1.  **Depositar**: Arroja tus archivos (PDF, Excel, CSV) en las bandejas de entrada correspondientes de cada módulo (ej. `/modulo_compras/inbox_compras/`, `/modulo_bancos/inbox_bancos/`).
-2.  **Procesar**: Ejecuta el orquestador maestro:
-    ```bash
-    python erp_master.py
-    ```
-3.  **Resultado**: El sistema identifica el archivo, extrae los datos, los indexa en el **Buscador 360** y lo archiva bajo la **Regla Legal Centrada en Entidad** dentro de `archivos_[modulo]/[Entidad]/[Año]/[Mes]/` (aislamiento local perfecto).
+1.  **Recepción (Inbox)**: Puerta única de entrada.
+2.  **Histórico (Crudos)**: Archivo inmutable de reportes masivos (AFIP, CALIM, Bancos).
+    - **Política de Hash Único**: Los duplicados se eliminan del inbox para mantener el histórico limpio.
+    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre coincide pero el contenido cambió.
+3.  **Bóveda (Archivos)**: Reservada para la verdad física (PDFs, Fotos) vinculada manualmente.
 
 ---
 

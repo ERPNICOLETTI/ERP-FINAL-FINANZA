@@ -208,23 +208,25 @@ def archivar_evidencia_visual(factura_id, source_path, cuit, nombre_proveedor, f
         except:
             fecha_dt = datetime.strptime(fecha, '%d/%m/%Y')
 
+        # Estructura v4.6: modulo_compras/archivos_compras/PROVEEDOR/YYYY/MM/
         nuevo_nombre = f"{fecha_dt.strftime('%Y%m%d')}_{nombre_proveedor.replace(' ', '_')}_{punto_venta}-{numero}{ext}"
         
-        rel_path = os.path.join("static", "archivadas", "COMPRAS", 
-                                fecha_dt.strftime('%Y'), fecha_dt.strftime('%m'), 
-                                nombre_proveedor.replace(' ', '_'))
+        rel_path_from_archive = os.path.join(nombre_proveedor.upper().replace(' ', '_'), 
+                                           fecha_dt.strftime('%Y'), 
+                                           fecha_dt.strftime('%m'))
         
-        target_dir = os.path.join(BASE_DIR, rel_path)
+        target_dir = os.path.join(BASE_DIR, "modulo_compras", "archivos_compras", rel_path_from_archive)
         os.makedirs(target_dir, exist_ok=True)
         
         target_path = os.path.join(target_dir, nuevo_nombre)
         shutil.copy2(source_path, target_path)
         
-        final_rel_path = os.path.join(rel_path, nuevo_nombre)
+        # Guardar solo la ruta relativa DESDE archivos_compras para el servidor estático
+        final_rel_path = os.path.join(rel_path_from_archive, nuevo_nombre)
         
         # Actualizar DB
         conn = get_db_connection()
-        conn.execute("UPDATE facturas SET tiene_foto = 1, path_archivo = ? WHERE id = ?", (final_rel_path, factura_id))
+        conn.execute("UPDATE facturas SET tiene_foto = 1, path_archivo = ?, status = 'ARCHIVADO' WHERE id = ?", (final_rel_path, factura_id))
         conn.commit()
         conn.close()
         
@@ -267,6 +269,23 @@ def save_libro_iva(data: dict):
         conn.close()
 
 
+def get_all_facturas():
+    """Retorna todas las facturas de compras registradas."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''
+            SELECT id, fecha, tipo_comprobante, punto_venta, numero_comprobante, 
+                   proveedor, cuit_proveedor, neto, iva21, total, status, 
+                   tiene_foto, path_archivo, origen, meta_json
+            FROM facturas 
+            WHERE tipo_operacion = 'COMPRA'
+            ORDER BY fecha DESC
+        ''').fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def update_record_path(record_id, new_path, table="facturas"):
     """Actualiza la ruta física del archivo tras el archivado legal v4.5."""
     conn = get_db_connection()
@@ -274,7 +293,7 @@ def update_record_path(record_id, new_path, table="facturas"):
         if table not in ["facturas", "libroiva"]:
             raise ValueError(f"Tabla no permitida: {table}")
         if table == "facturas":
-            conn.execute(f"UPDATE {table} SET path_archivo = ?, tiene_foto = 1 WHERE id = ?", (new_path, record_id))
+            conn.execute(f"UPDATE {table} SET path_archivo = ?, tiene_foto = 1, status = 'ARCHIVADO' WHERE id = ?", (new_path, record_id))
         else:
             conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
         conn.commit()
@@ -322,6 +341,26 @@ def update_factura_status(factura_id, status_nuevo):
         conn.commit()
     except Exception as e:
         logger.warning(f"Error actualizando status en factura {factura_id}: {e}")
+    finally:
+        conn.close()
+
+
+def update_factura_fields(factura_id, fields: dict):
+    """Actualiza campos arbitrarios de una factura (punto_venta, numero_comprobante, etc)."""
+    conn = get_db_connection()
+    try:
+        query = "UPDATE facturas SET "
+        sets = [f"{k} = ?" for k in fields.keys()]
+        query += ", ".join(sets)
+        query += " WHERE id = ?"
+        
+        params = list(fields.values()) + [factura_id]
+        conn.execute(query, params)
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error actualizando campos en factura {factura_id}: {e}")
+        return False
     finally:
         conn.close()
 

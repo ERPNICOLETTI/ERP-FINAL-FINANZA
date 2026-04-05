@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
-# Versión 4.0 - Diseño Híbrido y Archivador Legal
+# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
 
 Esta neurona gestiona el **ciclo de vida fiscal** de los comprobantes y su conciliación contable.
 
@@ -26,11 +26,14 @@ storage.save_factura({
 
 ---
 
-## 🛰️ Flujo de Datos 4.5 (Ingesta, Vinculación Visual y Carga Manual)
-1.  **Ingesta AFIP/Calim (Regla Inbox)**: Los CSV/Excels se depositan estrictamente en `/modulo_compras/inbox_compras/` y se procesan automáticamente extrayendo columnas duras (neto, iva21) y guardando la fila en `meta_json`.
-2.  **Vinculación Visual (CLI/Frontend)**: Se sube una evidencia fotográfica (PDF/Foto), se ingresa el número de comprobante y, si hace match en DB, se archiva automáticamente bajo la **Regla de Archivado Legal**.
-3.  **Carga Manual con Fuzzy Search**: Si el comprobante no existe (ej: Gasto manual tipo ticket), se busca al proveedor usando búsqueda difusa en el **Maestro de Proveedores**. Si no existe, se crea. 
-4.  **Archivado Automático (Regla Proveedor)**: El destino final de la evidencia utiliza jerarquía obligatoria aislada: `/modulo_compras/archivos_compras/[Nombre_Proveedor]/[Año]/[Mes]/`. Se renombra como `YYYYMMDD_NombreProveedor_PV-NUM.ext` y se actualiza `tiene_foto = 1` en la DB.
+## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
+1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
+    - `inbox_compras/`: Puerta de entrada (API/UI). El Orquestador escanea aquí.
+    - `crudos_compras/` (Histórico): Los reportes (CSV/Excel) se mueven aquí tras la ingesta exitosa.
+    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox sin ensuciar la zona histórica.
+    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió, eliminando ruidos visuales.
+2.  **Vinculación Visual (Bóveda)**: Se sube una evidencia individual (PDF/Foto) desde el Sidebar.
+3.  **Archivos de Bóveda**: Se almacenan en `/modulo_compras/archivos_compras/` (Reservado para evidencias manuales).
 
 ---
 

@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO BANCOS (Tesorería) 🏦🧠
-# Versión 4.6 - Diseño Híbrido y Conciliación Multibanco
+# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
 
 Esta neurona es la **"Cámara Acorazada"** del sistema, registrando cada extracto de Chubut, Credicoop e Hipotecario.
 
@@ -23,11 +23,14 @@ storage.update_record_path(last_id, "/ruta/final/en/archivo/legal.xlsx")
 
 ---
 
-## 🛰️ Flujo de Datos 4.6 (Ley de Localía)
-1.  **Ingesta de 3 Capas (Visual -> Tránsito -> Archivo)**:
-    - `inbox_bancos/`: Interfaz UI deposita el Excel aquí.
-    - `crudos_bancos/`: La API lo mueve aquí automáticamente como sala de espera. Orquestador escanea *sólo* aquí.
-2.  **Modularidad Híbrida**: Los parsers (`chubut`, `hipotecario`, `credicoop`) extraen columnas duras y guardan la fila original de Excel en el JSON de `meta_json`.
+## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
+1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
+    - `inbox_bancos/`: Puerta de entrada. El Orquestador escanea aquí.
+    - `crudos_bancos/` (Histórico): Los reportes se mueven aquí tras la ingesta exitosa.
+    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox.
+    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió.
+2.  **Archivos de Bóveda**: Reservado para evidencias manuales vinculadas en `/archivos_bancos/`.
+ la fila original de Excel en el JSON de `meta_json`.
 3.  **Detección de IVA**: Los parsers informan automáticamente al `modulo_compras` ante la detección de IVA bancario/mora.
 4.  **Archivado Legal**: El archivo original se mueve usando la jerarquía obligatoria aislada: `/modulo_bancos/archivos_bancos/[Nombre_Entidad_Bancaria]/[Año]/[Mes]/` con trazabilidad por micro-hash.
 

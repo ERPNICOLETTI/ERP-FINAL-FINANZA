@@ -11,11 +11,17 @@ from erp_master import ERPMaster
 from modulo_tarjetas import logica_tarjetas as tarjetas
 from core_sistema import db_ingesta as ingesta
 from modulo_compras import motor_compras as facturas
+from modulo_compras import storage_compras as storage
+from core_sistema import archiver_service
 from modulo_tarjetas import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
 class ImportRequest(BaseModel):
     fuente: str
     path: str
+
+class FacturaUpdate(BaseModel):
+    punto_venta: str = None
+    numero_comprobante: str = None
 
 app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
 
@@ -36,13 +42,7 @@ async def upload_file(modulo: str, file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Traspaso inmediato a la sala de espera Crudos (Mandato de Localía)
-        crudos_dir = os.path.join(WORKSPACE, f"modulo_{modulo}", f"crudos_{modulo}")
-        os.makedirs(crudos_dir, exist_ok=True)
-        crudos_path = os.path.join(crudos_dir, file.filename)
-        shutil.move(file_path, crudos_path)
-            
-        return {"status": "success", "filename": file.filename}
+        return {"status": "success", "message": f"Archivo {file.filename} recibido en Inbox."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -126,24 +126,66 @@ async def get_sueldos_bancarios(anio: str = "2026"):
     from modulo_bancos import storage_bancos
     return storage_bancos.get_sueldos(anio)
 
-@app.get("/facturas/buscar")
-async def buscar_facturas(q: str):
-    return facturas.buscar_global(q)
+@app.get("/api/facturas")
+async def list_facturas():
+    """Listado total de facturas para la Bóveda de Compras."""
+    return storage.get_all_facturas()
 
-@app.post("/facturas/importar")
-async def importar_facturas(req: ImportRequest):
-    """Gatilla importación de AFIP o CALIM."""
+@app.post("/api/facturas/update/{fid}")
+async def update_factura(fid: int, req: FacturaUpdate):
+    """Actualiza campos específicos de una factura (Confirmación de Padding)."""
+    fields = {k: v for k, v in req.dict().items() if v is not None}
+    if not fields: return {"status": "ignored"}
+    success = storage.update_factura_fields(fid, fields)
+    return {"status": "success" if success else "error"}
+
+@app.post("/api/compras/vincular")
+async def vincular_archivo_factura(id_factura: int = Query(...), file: UploadFile = File(...)):
+    """Vincula físicamente un archivo a una factura existente en DB."""
     try:
-        fuente = req.fuente.upper()
-        if fuente == 'AFIP':
-            from modulo_compras.importador_afip import parse_afip_csv
-            parse_afip_csv(req.path)
-            return {"status": "success", "fuente": "AFIP"}
-        elif fuente == 'CALIM':
-            from modulo_compras.importador_calim import parse_calim_excel
-            parse_calim_excel(req.path)
-            return {"status": "success", "fuente": "CALIM"}
-        return {"status": "error", "message": f"Fuente '{fuente}' no soportada en facturas"}
+        # 1. Obtener datos de la factura para jerarquía
+        conn = storage.get_db_connection()
+        f = conn.execute("SELECT fecha, proveedor FROM facturas WHERE id = ?", (id_factura,)).fetchone()
+        conn.close()
+        
+        if not f: return {"status": "error", "message": "Factura no encontrada"}
+        
+        # 2. Guardar temporalmente en crudos para que archiver_service haga su magia
+        temp_dir = os.path.join(WORKSPACE, "modulo_compras", "crudos_compras")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, file.filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 3. Invocar Archivador Legal (Ley de Localía v4.6)
+        # archivar_documento usa: filepath, modulo, anio, mes, entidad
+        fecha = f['fecha'] # YYYY-MM-DD
+        final_path = archiver_service.archivar_documento(
+            temp_path, 
+            "compras", 
+            fecha[:4], 
+            fecha[5:7], 
+            f['proveedor']
+        )
+        
+        if final_path:
+            # Calcular ruta relativa para el servidor estático
+            # El servidor estático apunta a modulo_compras/archivos_compras
+            base_archive = os.path.join(WORKSPACE, "modulo_compras", "archivos_compras")
+            rel_path = os.path.relpath(final_path, base_archive)
+            
+            # 4. Actualizar base de datos via storage
+            storage.update_record_path(id_factura, rel_path, "facturas")
+            
+            return {
+                "status": "success", 
+                "message": "Vinculación legal exitosa",
+                "rel_path": rel_path
+            }
+        
+        return {"status": "error", "message": "Fallo al archivar documento físicamente"}
+        
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -153,8 +195,12 @@ async def sync_data():
     master.setup_schema()
     return {"status": "success", "message": "Estructura y FTS5 actualizados"}
 
-# Montar frontend al final para que no pise las rutas /api/
-os.makedirs(os.path.join(WORKSPACE, "frontend"), exist_ok=True)
+# Montar servidores estáticos jerárquicos (Aislamiento v4.6)
+os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "archivos_compras"), exist_ok=True)
+os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "crudos_compras"), exist_ok=True)
+
+app.mount("/archivos/compras", StaticFiles(directory="modulo_compras/archivos_compras"), name="archivos_compras")
+app.mount("/historico/compras", StaticFiles(directory="modulo_compras/crudos_compras"), name="crudos_compras")
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":

@@ -10,56 +10,75 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def sanitize_filename(filename):
-    """Limpia caracteres no permitidos en el sistema de archivos."""
-    name, ext = os.path.splitext(filename)
-    clean_name = re.sub(r'[^\w\s-]', '_', name).strip().upper()
-    return f"{clean_name}{ext.lower()}"
+def calculate_hash(filepath):
+    """Calcula el hash MD5 de un archivo para control de unicidad."""
+    hash_md5 = hashlib.md5()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
-def archivar_documento(filepath_origen, modulo, anio, mes, entidad):
+def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=True, overwrite=False):
     """
     Mueve un archivo crudo analizado a la estructura jerárquica modular.
-    Estructura v4.6: modulo_{MODULO}/archivos_{MODULO}/{ENTIDAD}/{AÑO}/{MES}/
+    Estructura v4.6: 
+    - Bóveda (use_vault=True):  modulo_{M}/archivos_{M}/{ENTIDAD}/{AÑO}/{MES}/
+    - Histórico (use_vault=False): modulo_{M}/crudos_{M}/{ENTIDAD}/{AÑO}/{MES}/
     """
     if not os.path.exists(filepath_origen):
         raise FileNotFoundError(f"No se encontró el archivo de origen: {filepath_origen}")
 
-    # 1. Definir Directorio Destino (Estructura v4.6: módulo -> archivos -> entidad -> año -> mes)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    entidad_clean = re.sub(r'[^\w\s-]', '_', entidad).strip().upper()
+    
+    # Seleccionar carpeta destino según propósito (Bóveda o Histórico)
+    subfolder = f'archivos_{modulo.lower()}' if use_vault else f'crudos_{modulo.lower()}'
+    
     target_dir = os.path.join(
         BASE_DIR, 
         f'modulo_{modulo.lower()}', 
-        f'archivos_{modulo.lower()}',
-        entidad.upper(),
+        subfolder,
+        entidad_clean,
         str(anio),
         str(mes).zfill(2)
     )
 
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
-        logger.info(f"📁 Creada nueva carpeta jerárquica: {target_dir}")
 
-    # 2. Generar Nombre Destino Sanitizado
+    # 1. Calcular Hash del archivo a archivar
+    current_hash = calculate_hash(filepath_origen)
+    
     original_name = os.path.basename(filepath_origen)
     target_filename = sanitize_filename(original_name)
     target_path = os.path.join(target_dir, target_filename)
 
-    # 3. Prevención de Sobrescritura (Timestamp + Hash Short)
+    # 2. Política de Archivo Único por Hash
     if os.path.exists(target_path):
-        name, ext = os.path.splitext(target_filename)
-        # Calculamos un hash corto del contenido para distinguirlo
-        with open(filepath_origen, "rb") as f:
-            file_hash = hashlib.md5(f.read()).hexdigest()[:6]
-        timestamp = datetime.now().strftime("%H%M%S")
-        target_filename = f"{name}_{timestamp}_{file_hash}{ext}"
-        target_path = os.path.join(target_dir, target_filename)
-        logger.warning(f"⚠️ Conflicto de nombre detectado. Renombrando a: {target_filename}")
+        existing_hash = calculate_hash(target_path)
+        
+        if current_hash == existing_hash:
+            # Es un duplicado idéntico. No hacemos nada con el destino, simplemente retornamos la ruta existente.
+            # El orquestador se encargará de borrar el origen (inbox).
+            logger.info(f"📁 Archivo idéntico ya existe en {target_path}. Omitiendo duplicado.")
+            return os.path.abspath(target_path)
+        
+        # El contenido es distinto pero el nombre es igual.
+        if not overwrite:
+            # Mantener ambos con sufijo (Comportamiento por defecto en Bóveda)
+            name, ext = os.path.splitext(target_filename)
+            timestamp = datetime.now().strftime("%H%M%S")
+            target_filename = f"{name}_{timestamp}_{current_hash[:6]}{ext}"
+            target_path = os.path.join(target_dir, target_filename)
+        else:
+            # Sobreescribir (Comportamiento deseado en Histórico de Reportes)
+            logger.info(f"🔄 Sobreescribiendo reporte anterior: {target_filename}")
 
-    # 4. Mover Archivo
+    # 3. Mover Archivo
     try:
         shutil.move(filepath_origen, target_path)
-        logger.info(f"✅ Archivo archivado legalmente: {target_path}")
+        logger.info(f"✅ Archivo archivado legalmente en: {target_path}")
         return os.path.abspath(target_path)
     except Exception as e:
-        logger.error(f"❌ Error al mover el archivo al archivo legal: {e}")
+        logger.error(f"❌ Error al mover el archivo: {e}")
         return None
