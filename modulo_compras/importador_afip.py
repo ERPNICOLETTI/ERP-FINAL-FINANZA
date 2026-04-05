@@ -72,8 +72,6 @@ def procesar_archivo(file_path):
                 
                 pv = str(row['Punto de Venta']).strip().zfill(5)
                 num = str(row['Número Desde']).strip().zfill(8)
-                codigo_str = str(tipo_codigo).zfill(3)
-                numero_completo = f"{codigo_str}-{pv}-{num}"
                 
                 # Unificación de Columnas CUIT/Entidad (Soporte Multi-Formato)
                 if 'Denominación Receptor' in row.index or 'Receptor' in row.index:
@@ -96,7 +94,8 @@ def procesar_archivo(file_path):
 
                 # Diseño Híbrido: Todo el resto de la fila al meta_json mediante row_dump
                 factura_data = {
-                    "numero_completo": numero_completo,
+                    "punto_venta": pv,
+                    "numero_comprobante": num,
                     "tipo_operacion": tipo_operacion,
                     "tipo_comprobante": tipo_nombre,
                     "proveedor": denom_entity,

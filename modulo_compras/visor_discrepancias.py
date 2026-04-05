@@ -17,7 +17,7 @@ def check_discrepancias():
         print(f"Detectadas {len(facturas_pendientes)} facturas pendientes de conciliar con el contador:")
         print("-" * 60)
         for row in facturas_pendientes:
-            print(f"[-] {row['fecha']} | {row['numero_completo']} | {row['proveedor'][:20]:<20} | ${row['total']:>10,.2f} | {row['origen']}")
+            print(f"[-] {row['fecha']} | {row['numero_comprobante']} | {row['proveedor'][:20]:<20} | ${row['total']:>10,.2f} | {row['origen']}")
 
 if __name__ == "__main__":
     check_discrepancias()

@@ -19,7 +19,8 @@ Si un campo representa el mismo concepto financiero o temporal, debe llamarse **
 | Concepto | Nombre de Columna Único | Notas |
 | :--- | :--- | :--- |
 | **Fechas** | `fecha`, `fecha_emision`, `fecha_vencimiento` | No usar prefijos por tabla. |
-| **Identificadores** | `cuit`, `numero_comprobante` | `cuit` es universal para clientes/proveedores. |
+| **Pto. Venta** | `punto_venta` | Obligatorio TEXT de 5 ceros a izq (zfill 5). |
+| **Identificadores** | `cuit`, `numero_comprobante` | `cuit` universal. `numero_comprobante` obligatorio TEXT de 8 ceros a izq. |
 | **Dinero (Neto)** | `neto` | El monto imponible base. |
 | **IVA 21%** | `iva21` | Sin puntos ni prefijos tipo '21iva'. |
 | **IVA 10.5%** | `iva105` | Estandarizado. |

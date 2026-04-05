@@ -16,7 +16,8 @@ from . import storage_compras as storage
 
 # Guardar factura con volcado de fila completo (Diseño Híbrido)
 storage.save_factura({
-    "numero_completo": "001-00005-00007365",
+    "punto_venta": "00005",
+    "numero_comprobante": "00007365",
     "proveedor": "TELECOM SA",
     "monto_total": 45000.00,
     "meta_json": row.to_dict()  # Metadata cruda JSON (Estándar v4.5)
@@ -35,7 +36,7 @@ storage.save_factura({
 
 ## 🧱 Tablas Clave
 - `facturas`: Tabla maestra digitalizada. 
-- **Idempotencia**: `UNIQUE(cuit_proveedor, punto_venta, numero_completo, tipo_comprobante)` + `INSERT OR IGNORE`.
+- **Idempotencia**: `UNIQUE(cuit_proveedor, punto_venta, numero_comprobante, tipo_comprobante)` + `INSERT OR IGNORE`.
 
 ---
 

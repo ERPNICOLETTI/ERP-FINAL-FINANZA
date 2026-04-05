@@ -49,7 +49,7 @@ def sync():
         # Filtramos la que más sentido tenga
         factura_match = None
         for f in match_facturas:
-            if num_clean in f['numero_completo']:
+            if num_clean in f['numero_comprobante']:
                 factura_match = f
                 break
 
@@ -73,7 +73,8 @@ def sync():
             
             # Crear la huérfana directo en BD sin SQL
             data_huerfana = {
-                "numero_completo": f"000-00000-{num_clean.zfill(8)}",
+                "punto_venta": "00000",
+                "numero_comprobante": num_clean.zfill(8),
                 "tipo_operacion": "COMPRA",
                 "tipo_comprobante": "HUERFANA",
                 "proveedor": provider_guess,

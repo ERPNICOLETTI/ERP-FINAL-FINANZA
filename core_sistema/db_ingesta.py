@@ -84,7 +84,7 @@ def update_search_index():
             INSERT INTO search_index(source, record_id, nombre, monto, fecha, extra, metadata_texto)
 
             SELECT 'Factura', id,
-                   COALESCE(numero_completo, '') || ' ' || COALESCE(proveedor, ''),
+                   COALESCE(punto_venta, '') || '-' || COALESCE(numero_comprobante, '') || ' ' || COALESCE(proveedor, ''),
                    monto_total, fecha,
                    COALESCE(tipo_comprobante, '') || ' CUIT:' || COALESCE(cuit_proveedor, ''),
                    COALESCE(metadata_cruda, '')

@@ -62,17 +62,14 @@ def procesar_archivo(file_path):
                 total = parse_money(row.get('Total'))
                 tipo_nombre = str(row['Tipo']).strip()
                 
-                # Formatear el número (Código-PV-Número)
-                tipo_codigo = CALIM_TO_AFIP_CODIGO.get(tipo_nombre, 0)
-                codigo_str = str(tipo_codigo).zfill(3)
                 num_parts = str(row['Numero']).split('-')
-                pv = num_parts[0].strip().zfill(pv_len := 5) if len(num_parts) == 2 else "00000"
+                pv = num_parts[0].strip().zfill(5) if len(num_parts) == 2 else "00000"
                 n = num_parts[1].strip().zfill(8) if len(num_parts) == 2 else str(row['Numero']).strip().zfill(8)
-                numero_completo = f"{codigo_str}-{pv}-{n}"
                 
                 # Diseño Híbrido: Empaquetar fila completa en meta_json via row_dump
                 factura_data = {
-                    "numero_completo": numero_completo,
+                    "punto_venta": pv,
+                    "numero_comprobante": n,
                     "tipo_operacion": 'COMPRA' if 'Compra' in os.path.basename(file_path) else 'VENTA',
                     "tipo_comprobante": tipo_nombre,
                     "proveedor": str(row['Proveedor']).strip(),

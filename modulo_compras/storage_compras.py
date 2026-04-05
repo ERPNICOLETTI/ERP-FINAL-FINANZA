@@ -41,7 +41,7 @@ def init_db_compras():
             fecha           TEXT,
             tipo_comprobante TEXT,
             punto_venta     TEXT,
-            numero_completo TEXT,
+            numero_comprobante TEXT,
             cuit_proveedor  TEXT,
             proveedor       TEXT,
             neto            REAL DEFAULT 0,
@@ -61,7 +61,7 @@ def init_db_compras():
             origen          TEXT DEFAULT 'MANUAL',
             meta_json       TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(cuit_proveedor, punto_venta, numero_completo, tipo_comprobante)
+            UNIQUE(cuit_proveedor, punto_venta, numero_comprobante, tipo_comprobante)
         )
     ''')
 
@@ -108,7 +108,7 @@ def save_factura(f: dict):
     conn = get_db_connection()
     try:
         columnas_duras = {
-            'fecha', 'tipo_comprobante', 'punto_venta', 'numero_completo',
+            'fecha', 'tipo_comprobante', 'punto_venta', 'numero_comprobante',
             'cuit_proveedor', 'proveedor', 'neto', 'iva21', 'iva105',
             'iva27', 'exento', 'percepcion_iva', 'imp_internos', 'total', 
             'moneda', 'tipo_operacion', 'status', 'tiene_foto', 
@@ -118,7 +118,7 @@ def save_factura(f: dict):
 
         cursor = conn.execute('''
             INSERT OR IGNORE INTO facturas (
-                fecha, tipo_comprobante, punto_venta, numero_completo,
+                fecha, tipo_comprobante, punto_venta, numero_comprobante,
                 cuit_proveedor, proveedor, neto, iva21, iva105,
                 iva27, exento, percepcion_iva, imp_internos, total, moneda,
                 tipo_operacion, status, tiene_foto, path_archivo, hash_archivo, origen, 
@@ -126,7 +126,7 @@ def save_factura(f: dict):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             f.get('fecha'), f.get('tipo_comprobante'), f.get('punto_venta'),
-            f.get('numero_completo'), f.get('cuit_proveedor'), f.get('proveedor'),
+            f.get('numero_comprobante'), f.get('cuit_proveedor'), f.get('proveedor'),
             f.get('neto', 0), f.get('iva21', 0), f.get('iva105', 0),
             f.get('iva27', 0), f.get('exento', 0), f.get('percepcion_iva', 0), 
             f.get('imp_internos', 0), f.get('total', 0), f.get('moneda', 'ARS'),
@@ -140,8 +140,8 @@ def save_factura(f: dict):
         if last_id == 0 or last_id is None:
             res = conn.execute('''
                 SELECT id FROM facturas 
-                WHERE cuit_proveedor = ? AND punto_venta = ? AND numero_completo = ? AND tipo_comprobante = ?
-            ''', (f.get('cuit_proveedor'), f.get('punto_venta'), f.get('numero_completo'), f.get('tipo_comprobante'))).fetchone()
+                WHERE cuit_proveedor = ? AND punto_venta = ? AND numero_comprobante = ? AND tipo_comprobante = ?
+            ''', (f.get('cuit_proveedor'), f.get('punto_venta'), f.get('numero_comprobante'), f.get('tipo_comprobante'))).fetchone()
             if res: last_id = res['id']
 
         conn.commit()
@@ -289,7 +289,7 @@ def get_reporte_discrepancias():
     conn = get_db_connection()
     try:
         rows = conn.execute('''
-            SELECT id, numero_completo, proveedor, fecha, total, origen, status 
+            SELECT id, numero_comprobante, proveedor, fecha, total, origen, status 
             FROM facturas 
             WHERE tipo_operacion = 'COMPRA' AND status = 'SOLO_AFIP'
             ORDER BY fecha DESC
@@ -304,7 +304,7 @@ def get_facturas_sin_archivo():
     conn = get_db_connection()
     try:
         rows = conn.execute('''
-            SELECT id, numero_completo, proveedor, fecha, total, origen 
+            SELECT id, numero_comprobante, proveedor, fecha, total, origen 
             FROM facturas 
             WHERE tiene_foto = 0 OR path_archivo IS NULL
             ORDER BY fecha DESC
@@ -346,7 +346,7 @@ def buscar_facturas(termino):
     q = f"%{termino}%"
     rows = cur.execute("""
         SELECT * FROM facturas 
-        WHERE numero_completo LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?
+        WHERE numero_comprobante LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?
         ORDER BY fecha DESC LIMIT 20
     """, (q, q, q)).fetchall()
     conn.close()
