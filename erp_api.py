@@ -127,9 +127,9 @@ async def get_sueldos_bancarios(anio: str = "2026"):
     return storage_bancos.get_sueldos(anio)
 
 @app.get("/api/facturas")
-async def list_facturas():
-    """Listado total de facturas para la Bóveda de Compras."""
-    return storage.get_all_facturas()
+async def list_facturas(anio: str = None, mes: str = None):
+    """Listado de facturas con soporte para selección cronológica (Modo ML)."""
+    return storage.get_all_facturas(anio, mes)
 
 @app.post("/api/facturas/update/{fid}")
 async def update_factura(fid: int, req: FacturaUpdate):
@@ -139,35 +139,66 @@ async def update_factura(fid: int, req: FacturaUpdate):
     success = storage.update_factura_fields(fid, fields)
     return {"status": "success" if success else "error"}
 
+@app.get("/api/compras/search")
+async def search_compras_match(q: str):
+    """Búsqueda elástica para feedback atómico (v4.8)."""
+    if not q or len(q) < 3: return {"status": "too_short"}
+    results = storage.smart_search_invoice(q)
+    return {"results": results}
+
 @app.post("/api/compras/vincular")
 async def vincular_archivo_factura(id_factura: int = Query(...), file: UploadFile = File(...)):
     """Vincula físicamente un archivo a una factura existente en DB."""
     try:
         # 1. Obtener datos de la factura para jerarquía
-        conn = storage.get_db_connection()
-        f = conn.execute("SELECT fecha, proveedor FROM facturas WHERE id = ?", (id_factura,)).fetchone()
-        conn.close()
+        # 1. Recuperar datos de la factura para carpetas CUIT
+        f_data = storage.get_factura_by_id(id_factura)
+        if not f_data: return {"status": "error", "message": "Factura no encontrada"}
         
-        if not f: return {"status": "error", "message": "Factura no encontrada"}
+        cuit = f_data.get('cuit_proveedor', '00000000000')
+        proveedor = f_data.get('proveedor', 'DESCONOCIDO')
+        fecha = f_data.get('fecha', '2026-01-01')
+        pv = f_data.get('punto_venta', '00000')
+        num = f_data.get('numero_comprobante', '00000000')
         
-        # 2. Guardar temporalmente en crudos para que archiver_service haga su magia
-        temp_dir = os.path.join(WORKSPACE, "modulo_compras", "crudos_compras")
+        # 2. Guardar temporalmente
+        temp_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
         os.makedirs(temp_dir, exist_ok=True)
-        temp_path = os.path.join(temp_dir, file.filename)
+        
+        # Sanitizar extensión
+        _, ext = os.path.splitext(file.filename)
+        temp_path = os.path.join(temp_dir, f"temp_upload_{id_factura}{ext}")
         
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 3. Invocar Archivador Legal (Ley de Localía v4.6)
-        # archivar_documento usa: filepath, modulo, anio, mes, entidad
-        fecha = f['fecha'] # YYYY-MM-DD
+        # 3. Invocar Archivador Nominal (v4.8)
+        entidad_vault = f"{cuit} - {proveedor}"
         final_path = archiver_service.archivar_documento(
             temp_path, 
             "compras", 
             fecha[:4], 
             fecha[5:7], 
-            f['proveedor']
+            entidad_vault,
+            use_vault=True,
+            overwrite=True
         )
+
+        # 4. Renombrado Nominal: Fecha_Proveedor_Factura_PV-NUM
+        if final_path and os.path.exists(final_path):
+            # Sanitizar nombre de proveedor para evitar caracteres ilegales en Windows
+            prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
+            target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
+            
+            final_dir = os.path.dirname(final_path)
+            new_final_path = os.path.join(final_dir, target_name)
+            
+            if os.path.exists(new_final_path): os.remove(new_final_path)
+            os.rename(final_path, new_final_path)
+            final_path = new_final_path
+            
+        # El archivo temporal temp_path ya fue MOVIDO/ELIMINADO por archiver_service.archivar_documento
+        # (shutil.move se encarga de la limpieza de origen)
         
         if final_path:
             # Calcular ruta relativa para el servidor estático
@@ -175,12 +206,16 @@ async def vincular_archivo_factura(id_factura: int = Query(...), file: UploadFil
             base_archive = os.path.join(WORKSPACE, "modulo_compras", "archivos_compras")
             rel_path = os.path.relpath(final_path, base_archive)
             
-            # 4. Actualizar base de datos via storage
-            storage.update_record_path(id_factura, rel_path, "facturas")
+            # 4. Actualizar estado y sello
+            storage.update_factura_fields(id_factura, {
+                "path_archivo": rel_path,
+                "tiene_foto": 1,
+                "status": "ARCHIVADO"
+            })
             
             return {
                 "status": "success", 
-                "message": "Vinculación legal exitosa",
+                "message": "Archivo vinculado y archivado por CUIT",
                 "rel_path": rel_path
             }
         

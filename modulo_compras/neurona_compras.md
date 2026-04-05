@@ -1,7 +1,7 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
-# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
+# Versión 4.8.0 - Ecosistema Unificado y Match Atómico
 
-Esta neurona gestiona el **ciclo de vida fiscal** de los comprobantes y su conciliación contable.
+Esta neurona gestiona el **Ecosistema de Compras**, unificado en una sola terminal de asalto visual y rápido, encargada de la conciliación fiscal y archivado permanente.
 
 ---
 
@@ -26,14 +26,24 @@ storage.save_factura({
 
 ---
 
-## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
-1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
-    - `inbox_compras/`: Puerta de entrada (API/UI). El Orquestador escanea aquí.
-    - `crudos_compras/` (Histórico): Los reportes (CSV/Excel) se mueven aquí tras la ingesta exitosa.
-    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox sin ensuciar la zona histórica.
-    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió, eliminando ruidos visuales.
-2.  **Vinculación Visual (Bóveda)**: Se sube una evidencia individual (PDF/Foto) desde el Sidebar.
-3.  **Archivos de Bóveda**: Se almacenan en `/modulo_compras/archivos_compras/` (Reservado para evidencias manuales).
+## 🛰️ Ecosistema de Ingesta Unificado (v4.8.0)
+El módulo ha evolucionado hacia un diseño de una sola pantalla potente y minimalista:
+
+### 1. Match Atómico Inteligente 🔍
+El formulario de la bóveda cuenta con un **único input** para el número de factura. 
+La función `smart_search_invoice()` en `storage_compras.py` realiza búsquedas elásticas eliminando ceros y guiones en tiempo real. Cuando hay coincidencia, el sistema arroja metadatos completos y origen (AFIP/CALIM).
+
+### 2. Flujo de Ingesta a Bóveda (3 Pasos)
+1. **Drop & Zoom (UI)**: Se suelta el PDF/Imagen directamente en el panel. Se permite Zoom libre mediante scroll y paneo con drag en el área de visualización.
+2. **Match (UI/DB)**: Se busca el comprobante y se relaciona automágicamente.
+3. **Archivado Nominal y Limpieza de Origen**:
+    Al confirmar, la API:
+    - **Renombra** la evidencia siguiendo el estricto formato: `YYYY-MM-DD_NombreProveedor_Factura_PV-NUM.pdf` (Ej: `2026-04-05_FARMACITY_Factura_0001-00000123.pdf`).
+    - **Archiva** en la bóveda sagrada `/modulo_compras/archivos_compras/[CUIT] - [Proveedor]/[Año]/[Mes]/`.
+    - **Limpia** (elimina/mueve) el archivo original que estaba temporalmente en la carpeta `inbox_compras`. (Limpieza atómica sin registros huérfanos).
+
+### 3. Filtros Cronológicos ML-Style
+La bóveda listando las facturas ya procesadas filtra masivamente la base de datos usando `anio` y `mes`.
 
 ---
 

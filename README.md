@@ -1,17 +1,21 @@
-# CEREBRO ERP FINAL - Versión 4.6.2 (Consolidación)
-# Sistema de Ingesta Inteligente
+# CEREBRO ERP FINAL - Versión 4.8.0 (Ecosistema Unificado)
+# Sistema de Ingesta Inteligente y Bóveda Nominal
 
 Bienvenido al repositorio central de **ERP Final**. Este sistema utiliza una arquitectura de **Monolito Modular (Vertical Slicing)** con un motor de **Ingesta Híbrida** (Relacional + JSON) y cumplimiento legal automatizado.
 
 ---
 
-## 🏛️ El Flujo de "Zelosa Custodia" v4.6.2
+## 🏛️ Ecosistema Unificado y Flujo Atómico (v4.8.0)
 
-1.  **Recepción (Inbox)**: Puerta única de entrada.
-2.  **Histórico (Crudos)**: Archivo inmutable de reportes masivos (AFIP, CALIM, Bancos).
-    - **Política de Hash Único**: Los duplicados se eliminan del inbox para mantener el histórico limpio.
-    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre coincide pero el contenido cambió.
-3.  **Bóveda (Archivos)**: Reservada para la verdad física (PDFs, Fotos) vinculada manualmente.
+1.  **Terminal de Ingesta (Split-Screen)**: Interfaz única con Visor HD integrado. Soporta *Drop* de PDFs/Imágenes, Zoom por rueda de ratón (Mousewheel) y Paneo (Drag-to-Pan).
+2.  **Match Atómico Inteligente**:
+    - Un input único para la vinculación. Al escribir el número de factura, el sistema busca de forma elástica eliminando guiones y ceros.
+    - Devuelve instantáneamente el "Match" indicando orígenes (AFIP / CALIM) y los totales.
+3.  **Archivado Nominal en Bóveda**:
+    - Al vincular, se asegura la jerarquía por CUIT: `[Modulo]/archivos_[modulo]/[CUIT - Proveedor]/[Año]/[Mes]`.
+    - **Nomenclatura**: Imposición del renombrado automático: `YYYY-MM-DD_Proveedor_Factura_PV-NUM.ext`.
+4.  **Limpieza de Origen**:
+    - El comprobante cargado en la terminal es movido permanentemente a la bóveda. Desaparece de origen (`inbox`), garantizando una ingesta sin archivos huérfanos.
 
 ---
 

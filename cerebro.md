@@ -1,5 +1,5 @@
 # 🧠 Cerebro ERP - Tronco Cerebral (Índice Maestro) 🦾🏗️🧬
-# Versión 4.0 - Ingesta Autónoma y Cumplimiento Legal
+# Versión 4.8.0 - Ecosistema Unificado y Match Atómico
 
 Este documento es el **punto de entrada definitivo** para entender la arquitectura y operación del ERP. Cualquier desarrollador o IA que trabaje en este proyecto **DEBE** seguir las reglas maestras aquí descritas.
 
@@ -20,11 +20,11 @@ El sistema se organiza en dominios autónomos (Tarjetas, Compras, Bancos). Zero 
 > [!IMPORTANT]
 > **Prohibición de SQL Directo**: Ninguna "Neurona" de lógica puede importar `sqlite3`. Toda persistencia debe realizarse a través de las funciones del archivo `storage_*.py` de su propio módulo.
 
-### 📥 Flujo "Soltar e Ingerir" (Ley de Localía v4.6)
-El sistema utiliza una arquitectura de **Aislamiento Físico Total** en tres estadios por módulo:
-1.  **Entrada Visual (`inbox_[modulo]/`)**: Punto de entrada físico inicial desde la UI Frontend.
-2.  **Depósito de Tránsito (`crudos_[modulo]/`)**: Sala de espera física donde la API almacena los documentos antes de ser ingeridos por el Orquestador.
-3.  **Archivado Legal Permanente (`archivos_[modulo]/`)**: Bóveda final, recluida internamente en el módulo. Jerarquía obligatoria: `/modulo_[nombre]/archivos_[nombre]/[Entidad]/[Año]/[Mes]/`. **Queda extinto el uso de la carpeta genérica `/static/` para resguardo operativo**.
+### 📥 Ecosistema Unificado de Ingesta (v4.8.0)
+El sistema utiliza una arquitectura de **Aislamiento Físico Total** con un flujo de "Limpieza Atómica de Origen" para evidencias:
+1.  **Terminal de Ingesta (Split-Screen)**: Una única interfaz (Frontend) permite hacer Drop de PDFs/Imágenes y ofrece Zoom dinámico (Scroll/Pan) sin salir del módulo.
+2.  **Match Atómico**: El operario ingresa el número de factura en un input único. El cerebro hace una búsqueda elástica y asocia origen (AFIP/CALIM) en tiempo real.
+3.  **Archivado Legal Nominal (`archivos_[modulo]/`)**: Tras vincular, el archivo temporal se "mueve" y desaparece (Limpieza de Origen). En la bóveda sagrada `/modulo_[nombre]/archivos_[nombre]/[Entidad]/[Año]/[Mes]/` se renombra dinámicamente: `YYYY-MM-DD_Proveedor_Factura_PV-NUM.pdf`.
 
 ---
 

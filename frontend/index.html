@@ -3,118 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Central Intelligence</title>
+    <title>ERP Final - Ecosistema Compras v4.7</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1 class="glow-text">ERP <span>Central Intelligence</span></h1>
-            <p>Ingesta Híbrida v4.5 • Modo Glassmorphism</p>
+    <div class="app-wrapper">
+        <!-- CABECERA ÚNICA -->
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Compras</span></h1>
+                <p>Terminal de Gestión Unificada v4.7.0</p>
+            </div>
             
-            <div class="search-container">
-                <input type="text" id="spotlight-search" placeholder="🔍 Buscar por CUIT, nombre, monto (Búsqueda 360)..." autocomplete="off">
-                <div id="search-results" class="search-dropdown hidden"></div>
+            <div class="header-actions">
+                <button id="btn-process" class="btn-sync">⚡ Sincronizar Ecosistema ⚡</button>
+                <div id="status-message" class="mini-status"></div>
             </div>
         </header>
 
-        <div class="modules-grid">
-            <div class="dropzone-card" id="card-compras" data-modulo="compras">
-                <div class="card-header">
-                    <h2>🧾 Compras</h2>
-                    <button class="btn-entry" onclick="app.showModule('compras')">📁 Abrir Bóveda</button>
+        <main class="ecosystem-layout">
+            <!-- PANEL IZQUIERDO: INGESTA & CARGA -->
+            <aside class="ingesta-panel glass">
+                <div class="panel-header">
+                    <h3>📥 Terminal de Ingesta</h3>
+                    <p>Carga la foto y busca el número</p>
                 </div>
-                <div class="drop-area">
-                    <p>Arrastra Facturas (AFIP/CALIM)</p>
-                    <span class="file-counter">0 pendientes</span>
-                </div>
-            </div>
 
-            <div class="dropzone-card" id="dropzone-bancos" data-modulo="bancos">
-                <h2>🏦 Bancos</h2>
-                <div class="drop-area">
-                    <p>Arrastra Extractos (Chubut/Credicoop)</p>
-                    <span class="file-counter">0 pendientes</span>
-                </div>
-            </div>
-
-            <div class="dropzone-card" id="dropzone-tarjetas" data-modulo="tarjetas">
-                <h2>💳 Tarjetas</h2>
-                <div class="drop-area">
-                    <p>Arrastra Liqs. (Payway/Naranja)</p>
-                    <span class="file-counter">0 pendientes</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="trigger-container">
-            <button id="btn-process" class="btn-neon">⚡ Sincronizar Ecosistema ⚡</button>
-            <div id="status-message"></div>
-        </div>
-
-        <!-- VISTA MÓDULO: COMPRAS (Bóveda) -->
-        <section id="view-compras" class="module-view hidden">
-            <div class="view-header">
-                <button class="btn-back" onclick="app.showDashboard()">⬅ Volver al Dashboard</button>
-                <h2>Bóveda de Gestión de Compras</h2>
-            </div>
-            
-            <div class="filter-pills">
-                <button class="pill active" data-filter="all">Todas (<span id="count-all">0</span>)</button>
-                <button class="pill pending" data-filter="pending">Pendientes 🔴 (<span id="count-pending">0</span>)</button>
-                <button class="pill completed" data-filter="completed">Listas 🟢 (<span id="count-completed">0</span>)</button>
-            </div>
-
-            <div class="table-container glass">
-                <table id="table-compras">
-                    <thead>
-                        <tr>
-                            <th>Estado</th>
-                            <th>Fecha</th>
-                            <th>Proveedor</th>
-                            <th>Comprobante</th>
-                            <th>Monto</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-compras">
-                        <!-- Se llena vía JS -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- SIDEBAR DE VINCULACIÓN -->
-        <div id="sidebar-vincular" class="sidebar hidden">
-            <div class="sidebar-content glass">
-                <button class="btn-close" onclick="app.closeSidebar()">×</button>
-                <h3>Detalle del Comprobante</h3>
-                <div id="sidebar-details">
-                    <!-- Se llena vía JS -->
-                </div>
-                
-                <hr>
-                
-                <div class="correction-zone">
-                    <label>Ajuste de Comprobante:</label>
-                    <div class="row">
-                        <input type="text" id="edit-pv" placeholder="P.V. (5 dígitos)">
-                        <input type="text" id="edit-num" placeholder="Número (8 dígitos)">
+                <div id="drop-zone" class="dropzone-preview">
+                    <div id="sidebar-preview" class="preview-content">
+                        <p class="preview-placeholder">📁 Arrastrar PDF o Foto aquí</p>
                     </div>
-                    <button id="btn-save-fields" class="btn-small">💾 Guardar Cambios</button>
+                    <input type="file" id="file-input" hidden accept="image/*,application/pdf">
                 </div>
 
-                <div class="dropzone-sidebar" id="dropzone-sidebar">
-                    <p>Arrastra la Foto o PDF aquí para vincular físicamente</p>
-                    <input type="file" id="file-vincular" class="hidden">
+                <div class="ingesta-form">
+                    <div class="form-group">
+                        <input type="text" id="edit-full-number" class="big-input" placeholder="⌨️ Nro. Factura (Ej: 1234)" autocomplete="off">
+                    </div>
+
+                    <!-- Display de Match Atómico -->
+                    <div id="match-card" class="match-card hidden">
+                        <div class="match-header">
+                            <span id="match-origen" class="badge">AFIP</span>
+                            <span id="match-fecha">2026-04-05</span>
+                        </div>
+                        <div id="match-details" class="match-details">
+                            Match encontrado para este número.
+                        </div>
+                    </div>
+                    
+                    <div id="sidebar-status" class="status-msg"></div>
+                    <button id="btn-confirmar" class="btn-primary-main" onclick="app.confirmarVinculacion()">Archivar en Bóveda 💾</button>
                 </div>
-                
-                <div id="sidebar-status"></div>
-            </div>
-        </div>
+            </aside>
+
+            <!-- PANEL CENTRAL: BÓVEDA & LISTADO -->
+            <section class="boveda-panel">
+                <div class="boveda-header">
+                    <div class="search-pro">
+                        <input type="text" id="pro-search" placeholder="🔍 Buscar por proveedor, CUIT o número...">
+                    </div>
+                    
+                    <div class="cron-filters">
+                        <select id="filter-anio">
+                            <option value="2026">Año 2026</option>
+                            <option value="2025">Año 2025</option>
+                        </select>
+                        <select id="filter-mes">
+                            <option value="">Todos los Meses</option>
+                            <option value="01">Enero</option>
+                            <option value="02">Febrero</option>
+                            <option value="03">Marzo</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Mayo</option>
+                            <option value="06">Junio</option>
+                            <option value="07">Julio</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Sep.</option>
+                            <option value="10">Oct.</option>
+                            <option value="11">Nov.</option>
+                            <option value="12">Dic.</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="status-pills">
+                    <button class="pill active" data-filter="all">Todas (<span id="count-all">0</span>)</button>
+                    <button class="pill pending" data-filter="pending">Pendientes 🔴 (<span id="count-pending">0</span>)</button>
+                    <button class="pill completed" data-filter="completed">Archivadas 🟢 (<span id="count-completed">0</span>)</button>
+                </div>
+
+                <div class="table-container-final glass">
+                    <table id="table-compras-final">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Fecha</th>
+                                <th>Proveedor</th>
+                                <th>Comprobante</th>
+                                <th>Monto</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-compras">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     </div>
-    
+
     <script src="app.js"></script>
 </body>
 </html>

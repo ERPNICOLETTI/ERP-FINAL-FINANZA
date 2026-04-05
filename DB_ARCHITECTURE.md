@@ -1,5 +1,5 @@
 # 🗄️ Arquitectura de Base de Datos - ERP FINAL (Modular DDD) 🏗️🧱🧠
-# Versión 4.5 - MANDAMIENTOS UNIVERSALES ⚖️💎
+# Versión 4.8.0 - MANDAMIENTOS UNIVERSALES ⚖️💎
 
 Este documento es la autoridad central para todas las bases de datos del ERP. Todo módulo presente y futuro **DEBE** obedecer estas reglas innegociables.
 
@@ -55,7 +55,7 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 
 ---
 
-## 🏛️ Trazabilidad Física
-- `path_archivo`: Ubicación física inmutable en `archivos_[modulo]/`.
+## 🏛️ Trazabilidad Física y Archivado Nominal (v4.8.0)
+- `path_archivo`: Ubicación física inmutable en `archivos_[modulo]/`. Para el caso de *Compras*, se fuerza una estructura CUIT nominal: `[CUIT - Entidad]/[Año]/[Mes]/[Fecha]_[Nombre]_Factura_[PV-NUM].ext`.
 - `hash_archivo`: Vínculo lógico con la ingesta.
-- `tiene_foto`: Booleano para vincular evidencias físicas.
+- `tiene_foto`: Booleano vital para el semáforo (Rojo/Verde) de vinculación de evidencias físicas.

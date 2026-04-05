@@ -269,18 +269,30 @@ def save_libro_iva(data: dict):
         conn.close()
 
 
-def get_all_facturas():
-    """Retorna todas las facturas de compras registradas."""
+def get_all_facturas(anio=None, mes=None):
+    """Retorna facturas de compras con soporte de filtrado cronológico v4.7."""
     conn = get_db_connection()
     try:
-        rows = conn.execute('''
+        query = '''
             SELECT id, fecha, tipo_comprobante, punto_venta, numero_comprobante, 
                    proveedor, cuit_proveedor, neto, iva21, total, status, 
                    tiene_foto, path_archivo, origen, meta_json
             FROM facturas 
             WHERE tipo_operacion = 'COMPRA'
-            ORDER BY fecha DESC
-        ''').fetchall()
+        '''
+        params = []
+        
+        if anio and mes:
+            # Formato YYYY-MM
+            query += " AND (fecha LIKE ?)"
+            params.append(f"{anio}-{mes}%")
+        elif anio:
+            query += " AND (fecha LIKE ?)"
+            params.append(f"{anio}%")
+
+        query += " ORDER BY fecha DESC"
+        
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -341,6 +353,42 @@ def update_factura_status(factura_id, status_nuevo):
         conn.commit()
     except Exception as e:
         logger.warning(f"Error actualizando status en factura {factura_id}: {e}")
+    finally:
+        conn.close()
+
+
+def get_factura_by_id(factura_id):
+    """Retorna una factura completa por su ID."""
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM facturas WHERE id = ?", (factura_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def smart_search_invoice(query):
+    """Busca facturas por coincidencia parcial en el número (AFIP/CALIM) v4.8."""
+    conn = get_db_connection()
+    try:
+        # Limpiar query: quitar guiones y ceros iniciales para búsqueda elástica
+        clean_q = query.strip().replace('-', '').lstrip('0')
+        if not clean_q: return []
+        
+        search_pattern = f"%{clean_q}"
+        
+        rows = conn.execute("""
+            SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
+            FROM facturas 
+            WHERE tipo_operacion = 'COMPRA' 
+              AND (
+                  numero_comprobante LIKE ? OR 
+                  (punto_venta || numero_comprobante) LIKE ? OR
+                  (CAST(CAST(numero_comprobante AS INTEGER) AS TEXT)) LIKE ?
+              )
+            ORDER BY fecha DESC LIMIT 5
+        """, (search_pattern, search_pattern, search_pattern)).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 
