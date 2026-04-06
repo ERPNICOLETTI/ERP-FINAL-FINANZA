@@ -2,9 +2,23 @@ import sqlite3
 import json
 import os
 import logging
+import re
 
 # STORAGE COMPRAS - v4.5 GOLDEN MASTER 🧾🧱🧠⚖️
 # Diseño Híbrido: Columnas Duras + meta_json (JSON) + path_archivo
+
+def sanitize_path_db(path):
+    """Leyes de la Bóveda v5.2: Normalización universal y limpieza de ruido binario."""
+    if not path: return None
+    # 1. Normalización total a diagonales web (/)
+    p = str(path).replace('\\', '/')
+    # 2. Eliminación de caracteres no imprimibles o ruido binario (como nulos \0)
+    p = "".join([c for c in p if 31 < ord(c) < 127 or ord(c) > 160])
+    # 3. Quitar duplicación de barras y espacios extra
+    p = re.sub(r'/+', '/', p)
+    # 4. Asegurar que las rutas absolutas de Windows retengan su formato C:/
+    p = p.replace(':/', '://').replace('://', ':/')
+    return p.strip()
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +129,9 @@ def save_factura(f: dict):
             'path_archivo', 'hash_archivo', 'origen'
         }
         metadata = {k: v for k, v in f.items() if k not in columnas_duras}
+        
+        # Sanitizar ruta
+        path_limpio = sanitize_path_db(f.get('path_archivo'))
 
         cursor = conn.execute('''
             INSERT OR IGNORE INTO facturas (
@@ -131,7 +148,7 @@ def save_factura(f: dict):
             f.get('iva27', 0), f.get('exento', 0), f.get('percepcion_iva', 0), 
             f.get('imp_internos', 0), f.get('total', 0), f.get('moneda', 'ARS'),
             f.get('tipo_operacion', 'COMPRA'), f.get('status', 'SOLO_AFIP'),
-            f.get('tiene_foto', 0), f.get('path_archivo'), f.get('hash_archivo'), f.get('origen', 'MANUAL'),
+            f.get('tiene_foto', 0), path_limpio, f.get('hash_archivo'), f.get('origen', 'MANUAL'),
             json.dumps(metadata, ensure_ascii=False, default=str)
         ))
         
