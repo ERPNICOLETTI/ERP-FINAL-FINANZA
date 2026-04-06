@@ -33,7 +33,8 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
         raise FileNotFoundError(f"No se encontró el archivo de origen: {filepath_origen}")
 
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    entidad_clean = re.sub(r'[^\w\s-]', '_', entidad).strip().upper()
+    # Sanitización v5.1: Permitimos puntos (.) porque son legales en Windows y evitan 404s
+    entidad_clean = re.sub(r'[^\w\s.-]', '_', entidad).strip().upper()
     
     # Seleccionar carpeta destino según propósito (Bóveda o Histórico)
     subfolder = f'archivos_{modulo.lower()}' if use_vault else f'crudos_{modulo.lower()}'

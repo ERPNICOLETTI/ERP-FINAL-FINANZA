@@ -413,8 +413,9 @@ const app = {
 
         tbody.innerHTML = filtered.map(f => {
             const statusClass = f.tiene_foto ? 'green' : 'red';
-            const pv = String(f.punto_venta || '').padStart(5, '0');
-            const num = String(f.numero_comprobante || '').padStart(8, '0');
+            // Removiendo ceros a la izquierda para vista compacta v4.9
+            const pv = String(f.punto_venta || '').replace(/^0+/, '') || '0';
+            const num = String(f.numero_comprobante || '').replace(/^0+/, '') || '0';
 
             return `
                 <tr onclick="app.loadToIngesta(${f.id})">
@@ -425,8 +426,11 @@ const app = {
                     <td>$ ${Number(f.total).toLocaleString()}</td>
                     <td>
                         ${f.path_archivo ? `
-                            <button class="btn-sync" style="padding: 5px 10px; font-size: 0.7rem;" 
-                                    onclick="event.stopPropagation(); app.viewFile('${f.path_archivo}', ${f.tiene_foto})">👁️ VER</button>
+                            <button class="btn-sync" 
+                                    style="padding: 5px 10px; font-size: 0.7rem; background: ${f.status === 'SALA_ESPERA' ? 'var(--warning)' : ''}; color: ${f.status === 'SALA_ESPERA' ? '#000' : ''};" 
+                                    onclick="event.stopPropagation(); app.viewFile('${f.path_archivo}', ${f.tiene_foto})">
+                                ${f.status === 'SALA_ESPERA' ? '⏳ PENDIENTE' : '👁️ VER'}
+                            </button>
                         ` : '--'}
                     </td>
                 </tr>
@@ -448,13 +452,18 @@ const app = {
 
 
     viewFile(path, tieneFoto) {
-        // tieneFoto ? Bóveda (archivos) : Histórico (crudos)
-        // Link Inteligente v4.9: Recorta la ruta absoluta de Windows para que el navegador no se pierda.
-        const cleanPath = path.split('archivos_compras/').pop().split('archivos_compras\\').pop()
-                             .split('crudos_compras/').pop().split('crudos_compras\\').pop();
+        // Link de Acero v5.0: Forzamos limpieza total de rutas de Windows
+        let p = path.replace(/\\/g, '/'); // Normalizar barras
+        
+        // Detectar el punto de corte (Bóveda o Crudos)
+        if (p.includes('archivos_compras/')) {
+            p = p.split('archivos_compras/').pop();
+        } else if (p.includes('crudos_compras/')) {
+            p = p.split('crudos_compras/').pop();
+        }
                              
         const prefix = tieneFoto ? '/archivos/compras/' : '/historico/compras/';
-        window.open(`${prefix}${cleanPath}`, '_blank');
+        window.open(`${prefix}${p}`, '_blank');
     },
 
     async sincronizarEcosistema() {

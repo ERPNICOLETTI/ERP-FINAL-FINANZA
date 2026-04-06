@@ -1,5 +1,5 @@
-# CEREBRO ERP FINAL - Versión 4.8.0 (Ecosistema Unificado)
-# Sistema de Ingesta Inteligente y Bóveda Nominal
+# CEREBRO ERP FINAL - Versión 5.0.0 (Ecosistema Estable)
+# Ingesta CAE, Sala de Espera y Bóveda Anti-Corrupción
 
 Bienvenido al repositorio central de **ERP Final**. Este sistema utiliza una arquitectura de **Monolito Modular (Vertical Slicing)** con un motor de **Ingesta Híbrida** (Relacional + JSON) y cumplimiento legal automatizado.
 
@@ -7,15 +7,15 @@ Bienvenido al repositorio central de **ERP Final**. Este sistema utiliza una arq
 
 ## 🏛️ Ecosistema Unificado y Flujo Atómico (v4.8.0)
 
-1.  **Terminal de Ingesta (Split-Screen)**: Interfaz única con Visor HD integrado. Soporta *Drop* de PDFs/Imágenes, Zoom por rueda de ratón (Mousewheel) y Paneo (Drag-to-Pan).
-2.  **Match Atómico Inteligente**:
-    - Un input único para la vinculación. Al escribir el número de factura, el sistema busca de forma elástica eliminando guiones y ceros.
-    - Devuelve instantáneamente el "Match" indicando orígenes (AFIP / CALIM) y los totales.
-3.  **Archivado Nominal en Bóveda**:
-    - Al vincular, se asegura la jerarquía por CUIT: `[Modulo]/archivos_[modulo]/[CUIT - Proveedor]/[Año]/[Mes]`.
-    - **Nomenclatura**: Imposición del renombrado automático: `YYYY-MM-DD_Proveedor_Factura_PV-NUM.ext`.
-4.  **Limpieza de Origen**:
-    - El comprobante cargado en la terminal es movido permanentemente a la bóveda. Desaparece de origen (`inbox`), garantizando una ingesta sin archivos huérfanos.
+1.  **Terminal de Ingesta HD**: Interfaz única con Visor HD. Soporta *Drop*, Zoom dinámico y Paneo (Drag-to-Pan).
+2.  **Match Atómico Inteligente (AFIP/CALIM/CAE)**:
+    - Un input único para la vinculación. Soporta búsqueda elástica por número y búsqueda por **CAE** (dentro de metadatos JSON).
+    - **Sala de Espera**: Gestión de excepciones para facturas no encontradas en AFIP/CALIM (Cuarentena).
+3.  **Bóveda Jerárquica y Engrapadora Virtual**:
+    - **Engrapadora de PDFs**: Fusión automática en memoria de documentos multi-página.
+    - **Bóveda Anti-Corrupción**: Rutas normalizadas con `/` para evitar errores de escape en Windows.
+4.  **Sanitización y Limpieza**:
+    - El comprobante cargado en la terminal es movido permanentemente a la bóveda y limpiado del `inbox`.
 
 ---
 

@@ -230,17 +230,17 @@ async def vincular_archivo_factura(
             entidad_vault = f"{cuit} - PENDIENTES CALIM"
             final_path = archiver_service.archivar_documento(
                 temp_path, "compras", fecha[:4], fecha[5:7], entidad_vault, use_vault=True, overwrite=True, subcategoria="Facturas"
-            )
+            ).replace('\\', '/')
             
             if final_path and os.path.exists(final_path):
                 prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
                 target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
-                final_dir = os.path.dirname(final_path)
-                new_final_path = os.path.join(final_dir, target_name)
+                final_dir = os.path.dirname(final_path).replace('\\', '/')
+                new_final_path = f"{final_dir}/{target_name}"
                 
                 if os.path.exists(new_final_path): os.remove(new_final_path)
                 os.rename(final_path, new_final_path)
-                final_path = new_final_path
+                final_path = new_final_path.replace('\\', '/')
                 
                 # Inyección a Base de Datos como PENDIENTE
                 storage.save_factura({
@@ -289,8 +289,8 @@ async def vincular_archivo_factura(
             prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
             target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}.pdf"
             
-            final_dir = os.path.dirname(old_path)
-            new_final_path = os.path.join(final_dir, target_name)
+            final_dir = os.path.dirname(old_path).replace('\\', '/')
+            new_final_path = f"{final_dir}/{target_name}"
             
             # Fusionar ambos (el previo de la bd y el nuevo entrante)
             merge_files_to_pdf(old_path, temp_path, new_final_path)
@@ -300,7 +300,7 @@ async def vincular_archivo_factura(
             if old_path != new_final_path and os.path.exists(old_path):
                 os.remove(old_path)
                 
-            final_path = new_final_path
+            final_path = new_final_path.replace('\\', '/')
             
         else:
             # 3. Invocar Archivador Nominal Estandar (v4.8)
@@ -314,7 +314,7 @@ async def vincular_archivo_factura(
                 use_vault=True,
                 overwrite=True,
                 subcategoria="Facturas"
-            )
+            ).replace('\\', '/')
 
             # 4. Renombrado Nominal: Fecha_Proveedor_Factura_PV-NUM
             if final_path and os.path.exists(final_path):

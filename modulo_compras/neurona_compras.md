@@ -1,60 +1,51 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
-# Versión 4.9.4 - Match Atómico CAE, Jerarquía de Bóveda y Engrapadora PDF
+# Versión 5.0.0 - Ecosistema Estable: Match CAE, Sala de Espera y Bóveda Blindada
 
-Esta neurona gestiona el **Ecosistema de Compras**, unificado en una sola terminal de asalto visual y rápido, encargada de la conciliación fiscal y archivado permanente.
+Este documento es el manual de operaciones definitivo para el **Ecosistema de Compras**. Diseñado para ser portátil, rápido y a prueba de errores de codificación.
 
 ---
 
 ## 🏛️ Patrón Repositorio (Regla Inquebrantable)
 > [!CAUTION]
 > **Prohibición de SQL Directo**: Ningún archivo de este módulo (parsers o lógica) puede importar `sqlite3`.
-> Toda la persistencia debe pasar por `storage_compras.py`.
-
-### Ejemplo de Uso del Repositorio:
-```python
-from . import storage_compras as storage
-
-# Guardar factura con volcado de fila completo (Diseño Híbrido)
-storage.save_factura({
-    "punto_venta": "00005",
-    "numero_comprobante": "00007365",
-    "proveedor": "TELECOM SA",
-    "monto_total": 45000.00,
-    "meta_json": row.to_dict()  # Metadata cruda JSON (Estándar v4.5)
-})
-```
+> Toda la persistencia debe pasar por `storage_compras.py` para garantizar la integridad de los metadatos JSON.
 
 ---
 
-## 🛰️ Ecosistema de Ingesta Unificado (v4.8.0)
-El módulo ha evolucionado hacia un diseño de una sola pantalla potente y minimalista:
+## 🛰️ Ecosistema de Ingesta Unificado (v5.0)
 
-### 1. Match Atómico Inteligente con Búsqueda CAE 🔍
-El formulario de la bóveda cuenta con un **único input** para búsqueda omnidireccional. 
-La función `smart_search_invoice()` en `storage_compras.py` realiza búsquedas elásticas eliminando ceros y guiones en tiempo real. Adicionalmente de buscar por número, busca en texto libre dentro del campo `meta_json`, permitiendo al usuario rutear comprobantes largos simplemente ingresando el número de **metadato CAE**. Cuando hay coincidencia, el sistema arroja metadatos completos y origen (AFIP/CALIM).
+### 1. Match Atómico Inteligente (Búsqueda 360) 🔍
+- **Input Único**: El formulario usa un solo buscador inteligente.
+- **Detección CAE**: Si se ingresa el número de CAE, el sistema busca dentro del `meta_json` (AFIP/CALIM) y lo asocia instantáneamente al archivo.
+- **Limpieza de Ceros**: El sistema ignora ceros a la izquierda y guiones para que el match sea siempre exitoso.
 
-### 2. Flujo de Ingesta a Bóveda (3 Pasos)
-1. **Drop & Zoom (UI)**: Se suelta el PDF/Imagen directamente en el panel. Se permite Zoom libre mediante scroll y paneo con drag en el área de visualización.
-2. **Match (UI/DB)**: Se busca el comprobante y se relaciona automágicamente.
-3. **Archivado Nominal, Sub-Capas y Engrapadora Virtual PDF**:
-    Al confirmar, el Motor Orquestador de la API:
-    - **Renombra** la evidencia siguiendo el estricto formato: `YYYY-MM-DD_[Proveedor]_Factura_PV-NUM.pdf`.
-    - **Archiva en Bóveda Jerárquica**: Envía el archivo a la bóveda sagrada añadiendo la etiqueta a la subcategoría Facturas: `/modulo_compras/archivos_compras/Facturas/[CUIT] - [Proveedor]/[Año]/[Mes]/`. Evita colocar "NONE" en CUITs ausentes.
-    - **Engrapadora Virtual PDF**: Si la factura ya tenía un documento asociado (tiene_foto = 1), el motor ensamblará un Buffer en memoria RAM utilizando PyPDF2 y Pillow para armar un PDF en tiempo real concatenándolo con la nueva imagen, sobreescribiendo una versión multi-hoja.
-    - **Limpia** el archivo entrante del `inbox_compras` de origen.
+### 2. Flujo de Ingesta (El "Mazo de Cartas")
+1. **Drop & HD Visor**: Se suelta el archivo en el panel. El visor permite Zoom dinámico y Paneo (arrastrar con mouse) para leer tickets pequeños.
+2. **Match o Sala de Espera**:
+   - **Match**: Si existe en la base, se vincula y archiva.
+   - **Sala de Espera (Cuarentena CALIM)**: Si el ticket no es encontrado (no está en AFIP ni CALIM), se usa el botón **"Archivar como Pendiente CALIM"**. 
+   - El archivo se mueve a la carpeta `00000000000 - PENDIENTES CALIM` y el registro queda marcado en **AMARILLO** con el texto **⏳ PENDIENTE**.
 
-### 3. Filtros Cronológicos ML-Style
-La bóveda listando las facturas ya procesadas filtra masivamente la base de datos usando `anio` y `mes`.
-
----
-
-## 🧱 Tablas Clave
-- `facturas`: Tabla maestra digitalizada. 
-- **Idempotencia**: `UNIQUE(cuit_proveedor, punto_venta, numero_comprobante, tipo_comprobante)` + `INSERT OR IGNORE`.
+### 3. Archivador Nominal y Engrapadora Virtual 📎
+Al confirmar, el Motor Orquestador (`archiver_service.py`):
+- **Normalización de Slashes**: Todas las rutas se guardan con diagonales frontales (`/`) para evitar errores de escape en Windows.
+- **Engrapadora PDF**: Si la factura ya tenía una foto, el sistema **las fusiona en un solo PDF multi-página** en tiempo real.
+- **Bóveda Jerárquica**: `/modulo_compras/archivos_compras/Facturas/[CUIT] - [PROVEEDOR]/[YYYY]/[MM]/`.
+- **Rutas a Prueba de Balas**: Se permiten puntos (`.`) en nombres de proveedores para evitar 404s en la visualización.
 
 ---
 
-## 🛠️ Comandos y Herramientas
-- `resumen [anio]`: Análisis de IVA Ventas vs IVA Compras.
-- `buscar <termino>`: Búsqueda 360 vía FTS5 (indexa metadata JSON).
-- `procesar_archivo(path)`: Firma estándar para el orquestador.
+## 👁️ Visor de Bóveda (UX)
+- **Cero Zeros**: La tabla muestra números de factura compactos (ej: `3-839` en vez de `00003-00000839`).
+- **No-Wrap**: Las fechas y números nunca se cortan en dos líneas.
+- **Link Inteligente**: El botón "VER" es capaz de recortar rutas absolutas de Windows para abrir el PDF sin importar dónde esté instalado el ERP.
+
+---
+
+## 🛠️ Herramientas de Mantenimiento
+- `sync_dots.py`: (Uso interno) Sincroniza nombres de carpetas físicas con la base de datos.
+- `sanar_db.py`: (Uso interno) Repara rutas corruptas por codificaciones viejas.
+- `storage.smart_search_invoice(q)`: El corazón de la búsqueda elástica.
+
+---
+*Documentación actualizada para v5.0.0 - 05/04/2026*

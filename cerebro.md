@@ -1,5 +1,5 @@
 # 🧠 Cerebro ERP - Tronco Cerebral (Índice Maestro) 🦾🏗️🧬
-# Versión 4.8.0 - Ecosistema Unificado y Match Atómico
+# Versión 5.0.0 - Ecosistema Estable con Match CAE y Sala de Espera
 
 Este documento es el **punto de entrada definitivo** para entender la arquitectura y operación del ERP. Cualquier desarrollador o IA que trabaje en este proyecto **DEBE** seguir las reglas maestras aquí descritas.
 
@@ -20,11 +20,14 @@ El sistema se organiza en dominios autónomos (Tarjetas, Compras, Bancos). Zero 
 > [!IMPORTANT]
 > **Prohibición de SQL Directo**: Ninguna "Neurona" de lógica puede importar `sqlite3`. Toda persistencia debe realizarse a través de las funciones del archivo `storage_*.py` de su propio módulo.
 
-### 📥 Ecosistema Unificado de Ingesta (v4.8.0)
+### 📥 Ecosistema Unificado de Ingesta (v5.0.0)
 El sistema utiliza una arquitectura de **Aislamiento Físico Total** con un flujo de "Limpieza Atómica de Origen" para evidencias:
-1.  **Terminal de Ingesta (Split-Screen)**: Una única interfaz (Frontend) permite hacer Drop de PDFs/Imágenes y ofrece Zoom dinámico (Scroll/Pan) sin salir del módulo.
-2.  **Match Atómico**: El operario ingresa el número de factura en un input único. El cerebro hace una búsqueda elástica y asocia origen (AFIP/CALIM) en tiempo real.
-3.  **Archivado Legal Nominal (`archivos_[modulo]/`)**: Tras vincular, el archivo temporal se "mueve" y desaparece (Limpieza de Origen). En la bóveda sagrada `/modulo_[nombre]/archivos_[nombre]/[Entidad]/[Año]/[Mes]/` se renombra dinámicamente: `YYYY-MM-DD_Proveedor_Factura_PV-NUM.pdf`.
+1.  **Terminal de Ingesta HD**: Una única interfaz (Frontend) permite hacer Drop de PDFs/Imágenes y ofrece Zoom dinámico (Scroll/Pan) sin salir del módulo.
+2.  **Match Atómico Omni-Direccional (CAE)**: El operario ingresa el número de factura o el **CAE** en un input único. El cerebro hace una búsqueda elástica en metadatos y asocia origen (AFIP/CALIM) en tiempo real.
+3.  **Sala de Espera (Excepción)**: Si el comprobante no existe, se archiva en la carpeta unificada `PENDIENTES CALIM` para posterior conciliación.
+4.  **Archivado Legal Nominal (`archivos_[modulo]/`)**: Tras vincular, el archivo temporal se "mueve" y desaparece (Limpieza de Origen). 
+    - **Nomenclatura**: `YYYY-MM-DD_[Proveedor]_Factura_PV-NUM.pdf`.
+    - **Normalización**: Rutas guardadas con `/` para máxima portabilidad y estabilidad en Windows (Anti-Corrupción).
 
 ---
 

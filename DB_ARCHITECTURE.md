@@ -1,5 +1,5 @@
 # 🗄️ Arquitectura de Base de Datos - ERP FINAL (Modular DDD) 🏗️🧱🧠
-# Versión 4.8.0 - MANDAMIENTOS UNIVERSALES ⚖️💎
+# Versión 5.0.0 - Ecosistema Estable con Rutas Blindadas (/) ⚖️💎🛡️
 
 Este documento es la autoridad central para todas las bases de datos del ERP. Todo módulo presente y futuro **DEBE** obedecer estas reglas innegociables.
 
@@ -19,8 +19,8 @@ Si un campo representa el mismo concepto financiero o temporal, debe llamarse **
 | Concepto | Nombre de Columna Único | Notas |
 | :--- | :--- | :--- |
 | **Fechas** | `fecha`, `fecha_emision`, `fecha_vencimiento` | No usar prefijos por tabla. |
-| **Pto. Venta** | `punto_venta` | Obligatorio TEXT de 5 ceros a izq (zfill 5). |
-| **Identificadores** | `cuit`, `numero_comprobante` | `cuit` universal. `numero_comprobante` obligatorio TEXT de 8 ceros a izq. |
+| **Pto. Venta** | `punto_venta` | TEXT de 5 ceros (zfill 5). En UI se muestra sin ceros. |
+| **Num. Comprobante** | `numero_comprobante` | TEXT de 8 ceros (zfill 8). En UI se muestra sin ceros. |
 | **Dinero (Neto)** | `neto` | El monto imponible base. |
 | **IVA 21%** | `iva21` | Sin puntos ni prefijos tipo '21iva'. |
 | **IVA 10.5%** | `iva105` | Estandarizado. |
@@ -55,7 +55,10 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 
 ---
 
-## 🏛️ Trazabilidad Física y Archivado Nominal (v4.8.0)
-- `path_archivo`: Ubicación física inmutable en `archivos_[modulo]/`. Para el caso de *Compras*, se fuerza una estructura CUIT nominal: `[CUIT - Entidad]/[Año]/[Mes]/[Fecha]_[Nombre]_Factura_[PV-NUM].ext`.
-- `hash_archivo`: Vínculo lógico con la ingesta.
+## 🏛️ Trazabilidad Física y Archivado Anti-Corrupción (v5.0.0)
+- `path_archivo`: Ubicación física inmutable en `archivos_[modulo]/`. 
+  - **SASH-SAFE**: Todas las rutas deben guardarse con `/` (forward slash) para evitar errores de escape en Windows.
+  - **Formato**: `[CUIT - Entidad]/[Año]/[Mes]/[Fecha]_[Nombre]_Factura_[PV-NUM].ext`.
+- `status`: Campo vital para el ciclo de vida del dato (`NORMAL` | `SALA_ESPERA`).
 - `tiene_foto`: Booleano vital para el semáforo (Rojo/Verde) de vinculación de evidencias físicas.
+
