@@ -449,8 +449,12 @@ const app = {
 
     viewFile(path, tieneFoto) {
         // tieneFoto ? Bóveda (archivos) : Histórico (crudos)
+        // Link Inteligente v4.9: Recorta la ruta absoluta de Windows para que el navegador no se pierda.
+        const cleanPath = path.split('archivos_compras/').pop().split('archivos_compras\\').pop()
+                             .split('crudos_compras/').pop().split('crudos_compras\\').pop();
+                             
         const prefix = tieneFoto ? '/archivos/compras/' : '/historico/compras/';
-        window.open(`${prefix}${path}`, '_blank');
+        window.open(`${prefix}${cleanPath}`, '_blank');
     },
 
     async sincronizarEcosistema() {

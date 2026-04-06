@@ -47,7 +47,7 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
             entidad_clean,
             str(anio),
             str(mes).zfill(2)
-        )
+        ).replace('\\', '/')
     else:
         target_dir = os.path.join(
             BASE_DIR, 
@@ -56,7 +56,7 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
             entidad_clean,
             str(anio),
             str(mes).zfill(2)
-        )
+        ).replace('\\', '/')
 
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
@@ -76,7 +76,7 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
             # Es un duplicado idéntico. No hacemos nada con el destino, simplemente retornamos la ruta existente.
             # El orquestador se encargará de borrar el origen (inbox).
             logger.info(f"📁 Archivo idéntico ya existe en {target_path}. Omitiendo duplicado.")
-            return os.path.abspath(target_path)
+            return target_path.replace('\\', '/')
         
         # El contenido es distinto pero el nombre es igual.
         if not overwrite:
@@ -93,7 +93,7 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     try:
         shutil.move(filepath_origen, target_path)
         logger.info(f"✅ Archivo archivado legalmente en: {target_path}")
-        return os.path.abspath(target_path)
+        return target_path.replace('\\', '/')
     except Exception as e:
         logger.error(f"❌ Error al mover el archivo: {e}")
         return None
