@@ -1,19 +1,55 @@
-from fastapi import FastAPI, Query, UploadFile, File
+from fastapi import FastAPI, Query, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import sys
+import shutil
+import io
 from typing import List, Dict, Any
 from pydantic import BaseModel
+from PIL import Image
+from PyPDF2 import PdfMerger
 from erp_master import ERPMaster
 
 # IMPORTACIÓN ESTRUCTURADA POR DOMINIOS (DDD) 🏗️🧱🧠⚖️
 from modulo_tarjetas import logica_tarjetas as tarjetas
-from core_sistema import db_ingesta as ingesta
-from modulo_compras import motor_compras as facturas
-from modulo_compras import storage_compras as storage
+# IMPORTACIÓN DE LIBRERÍAS DE CONTROLADOR DE ALMACENAMIENTO LOCAL
+# El control cruzado ocurre aquí a nivel aplicación, FastAPI llama al motor SQLite.
+import modulo_compras.storage_compras as storage
 from core_sistema import archiver_service
 from modulo_tarjetas import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
+
+def merge_files_to_pdf(existing_path: str, new_path: str, out_path: str):
+    """Cerebro de la Engrapadora Virtual (v4.9.3)"""
+    merger = PdfMerger()
+
+    def add_to_merger(path):
+        ext = path.lower().split('.')[-1]
+        try:
+            if ext == 'pdf':
+                merger.append(path)
+            elif ext in ['jpg', 'jpeg', 'png', 'webp']:
+                img = Image.open(path).convert('RGB')
+                pdf_bytes = io.BytesIO()
+                img.save(pdf_bytes, format='PDF')
+                pdf_bytes.seek(0)
+                merger.append(pdf_bytes)
+        except Exception as e:
+            print(f"Error engrapando {path}: {e}")
+
+    add_to_merger(existing_path)
+    add_to_merger(new_path)
+
+    temp_buffer = io.BytesIO()
+    merger.write(temp_buffer)
+    merger.close()
+
+    with open(out_path, 'wb') as f:
+        f.write(temp_buffer.getvalue())
+
+# ------------------------------------------------------------------------------------------
+# ENDPOINTS DE API - MÓDULO COMPRAS
+# ------------------------------------------------------------------------------------------
 
 class ImportRequest(BaseModel):
     fuente: str
@@ -146,56 +182,135 @@ async def search_compras_match(q: str):
     results = storage.smart_search_invoice(q)
     return {"results": results}
 
+@app.get("/api/compras/inbox/list")
+async def list_inbox_files():
+    """Devuelve la lista de archivos pendientes en el Inbox (v4.9)."""
+    inbox_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
+    os.makedirs(inbox_dir, exist_ok=True)
+    files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f)) and f.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg'))]
+    return {"files": files}
+
 @app.post("/api/compras/vincular")
-async def vincular_archivo_factura(id_factura: int = Query(...), file: UploadFile = File(...)):
-    """Vincula físicamente un archivo a una factura existente en DB."""
+async def vincular_archivo_factura(
+    id_factura: int = Query(0), 
+    file: UploadFile = File(None),
+    inbox_filename: str = Form(None),
+    is_pending_calim: str = Form("false"),
+    proveedor_nombre: str = Form(""),
+    numero_factura: str = Form("")
+):
+    """Vincula físicamente un archivo a una factura, o archiva en espera (v4.9)."""
     try:
-        # 1. Obtener datos de la factura para jerarquía
-        # 1. Recuperar datos de la factura para carpetas CUIT
-        f_data = storage.get_factura_by_id(id_factura)
-        if not f_data: return {"status": "error", "message": "Factura no encontrada"}
-        
-        cuit = f_data.get('cuit_proveedor', '00000000000')
-        proveedor = f_data.get('proveedor', 'DESCONOCIDO')
-        fecha = f_data.get('fecha', '2026-01-01')
-        pv = f_data.get('punto_venta', '00000')
-        num = f_data.get('numero_comprobante', '00000000')
-        
-        # 2. Guardar temporalmente
         temp_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
         os.makedirs(temp_dir, exist_ok=True)
         
-        # Sanitizar extensión
-        _, ext = os.path.splitext(file.filename)
-        temp_path = os.path.join(temp_dir, f"temp_upload_{id_factura}{ext}")
-        
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # --- MODO 1: Excepción (Pendiente CALIM) ---
+        if is_pending_calim.lower() == "true":
+            if not inbox_filename and not file:
+                return {"status": "error", "message": "No hay archivo para Sala de Espera"}
+                
+            cuit = "00000000000"
+            proveedor = proveedor_nombre.strip().upper() if proveedor_nombre else "PENDIENTE_CALIM"
+            fecha = datetime.now().strftime("%Y-%m-%d")
+            pv = "XX"
+            num = numero_factura.strip() if numero_factura else str(int(datetime.now().timestamp()))
             
-        # 3. Invocar Archivador Nominal (v4.8)
-        entidad_vault = f"{cuit} - {proveedor}"
-        final_path = archiver_service.archivar_documento(
-            temp_path, 
-            "compras", 
-            fecha[:4], 
-            fecha[5:7], 
-            entidad_vault,
-            use_vault=True,
-            overwrite=True
-        )
+            # Obtener archivo origen
+            if inbox_filename:
+                temp_path = os.path.join(temp_dir, inbox_filename)
+                _, ext = os.path.splitext(inbox_filename)
+                if not os.path.exists(temp_path): return {"status": "error"}
+            else:
+                _, ext = os.path.splitext(file.filename)
+                temp_path = os.path.join(temp_dir, f"temp_upload_calim_{num}{ext}")
+                with open(temp_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+            
+            entidad_vault = f"{cuit} - PENDIENTES CALIM"
+            final_path = archiver_service.archivar_documento(
+                temp_path, "compras", fecha[:4], fecha[5:7], entidad_vault, use_vault=True, overwrite=True, subcategoria="Facturas"
+            )
+            
+            if final_path and os.path.exists(final_path):
+                prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
+                target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
+                final_dir = os.path.dirname(final_path)
+                new_final_path = os.path.join(final_dir, target_name)
+                
+                if os.path.exists(new_final_path): os.remove(new_final_path)
+                os.rename(final_path, new_final_path)
+                final_path = new_final_path
+            
+            return {"status": "success", "message": "Enviado a Sala de Espera CALIM"}
 
-        # 4. Renombrado Nominal: Fecha_Proveedor_Factura_PV-NUM
-        if final_path and os.path.exists(final_path):
-            # Sanitizar nombre de proveedor para evitar caracteres ilegales en Windows
+        # --- MODO 2: Normal ---
+        # 1. Recuperar datos de la factura
+        f_data = storage.get_factura_by_id(id_factura)
+        if not f_data: return {"status": "error", "message": "Factura no encontrada"}
+        
+        cuit = f_data.get('cuit_proveedor')
+        proveedor = f_data.get('proveedor') or 'DESCONOCIDO'
+        fecha = f_data.get('fecha') or '2026-01-01'
+        pv = f_data.get('punto_venta') or '00000'
+        num = f_data.get('numero_comprobante') or '00000000'
+        
+        if inbox_filename:
+            temp_path = os.path.join(temp_dir, inbox_filename)
+            _, ext = os.path.splitext(inbox_filename)
+            if not os.path.exists(temp_path): return {"status": "error", "message": "Archivo de inbox perdido"}
+        else:
+            _, ext = os.path.splitext(file.filename)
+            temp_path = os.path.join(temp_dir, f"temp_upload_{id_factura}{ext}")
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+        # 3. VERIFICAR SI APLICAMOS ENGRAPADORA VIRTUAL O ARCHIVADOR NORMAL
+        tiene_foto = bool(f_data.get('tiene_foto', 0))
+        old_path = f_data.get('path_archivo', '')
+        
+        if tiene_foto and old_path and os.path.exists(old_path):
+            # ENGRAPADORA VIRTUAL (Multi-página Detectado)
             prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
-            target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
+            target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}.pdf"
             
-            final_dir = os.path.dirname(final_path)
+            final_dir = os.path.dirname(old_path)
             new_final_path = os.path.join(final_dir, target_name)
             
-            if os.path.exists(new_final_path): os.remove(new_final_path)
-            os.rename(final_path, new_final_path)
+            # Fusionar ambos (el previo de la bd y el nuevo entrante)
+            merge_files_to_pdf(old_path, temp_path, new_final_path)
+            
+            # Limpieza post-ensamblaje
+            if os.path.exists(temp_path): os.remove(temp_path)
+            if old_path != new_final_path and os.path.exists(old_path):
+                os.remove(old_path)
+                
             final_path = new_final_path
+            
+        else:
+            # 3. Invocar Archivador Nominal Estandar (v4.8)
+            entidad_vault = f"{cuit} - {proveedor}" if cuit else proveedor
+            final_path = archiver_service.archivar_documento(
+                temp_path, 
+                "compras", 
+                fecha[:4], 
+                fecha[5:7], 
+                entidad_vault,
+                use_vault=True,
+                overwrite=True,
+                subcategoria="Facturas"
+            )
+
+            # 4. Renombrado Nominal: Fecha_Proveedor_Factura_PV-NUM
+            if final_path and os.path.exists(final_path):
+                prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
+                target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
+                
+                final_dir = os.path.dirname(final_path)
+                new_final_path = os.path.join(final_dir, target_name)
+                
+                if os.path.exists(new_final_path): os.remove(new_final_path)
+                os.rename(final_path, new_final_path)
+                final_path = new_final_path
             
         # El archivo temporal temp_path ya fue MOVIDO/ELIMINADO por archiver_service.archivar_documento
         # (shutil.move se encarga de la limpieza de origen)
@@ -233,9 +348,11 @@ async def sync_data():
 # Montar servidores estáticos jerárquicos (Aislamiento v4.6)
 os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "archivos_compras"), exist_ok=True)
 os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "crudos_compras"), exist_ok=True)
+os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "inbox_compras"), exist_ok=True)
 
 app.mount("/archivos/compras", StaticFiles(directory="modulo_compras/archivos_compras"), name="archivos_compras")
 app.mount("/historico/compras", StaticFiles(directory="modulo_compras/crudos_compras"), name="crudos_compras")
+app.mount("/inbox", StaticFiles(directory="modulo_compras/inbox_compras"), name="inbox_local")
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":

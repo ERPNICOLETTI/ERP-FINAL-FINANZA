@@ -5,18 +5,165 @@
 
 const app = {
     allFacturas: [],
-    backupFacturas: [], // Para búsqueda local pro
+    backupFacturas: [],
+    currentFilter: 'all',
     selectedFactura: null,
     sidebarFile: null,
-
-    // Filtros de estado
-    currentAnio: "2026",
-    currentMes: "",
-    currentFilter: "all",
+    
+    currentAnio: new Date().getFullYear().toString(),
+    currentMes: String(new Date().getMonth() + 1).padStart(2, '0'),
+    
+    // --- LÓGICA DE BUZÓN (MAZO DE CARTAS v4.9) ---
+    inboxFiles: [],
+    inboxIndex: 0,
 
     init() {
+        this.fillDateFilters();
         this.bindEvents();
-        this.fetchFacturas(); // Carga inicial directa
+        this.fetchFacturas();
+        this.fetchInbox();
+    },
+
+    fillDateFilters() {
+        const anioSelect = document.getElementById('filter-anio');
+        const mesSelect = document.getElementById('filter-mes');
+        if (anioSelect) anioSelect.value = this.currentAnio;
+        if (mesSelect) mesSelect.value = this.currentMes;
+    },
+
+    async fetchInbox(resetIndex = true) {
+        try {
+            const res = await fetch('/api/compras/inbox/list');
+            const data = await res.json();
+            this.inboxFiles = data.files || [];
+            if (resetIndex) this.inboxIndex = 0;
+            else if (this.inboxIndex >= this.inboxFiles.length) this.inboxIndex = Math.max(0, this.inboxFiles.length - 1);
+            
+            this.renderInboxController();
+            if (this.inboxFiles.length > 0) {
+                this.loadInboxFile();
+            } else {
+                document.getElementById('sidebar-preview').innerHTML = '<p class="preview-placeholder">📁 Buzón vacío. Arrastre aquí.</p>';
+            }
+        } catch (e) { console.error("Error cargando inbox", e); }
+    },
+
+    renderInboxController() {
+        const ctrl = document.getElementById('inbox-controller');
+        if (!ctrl) return;
+        if (this.inboxFiles.length === 0) {
+            ctrl.classList.add('hidden');
+        } else {
+            ctrl.classList.remove('hidden');
+            document.getElementById('inbox-status').textContent = `Buzón: ${this.inboxIndex + 1} de ${this.inboxFiles.length}`;
+        }
+    },
+
+    prevInbox() {
+        if (this.inboxIndex > 0) {
+            this.inboxIndex--;
+            this.loadInboxFile();
+            this.renderInboxController();
+        }
+    },
+
+    nextInbox() {
+        if (this.inboxIndex < this.inboxFiles.length - 1) {
+            this.inboxIndex++;
+            this.loadInboxFile();
+            this.renderInboxController();
+        }
+    },
+
+    loadInboxFile() {
+        if (this.inboxFiles.length === 0) return;
+        const filename = this.inboxFiles[this.inboxIndex];
+        const url = `/inbox/${filename}`;
+        
+        this.sidebarFile = null; // Anulamos bypass manual
+        
+        // Limpiar el form
+        const numInput = document.getElementById('edit-full-number');
+        if (numInput) numInput.value = '';
+        this.clearMatch();
+        
+        this.renderVisual(url, filename);
+        document.getElementById('sidebar-status').textContent = `📄 Inbox: ${filename}`;
+    },
+    
+    renderVisual(url, filename) {
+        const dropZone = document.getElementById('drop-zone');
+        const previewContainer = document.getElementById('sidebar-preview');
+        previewContainer.innerHTML = ''; 
+        
+        const ext = filename.toLowerCase().split('.').pop();
+        
+        if (ext === 'pdf') {
+            const embed = document.createElement('embed');
+            embed.src = `${url}#toolbar=0&navpanes=0&scrollbar=0`;
+            embed.type = 'application/pdf';
+            embed.style.width = '100%';
+            embed.style.height = '100%';
+            previewContainer.appendChild(embed);
+        } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.id = 'zoomable-img';
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '100%';
+            img.style.objectFit = 'contain';
+            img.draggable = false;
+            
+            img.style.transformOrigin = 'center center';
+            img.style.transition = 'transform 0.1s ease-out';
+            
+            previewContainer.appendChild(img);
+            
+            let scale = 1;
+            let translateX = 0;
+            let translateY = 0;
+            
+            dropZone.onwheel = (e) => {
+                e.preventDefault();
+                if (e.deltaY < 0) scale += 0.2;
+                else scale -= 0.2;
+                
+                scale = Math.max(0.2, Math.min(scale, 10)); // Hasta 10x zoom
+                img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            };
+            
+            let isDown = false;
+            let startX, startY;
+            let initialTx = 0, initialTy = 0;
+            
+            dropZone.onmousedown = (e) => {
+                isDown = true;
+                dropZone.classList.add('active-pan');
+                startX = e.pageX;
+                startY = e.pageY;
+                initialTx = translateX;
+                initialTy = translateY;
+                img.style.transition = 'none'; // Movimiento fluido
+            };
+            const deactivateDrag = () => { 
+                isDown = false; 
+                dropZone.classList.remove('active-pan'); 
+                img.style.transition = 'transform 0.1s ease-out';
+            };
+            
+            dropZone.onmouseleave = deactivateDrag;
+            dropZone.onmouseup = deactivateDrag;
+            
+            dropZone.onmousemove = (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX;
+                const y = e.pageY;
+                translateX = initialTx + (x - startX);
+                translateY = initialTy + (y - startY);
+                img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            };
+        }
     },
 
     bindEvents() {
@@ -117,8 +264,11 @@ const app = {
         const badge = document.getElementById('match-origen');
         const fecha = document.getElementById('match-fecha');
         const details = document.getElementById('match-details');
+        const calimCard = document.getElementById('calim-card');
         
         card.classList.remove('hidden');
+        calimCard.classList.add('hidden'); // Ocultar válvula CALIM si hay match
+        
         badge.textContent = f.origen.toUpperCase();
         badge.className = `badge ${f.origen.toLowerCase() === 'calim' ? 'calim' : ''}`;
         fecha.textContent = f.fecha;
@@ -128,11 +278,25 @@ const app = {
     clearMatch() {
         this.selectedFactura = null;
         document.getElementById('match-card').classList.add('hidden');
+        
+        // Válvula CALIM: Mostrar si no hay match pero y hay un número
+        const numInput = document.getElementById('edit-full-number');
+        if (numInput && numInput.value.trim().length >= 3) {
+            document.getElementById('calim-card').classList.remove('hidden');
+        } else {
+            document.getElementById('calim-card').classList.add('hidden');
+        }
     },
 
     async confirmarVinculacion() {
-        if (!this.selectedFactura || !this.sidebarFile) {
+        if (!this.selectedFactura) {
             alert("Sube la foto primero y asegúrate de que el sistema encuentre el número de factura.");
+            return;
+        }
+        
+        const isInboxMode = (this.inboxFiles.length > 0 && !this.sidebarFile);
+        if (!isInboxMode && !this.sidebarFile) {
+            alert("No hay ningún comprobante para vincular.");
             return;
         }
 
@@ -141,7 +305,8 @@ const app = {
         statusLabel.textContent = '💾 Archivado nominal y limpieza de origen...';
         
         const formData = new FormData();
-        formData.append('file', this.sidebarFile);
+        if (this.sidebarFile) formData.append('file', this.sidebarFile);
+        else formData.append('inbox_filename', this.inboxFiles[this.inboxIndex]);
         
         try {
             const res = await fetch(`/api/compras/vincular?id_factura=${this.selectedFactura.id}`, {
@@ -157,9 +322,14 @@ const app = {
                 // --- LIMPIEZA TOTAL TRAS ÉXITO ---
                 this.sidebarFile = null;
                 document.getElementById('edit-full-number').value = '';
-                document.getElementById('sidebar-preview').innerHTML = '<p class="preview-placeholder">Previsualización HD de Factura</p>';
                 this.clearMatch();
                 this.fetchFacturas(); // Refrescar lista principal
+                
+                if (isInboxMode) {
+                    this.fetchInbox(false); // Refresca mantenido el index para cargar la siguiente
+                } else {
+                    document.getElementById('sidebar-preview').innerHTML = '<p class="preview-placeholder">📁 Arrastrar PDF o Foto aquí</p>';
+                }
             } else {
                 statusLabel.style.color = 'var(--danger)';
                 statusLabel.textContent = '❌ Error: ' + result.message;
@@ -167,6 +337,46 @@ const app = {
         } catch (e) {
             statusLabel.textContent = '❌ Error de conexión';
         }
+    },
+
+    async archivarPendiente() {
+        const proveedor = document.getElementById('pending-proveedor').value.trim();
+        const num = document.getElementById('edit-full-number').value.trim();
+        const isInboxMode = (this.inboxFiles.length > 0 && !this.sidebarFile);
+        
+        if (!isInboxMode && !this.sidebarFile) { alert("Carga un archivo primero."); return; }
+        if (!proveedor || !num) { alert("Completa el Nombre del Proveedor y el Número."); return; }
+        
+        const statusLabel = document.getElementById('sidebar-status');
+        statusLabel.style.color = 'var(--warning)';
+        statusLabel.textContent = '⏳ Pasando a Sala de Espera CALIM...';
+        
+        const formData = new FormData();
+        if (this.sidebarFile) formData.append('file', this.sidebarFile);
+        else formData.append('inbox_filename', this.inboxFiles[this.inboxIndex]);
+        
+        formData.append('is_pending_calim', 'true');
+        formData.append('proveedor_nombre', proveedor);
+        formData.append('numero_factura', num);
+        
+        try {
+            const res = await fetch(`/api/compras/vincular`, { method: 'POST', body: formData });
+            const result = await res.json();
+            if (result.status === 'success') {
+                statusLabel.style.color = 'var(--success)';
+                statusLabel.textContent = '✅ Archivado como pendiente.';
+                
+                this.sidebarFile = null;
+                document.getElementById('edit-full-number').value = '';
+                document.getElementById('pending-proveedor').value = '';
+                this.clearMatch();
+                
+                if (isInboxMode) this.fetchInbox(false);
+                else document.getElementById('sidebar-preview').innerHTML = '<p class="preview-placeholder">📁 Arrastrar PDF o Foto aquí</p>';
+            } else {
+                statusLabel.textContent = '❌ Error: ' + result.message;
+            }
+        } catch(e) { statusLabel.textContent = '❌ Error'; }
     },
 
     async fetchFacturas() {
@@ -225,130 +435,17 @@ const app = {
     },
 
     handleFilePreview(file) {
-        this.sidebarFile = file;
-        const dropZone = document.getElementById('drop-zone');
-        const previewContainer = document.getElementById('sidebar-preview');
-        previewContainer.innerHTML = ''; 
-
+        this.sidebarFile = file; // Anula el flujo de Inbox y activa el modo Bypass (Manual)
         const fileUrl = URL.createObjectURL(file);
+        this.renderVisual(fileUrl, file.name);
+        document.getElementById('sidebar-status').textContent = `📄 Manual: ${file.name}`;
         
-        if (file.type === 'application/pdf') {
-            const embed = document.createElement('embed');
-            embed.src = fileUrl;
-            embed.type = 'application/pdf';
-            previewContainer.appendChild(embed);
-        } else if (file.type.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = fileUrl;
-            img.id = 'zoomable-img';
-            img.style.width = '100%';
-            previewContainer.appendChild(img);
-            
-            // Lógica de Zoom con Rueda
-            let zoomPct = 100;
-            dropZone.onwheel = (e) => {
-                e.preventDefault();
-                if (e.deltaY < 0) zoomPct += 15; // Zoom In
-                else zoomPct -= 15; // Zoom Out
-                
-                zoomPct = Math.max(20, Math.min(zoomPct, 500)); // Limites
-                img.style.width = `${zoomPct}%`;
-                img.style.maxWidth = 'none';
-                img.style.maxHeight = 'none';
-                
-                // Si hace zoom, alineamos al inicio para que el scroll empiece desde top-left
-                if (zoomPct > 100) {
-                    previewContainer.style.alignItems = 'flex-start';
-                    previewContainer.style.justifyContent = 'flex-start';
-                } else {
-                    previewContainer.style.alignItems = 'center';
-                    previewContainer.style.justifyContent = 'center';
-                }
-            };
-            
-            // Lógica de Paneo (Drag to Scroll)
-            let isDown = false;
-            let startX, startY, scrollLeft, scrollTop;
-            
-            dropZone.onmousedown = (e) => {
-                isDown = true;
-                dropZone.classList.add('active-pan');
-                startX = e.pageX - dropZone.offsetLeft;
-                startY = e.pageY - dropZone.offsetTop;
-                scrollLeft = dropZone.scrollLeft;
-                scrollTop = dropZone.scrollTop;
-            };
-            dropZone.onmouseleave = () => {
-                isDown = false;
-                dropZone.classList.remove('active-pan');
-            };
-            dropZone.onmouseup = () => {
-                isDown = false;
-                dropZone.classList.remove('active-pan');
-            };
-            dropZone.onmousemove = (e) => {
-                if (!isDown) return;
-                e.preventDefault();
-                const x = e.pageX - dropZone.offsetLeft;
-                const y = e.pageY - dropZone.offsetTop;
-                const walkX = (x - startX) * 1.5; // Velocidad
-                const walkY = (y - startY) * 1.5;
-                dropZone.scrollLeft = scrollLeft - walkX;
-                dropZone.scrollTop = scrollTop - walkY;
-            };
-        }
-        
-        document.getElementById('sidebar-status').textContent = `📄 ${file.name} listo.`;
+        // Limpiamos match para que obligue a buscar o mandar a espera
+        const numInput = document.getElementById('edit-full-number');
+        if (numInput) numInput.value = '';
+        this.clearMatch();
     },
 
-    loadToIngesta(id) {
-        const f = this.backupFacturas.find(x => x.id === id);
-        if (!f) return;
-
-        this.selectedFactura = f;
-        document.getElementById('edit-proveedor').value = f.proveedor;
-        document.getElementById('edit-pv').value = f.punto_venta || '';
-        document.getElementById('edit-numero').value = f.numero_comprobante || '';
-        document.getElementById('edit-total').value = f.total;
-        
-        // Match Feedback Visual
-        const feedback = document.getElementById('match-feedback');
-        feedback.classList.remove('hidden');
-        feedback.className = 'match-feedback success';
-        feedback.innerHTML = `<strong>Factura Seleccionada</strong><br>Listo para vincular evidencia física.`;
-    },
-
-    async confirmarVinculacion() {
-        if (!this.selectedFactura || !this.sidebarFile) {
-            alert("Selecciona una factura de la tabla y carga un archivo.");
-            return;
-        }
-
-        const statusLabel = document.getElementById('sidebar-status');
-        statusLabel.textContent = '🚀 Archivando en Bóveda...';
-        
-        const formData = new FormData();
-        formData.append('file', this.sidebarFile);
-        
-        try {
-            const res = await fetch(`/api/compras/vincular?id_factura=${this.selectedFactura.id}`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await res.json();
-            if (result.status === 'success') {
-                statusLabel.style.color = 'var(--success)';
-                statusLabel.textContent = '✅ Archivado por CUIT con éxito.';
-                this.fetchFacturas(); // Recargar tabla
-            } else {
-                statusLabel.style.color = 'var(--danger)';
-                statusLabel.textContent = '❌ Error: ' + result.message;
-            }
-        } catch (e) {
-            statusLabel.textContent = '❌ Error de conexión';
-        }
-    },
 
     viewFile(path, tieneFoto) {
         // tieneFoto ? Bóveda (archivos) : Histórico (crudos)

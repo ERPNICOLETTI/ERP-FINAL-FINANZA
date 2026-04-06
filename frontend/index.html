@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Ecosistema Compras v4.7</title>
-    <link rel="stylesheet" href="style.css">
+    <title>ERP Final - Ecosistema Compras v4.9</title>
+    <link rel="stylesheet" href="style.css?v=4.9.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -13,7 +13,7 @@
         <header class="app-header">
             <div class="brand">
                 <h1 class="glow-text">ERP <span>Compras</span></h1>
-                <p>Terminal de Gestión Unificada v4.7.0</p>
+                <p>Terminal de Gestión Unificada v4.9.0</p>
             </div>
             
             <div class="header-actions">
@@ -28,6 +28,14 @@
                 <div class="panel-header">
                     <h3>📥 Terminal de Ingesta</h3>
                     <p>Carga la foto y busca el número</p>
+                </div>
+
+                <!-- Controlador de Inbox -->
+                <div id="inbox-controller" class="inbox-controller hidden">
+                    <button id="inbox-prev" class="btn-icon" onclick="app.prevInbox()">◀️</button>
+                    <span id="inbox-status">Buzón: 0 pendientes</span>
+                    <button id="inbox-next" class="btn-icon" onclick="app.nextInbox()">▶️</button>
+                    <button id="inbox-refresh" class="btn-icon" onclick="app.fetchInbox()" title="Recargar Buzón">🔄</button>
                 </div>
 
                 <div id="drop-zone" class="dropzone-preview">
@@ -51,6 +59,15 @@
                         <div id="match-details" class="match-details">
                             Match encontrado para este número.
                         </div>
+                    </div>
+
+                    <!-- Excepción Pendiente CALIM -->
+                    <div id="calim-card" class="calim-card hidden">
+                        <div class="calim-header">⚠️ Factura No Encontrada</div>
+                        <p>No existe en la Base de Datos. Pasa la factura a la <strong>Sala de Espera</strong>.</p>
+                        
+                        <input type="text" id="pending-proveedor" class="calim-input" placeholder="Nombre Proveedor (Ej: VIA CARGO)">
+                        <button id="btn-pendiente" class="btn-warning" onclick="app.archivarPendiente()">Archivar como Pendiente CALIM ⏳</button>
                     </div>
                     
                     <div id="sidebar-status" class="status-msg"></div>
@@ -115,6 +132,6 @@
         </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=4.9.1"></script>
 </body>
 </html>

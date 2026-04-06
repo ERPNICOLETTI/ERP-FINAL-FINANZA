@@ -118,15 +118,15 @@ body {
     width: 100%;
     flex: 1; 
     min-height: 400px;
-    background: #000;
+    background: #111; /* Dark but not pure black */
     margin-bottom: 20px;
     border-radius: 12px;
-    border: 2px dashed rgba(88, 166, 255, 0.3);
+    border: 1px solid rgba(88, 166, 255, 0.2);
     position: relative;
-    overflow: auto; /* Permite scroll natural si hay zoom */
-    cursor: pointer;
-    transition: 0.3s;
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+    overflow: hidden; /* Oculta barras para usar transformación fluida */
+    cursor: grab;
+    transition: border 0.3s;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
 
 .dropzone-preview:hover {
@@ -142,7 +142,7 @@ body {
     align-items: center;
     justify-content: center;
     width: 100%;
-    min-height: 100%; /* Asegura que el flex ocupe todo el alto, aun si se hace scroll */
+    height: 100%;
 }
 
 .preview-content img {
@@ -276,6 +276,86 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(88, 166, 255, 0.5);
 }
+
+/* --- INBOX CONTROLLER --- */
+.inbox-controller {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid var(--glass-border);
+}
+.inbox-controller.hidden { display: none !important; }
+
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: white;
+    transition: 0.2s;
+    outline: none;
+}
+.btn-icon:hover { transform: scale(1.1); }
+#inbox-status { font-size: 0.9rem; font-weight: 600; color: var(--accent-color); }
+
+/* --- EXCEPCION: CALIM CARD --- */
+.calim-card {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid var(--warning);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    animation: fadeIn 0.3s ease;
+}
+.calim-card.hidden { display: none !important; }
+
+.calim-header { 
+    color: var(--warning); 
+    font-weight: bold; 
+    margin-bottom: 5px; 
+    font-size: 0.9rem;
+}
+.calim-card p { 
+    font-size: 0.8rem; 
+    color: #ffd54f; 
+    margin-bottom: 12px; 
+}
+.calim-input { 
+    width: 100%; 
+    padding: 12px; 
+    border-radius: 8px; 
+    border: 1px solid rgba(255, 193, 7, 0.5); 
+    background: rgba(0,0,0,0.3);
+    color: white;
+    margin-bottom: 12px; 
+    outline: none;
+}
+.calim-input:focus {
+    border-color: var(--warning);
+}
+
+.btn-warning { 
+    width: 100%; 
+    padding: 12px; 
+    border-radius: 8px; 
+    border: none; 
+    background: var(--warning); 
+    color: #111; 
+    font-weight: 800; 
+    cursor: pointer; 
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+}
+.btn-warning:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 193, 7, 0.4);
+}
+
 .boveda-panel {
     flex: 1;
     padding: 30px;

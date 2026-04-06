@@ -368,14 +368,15 @@ def get_factura_by_id(factura_id):
 
 
 def smart_search_invoice(query):
-    """Busca facturas por coincidencia parcial en el número (AFIP/CALIM) v4.8."""
+    """Busca facturas por coincidencia en número o en metadatos (CAE) v4.9."""
     conn = get_db_connection()
     try:
-        # Limpiar query: quitar guiones y ceros iniciales para búsqueda elástica
         clean_q = query.strip().replace('-', '').lstrip('0')
-        if not clean_q: return []
+        raw_q = query.strip()
+        if not raw_q: return []
         
-        search_pattern = f"%{clean_q}"
+        search_pattern = f"%{clean_q}%" if clean_q else f"%{raw_q}%"
+        meta_pattern = f"%{raw_q}%"
         
         rows = conn.execute("""
             SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
@@ -384,10 +385,11 @@ def smart_search_invoice(query):
               AND (
                   numero_comprobante LIKE ? OR 
                   (punto_venta || numero_comprobante) LIKE ? OR
-                  (CAST(CAST(numero_comprobante AS INTEGER) AS TEXT)) LIKE ?
+                  (CAST(CAST(numero_comprobante AS INTEGER) AS TEXT)) LIKE ? OR
+                  meta_json LIKE ?
               )
             ORDER BY fecha DESC LIMIT 5
-        """, (search_pattern, search_pattern, search_pattern)).fetchall()
+        """, (search_pattern, search_pattern, search_pattern, meta_pattern)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

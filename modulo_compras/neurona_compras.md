@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
-# Versión 4.8.0 - Ecosistema Unificado y Match Atómico
+# Versión 4.9.4 - Match Atómico CAE, Jerarquía de Bóveda y Engrapadora PDF
 
 Esta neurona gestiona el **Ecosistema de Compras**, unificado en una sola terminal de asalto visual y rápido, encargada de la conciliación fiscal y archivado permanente.
 
@@ -29,18 +29,19 @@ storage.save_factura({
 ## 🛰️ Ecosistema de Ingesta Unificado (v4.8.0)
 El módulo ha evolucionado hacia un diseño de una sola pantalla potente y minimalista:
 
-### 1. Match Atómico Inteligente 🔍
-El formulario de la bóveda cuenta con un **único input** para el número de factura. 
-La función `smart_search_invoice()` en `storage_compras.py` realiza búsquedas elásticas eliminando ceros y guiones en tiempo real. Cuando hay coincidencia, el sistema arroja metadatos completos y origen (AFIP/CALIM).
+### 1. Match Atómico Inteligente con Búsqueda CAE 🔍
+El formulario de la bóveda cuenta con un **único input** para búsqueda omnidireccional. 
+La función `smart_search_invoice()` en `storage_compras.py` realiza búsquedas elásticas eliminando ceros y guiones en tiempo real. Adicionalmente de buscar por número, busca en texto libre dentro del campo `meta_json`, permitiendo al usuario rutear comprobantes largos simplemente ingresando el número de **metadato CAE**. Cuando hay coincidencia, el sistema arroja metadatos completos y origen (AFIP/CALIM).
 
 ### 2. Flujo de Ingesta a Bóveda (3 Pasos)
 1. **Drop & Zoom (UI)**: Se suelta el PDF/Imagen directamente en el panel. Se permite Zoom libre mediante scroll y paneo con drag en el área de visualización.
 2. **Match (UI/DB)**: Se busca el comprobante y se relaciona automágicamente.
-3. **Archivado Nominal y Limpieza de Origen**:
-    Al confirmar, la API:
-    - **Renombra** la evidencia siguiendo el estricto formato: `YYYY-MM-DD_NombreProveedor_Factura_PV-NUM.pdf` (Ej: `2026-04-05_FARMACITY_Factura_0001-00000123.pdf`).
-    - **Archiva** en la bóveda sagrada `/modulo_compras/archivos_compras/[CUIT] - [Proveedor]/[Año]/[Mes]/`.
-    - **Limpia** (elimina/mueve) el archivo original que estaba temporalmente en la carpeta `inbox_compras`. (Limpieza atómica sin registros huérfanos).
+3. **Archivado Nominal, Sub-Capas y Engrapadora Virtual PDF**:
+    Al confirmar, el Motor Orquestador de la API:
+    - **Renombra** la evidencia siguiendo el estricto formato: `YYYY-MM-DD_[Proveedor]_Factura_PV-NUM.pdf`.
+    - **Archiva en Bóveda Jerárquica**: Envía el archivo a la bóveda sagrada añadiendo la etiqueta a la subcategoría Facturas: `/modulo_compras/archivos_compras/Facturas/[CUIT] - [Proveedor]/[Año]/[Mes]/`. Evita colocar "NONE" en CUITs ausentes.
+    - **Engrapadora Virtual PDF**: Si la factura ya tenía un documento asociado (tiene_foto = 1), el motor ensamblará un Buffer en memoria RAM utilizando PyPDF2 y Pillow para armar un PDF en tiempo real concatenándolo con la nueva imagen, sobreescribiendo una versión multi-hoja.
+    - **Limpia** el archivo entrante del `inbox_compras` de origen.
 
 ### 3. Filtros Cronológicos ML-Style
 La bóveda listando las facturas ya procesadas filtra masivamente la base de datos usando `anio` y `mes`.

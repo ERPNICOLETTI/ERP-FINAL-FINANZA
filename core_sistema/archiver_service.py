@@ -18,12 +18,16 @@ def calculate_hash(filepath):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=True, overwrite=False):
+def sanitize_filename(filename):
+    """Limpia el nombre del archivo de caracteres no permitidos."""
+    return re.sub(r'[^\w\.-]', '_', filename)
+
+def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=True, overwrite=False, subcategoria=None):
     """
     Mueve un archivo crudo analizado a la estructura jerárquica modular.
-    Estructura v4.6: 
-    - Bóveda (use_vault=True):  modulo_{M}/archivos_{M}/{ENTIDAD}/{AÑO}/{MES}/
-    - Histórico (use_vault=False): modulo_{M}/crudos_{M}/{ENTIDAD}/{AÑO}/{MES}/
+    Estructura v4.7: 
+    - Bóveda:  modulo_{M}/archivos_{M}/[subcategoria]/{ENTIDAD}/{AÑO}/{MES}/
+    - Histórico: modulo_{M}/crudos_{M}/[subcategoria]/{ENTIDAD}/{AÑO}/{MES}/
     """
     if not os.path.exists(filepath_origen):
         raise FileNotFoundError(f"No se encontró el archivo de origen: {filepath_origen}")
@@ -34,14 +38,25 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     # Seleccionar carpeta destino según propósito (Bóveda o Histórico)
     subfolder = f'archivos_{modulo.lower()}' if use_vault else f'crudos_{modulo.lower()}'
     
-    target_dir = os.path.join(
-        BASE_DIR, 
-        f'modulo_{modulo.lower()}', 
-        subfolder,
-        entidad_clean,
-        str(anio),
-        str(mes).zfill(2)
-    )
+    if subcategoria:
+        target_dir = os.path.join(
+            BASE_DIR, 
+            f'modulo_{modulo.lower()}', 
+            subfolder,
+            subcategoria,
+            entidad_clean,
+            str(anio),
+            str(mes).zfill(2)
+        )
+    else:
+        target_dir = os.path.join(
+            BASE_DIR, 
+            f'modulo_{modulo.lower()}', 
+            subfolder,
+            entidad_clean,
+            str(anio),
+            str(mes).zfill(2)
+        )
 
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
