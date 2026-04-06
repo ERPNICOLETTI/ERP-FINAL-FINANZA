@@ -66,7 +66,7 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     
     original_name = os.path.basename(filepath_origen)
     target_filename = sanitize_filename(original_name)
-    target_path = os.path.join(target_dir, target_filename)
+    target_path = os.path.join(target_dir, target_filename).replace('\\', '/')
 
     # 2. Política de Archivo Único por Hash
     if os.path.exists(target_path):

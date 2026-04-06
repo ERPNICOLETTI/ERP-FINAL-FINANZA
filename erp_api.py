@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from PIL import Image
 from PyPDF2 import PdfMerger
 from erp_master import ERPMaster
+from datetime import datetime
 
 # IMPORTACIÓN ESTRUCTURADA POR DOMINIOS (DDD) 🏗️🧱🧠⚖️
 from modulo_tarjetas import logica_tarjetas as tarjetas
@@ -240,6 +241,21 @@ async def vincular_archivo_factura(
                 if os.path.exists(new_final_path): os.remove(new_final_path)
                 os.rename(final_path, new_final_path)
                 final_path = new_final_path
+                
+                # Inyección a Base de Datos como PENDIENTE
+                storage.save_factura({
+                    "cuit_proveedor": cuit,
+                    "proveedor": proveedor,
+                    "punto_venta": pv,
+                    "numero_comprobante": num,
+                    "fecha": fecha,
+                    "tipo_operacion": "COMPRA",
+                    "tipo_comprobante": "88", # Código interno para Pendientes
+                    "origen": "PENDIENTE_CALIM",
+                    "status": "SALA_ESPERA",
+                    "tiene_foto": 1,
+                    "path_archivo": final_path
+                })
             
             return {"status": "success", "message": "Enviado a Sala de Espera CALIM"}
 
