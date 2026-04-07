@@ -104,9 +104,9 @@ async def spotlight_search(q: str):
 # ------------------------------------------------------------------------------------------
 
 @app.get("/api/pagos")
-async def list_pagos(estado: str = None, categoria: str = None):
+async def list_pagos(estado: str = None, categoria: str = None, periodo_anio: str = None, periodo_mes: str = None):
     """Listar todos los vencimientos y pagos."""
-    return pagos_storage.get_pagos(estado=estado, categoria=categoria)
+    return pagos_storage.get_pagos(estado=estado, categoria=categoria, periodo_anio=periodo_anio, periodo_mes=periodo_mes)
 
 @app.post("/api/pagos")
 async def save_pago_record(data: dict):
@@ -385,7 +385,11 @@ os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "archivos_compras"), exist
 os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "crudos_compras"), exist_ok=True)
 os.makedirs(os.path.join(WORKSPACE, "modulo_compras", "inbox_compras"), exist_ok=True)
 
+# Directorios de Pagos
+os.makedirs(os.path.join(WORKSPACE, "modulo_pagos", "archivos_pagos"), exist_ok=True)
+
 app.mount("/archivos/compras", StaticFiles(directory="modulo_compras/archivos_compras"), name="archivos_compras")
+app.mount("/archivos/pagos", StaticFiles(directory="modulo_pagos/archivos_pagos"), name="archivos_pagos")
 app.mount("/historico/compras", StaticFiles(directory="modulo_compras/crudos_compras"), name="crudos_compras")
 app.mount("/inbox", StaticFiles(directory="modulo_compras/inbox_compras"), name="inbox_local")
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

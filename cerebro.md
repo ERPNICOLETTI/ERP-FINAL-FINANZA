@@ -51,15 +51,25 @@ ARCA/AFIP, plataforma CALIM, Libro IVA y digitalización híbrida.
 Motor de búsqueda 360, Archivador Legal y esquema global.
 👉 **Manual**: [db_architecture.md](db_architecture.md)
 
+### 💰 Pagos (Vencimientos Sindicales y Servicios)
+Control de boletas sindicales (SEC, FAECYS, INACAP, POLICIA), servicios e impuestos.
+👉 **Manual**: [modulo_pagos/neurona_pagos.md](modulo_pagos/neurona_pagos.md)
+👉 **Taxonomía**: [modulo_pagos/pagos_recurrentes.md](modulo_pagos/pagos_recurrentes.md)
+
 ---
 
 ## ⚙️ 4. API de Parsers (Interface Estándar)
-Todos los parsers deben implementar la función:
+Todos los parsers de módulos core (Tarjetas, Compras, Bancos) implementan:
 `procesar_archivo(filepath) -> (bool, dict)`
 
-El diccionario de retorno `info` **debe** contener:
+El parser de Pagos usa una interface propia:
+`procesar_pago(filepath) -> (bool, dict)`
+
+El diccionario de retorno **debe** contener para módulos core:
 - `modulo`: 'TARJETAS' | 'COMPRAS' | 'BANCOS'
 - `entidad`: Nombre del proveedor/banco (ej: 'PAYWAY').
 - `anio` / `mes`: Para la jerarquía de archivado.
 - `db_table`: Nombre de la tabla de destino.
 - `id_insertado`: El ID generado para actualizar la ruta del archivo.
+
+Para Pagos, el dict incluye: `concepto`, `categoria`, `periodo_mes`, `periodo_anio`, `monto`, `monto_2`, `fecha_vencimiento`, `fecha_vencimiento_2`, `meta_json`.
