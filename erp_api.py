@@ -17,6 +17,7 @@ from modulo_tarjetas import logica_tarjetas as tarjetas
 # IMPORTACIÓN DE LIBRERÍAS DE CONTROLADOR DE ALMACENAMIENTO LOCAL
 # El control cruzado ocurre aquí a nivel aplicación, FastAPI llama al motor SQLite.
 import modulo_compras.storage_compras as storage
+import modulo_pagos.storage_pagos as pagos_storage
 from core_sistema import archiver_service
 from modulo_tarjetas import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
 
@@ -95,8 +96,26 @@ async def process_inboxes():
 @app.get("/api/search")
 async def spotlight_search(q: str):
     """Busqueda 360 estilo Spotlight sobre FTS5"""
-    results = ingesta.search_360(q)
+    results = storage.smart_search_invoice(q)
     return {"results": results or []}
+
+# ------------------------------------------------------------------------------------------
+# ENDPOINTS DE API - MÓDULO PAGOS (v5.0.0)
+# ------------------------------------------------------------------------------------------
+
+@app.get("/api/pagos")
+async def list_pagos(estado: str = None, categoria: str = None):
+    """Listar todos los vencimientos y pagos."""
+    return pagos_storage.get_pagos(estado=estado, categoria=categoria)
+
+@app.post("/api/pagos")
+async def save_pago_record(data: dict):
+    """Guardar o actualizar un registro de pago."""
+    pago_id = pagos_storage.save_pago(data)
+    if pago_id:
+        return {"status": "success", "id": pago_id}
+    return {"status": "error", "message": "No se pudo guardar el pago"}
+
 
 @app.get("/summary")
 async def get_summary(anio: str = None):
