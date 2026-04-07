@@ -39,7 +39,19 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     # Seleccionar carpeta destino según propósito (Bóveda o Histórico)
     subfolder = f'archivos_{modulo.lower()}' if use_vault else f'crudos_{modulo.lower()}'
     
-    if subcategoria:
+    # LÓGICA ESPECIALIZADA PARA PAGOS v5.2 (Legajo Único)
+    if modulo.upper() == 'PAGOS' and use_vault:
+        # modulo_pagos/archivos_pagos/[CATEGORIA]/[AÑO]/[MES]/[CONCEPTO]/
+        target_dir = os.path.join(
+            BASE_DIR, 
+            f'modulo_{modulo.lower()}', 
+            subfolder,
+            subcategoria if subcategoria else 'OTROS',
+            str(anio),
+            str(mes).zfill(2),
+            entidad_clean
+        ).replace('\\', '/')
+    elif subcategoria:
         target_dir = os.path.join(
             BASE_DIR, 
             f'modulo_{modulo.lower()}', 

@@ -5,8 +5,7 @@ import logging
 import re
 from datetime import datetime
 
-# STORAGE PAGOS - v5.0.0 💳🧱🧠⚖️
-# Coherencia Arquitectónica con Compras y Bancos
+# STORAGE PAGOS - v5.2.0 (Inteligencia Centralizada) 💳🧱🧠⚖️
 
 logger = logging.getLogger(__name__)
 
@@ -29,21 +28,23 @@ def get_db_connection():
     return conn
 
 def init_db_pagos():
-    """Crea la tabla de Pagos y Vencimientos."""
+    """Crea la tabla de Pagos con soporte para Legajo Único (Boleta + Comprobante)."""
     conn = get_db_connection()
-    print("🧱 [PAGOS] Construyendo tabla de Vencimientos y Pagos v5.0...")
+    print("🧱 [PAGOS] Evolucionando tabla de Pagos v5.2 (Schema Trazabilidad Dual)...")
 
+    # Migración/Creación: Usamos un diseño que soporta el ciclo de vida del pago
     conn.execute('''
         CREATE TABLE IF NOT EXISTS pagos (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             concepto            TEXT NOT NULL,
-            categoria           TEXT, -- Luz, Alquiler, 931, etc.
+            categoria           TEXT,
             fecha_vencimiento   TEXT,
-            fecha_pago          TEXT,
             monto               REAL DEFAULT 0,
-            estado              TEXT DEFAULT 'PENDIENTE', -- PENDING / PAID
-            path_archivo        TEXT,
-            hash_archivo        TEXT,
+            path_boleta         TEXT,
+            path_comprobante    TEXT,
+            estado              TEXT DEFAULT 'PENDIENTE',
+            hash_boleta         TEXT,
+            hash_comprobante    TEXT,
             meta_json           TEXT DEFAULT '{}',
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -52,43 +53,61 @@ def init_db_pagos():
     conn.close()
 
 def save_pago(data: dict):
-    """Guarda o actualiza un vencimiento/pago."""
+    """
+    Guarda o actualiza un pago. 
+    Lógica de Estado: PENDIENTE si solo hay boleta, PAGADO si hay comprobante.
+    """
     conn = get_db_connection()
     try:
-        path_limpio = sanitize_path_db(data.get('path_archivo'))
+        p_boleta = sanitize_path_db(data.get('path_boleta'))
+        p_comprobante = sanitize_path_db(data.get('path_comprobante'))
         
-        # Si tiene ID, es un UPDATE
-        if data.get('id'):
-            cursor = conn.execute('''
+        # Determinar estado
+        estado = 'PAGADO' if p_comprobante else 'PENDIENTE'
+        
+        # Si ya existe por concepto y fecha_vencimiento, hacemos UPDATE
+        cursor = conn.execute('''
+            SELECT id, path_boleta, path_comprobante FROM pagos 
+            WHERE concepto = ? AND (fecha_vencimiento = ? OR fecha_vencimiento IS NULL)
+        ''', (data.get('concepto'), data.get('fecha_vencimiento')))
+        
+        res = cursor.fetchone()
+        
+        if res:
+            pago_id = res['id']
+            # Mantener lo que ya estaba si el nuevo dato es nulo
+            final_boleta = p_boleta if p_boleta else res['path_boleta']
+            final_compro = p_comprobante if p_comprobante else res['path_comprobante']
+            final_estado = 'PAGADO' if final_compro else 'PENDIENTE'
+            
+            conn.execute('''
                 UPDATE pagos SET 
-                    concepto = COALESCE(?, concepto),
                     categoria = COALESCE(?, categoria),
-                    fecha_vencimiento = COALESCE(?, fecha_vencimiento),
-                    fecha_pago = COALESCE(?, fecha_pago),
                     monto = COALESCE(?, monto),
-                    estado = COALESCE(?, estado),
-                    path_archivo = ?,
+                    fecha_vencimiento = COALESCE(?, fecha_vencimiento),
+                    path_boleta = ?,
+                    path_comprobante = ?,
+                    estado = ?,
                     meta_json = ?
                 WHERE id = ?
             ''', (
-                data.get('concepto'), data.get('categoria'), 
-                data.get('fecha_vencimiento'), data.get('fecha_pago'),
-                data.get('monto'), data.get('estado'),
-                path_limpio, json.dumps(data.get('meta_json', {})),
-                data.get('id')
+                data.get('categoria'), data.get('monto'), data.get('fecha_vencimiento'),
+                final_boleta, final_compro, final_estado,
+                json.dumps(data.get('meta_json', {})), pago_id
             ))
-            return data.get('id')
+            conn.commit()
+            return pago_id
         else:
             # INSERT
             cursor = conn.execute('''
                 INSERT INTO pagos (
-                    concepto, categoria, fecha_vencimiento, monto, estado, path_archivo, meta_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    concepto, categoria, fecha_vencimiento, monto, 
+                    path_boleta, path_comprobante, estado, meta_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 data.get('concepto'), data.get('categoria', 'OTROS'),
                 data.get('fecha_vencimiento'), data.get('monto', 0),
-                data.get('estado', 'PENDIENTE'), path_limpio, 
-                json.dumps(data.get('meta_json', {}))
+                p_boleta, p_comprobante, estado, json.dumps(data.get('meta_json', {}))
             ))
             conn.commit()
             return cursor.lastrowid
@@ -98,22 +117,9 @@ def save_pago(data: dict):
     finally:
         conn.close()
 
-def get_pagos(estado=None, categoria=None):
-    """Lista los pagos con filtros opcionales."""
+def get_pagos():
     conn = get_db_connection()
-    query = "SELECT * FROM pagos WHERE 1=1"
-    params = []
-    
-    if estado:
-        query += " AND estado = ?"
-        params.append(estado)
-    if categoria:
-        query += " AND categoria = ?"
-        params.append(categoria)
-        
-    query += " ORDER BY fecha_vencimiento ASC"
-    
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute("SELECT * FROM pagos ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

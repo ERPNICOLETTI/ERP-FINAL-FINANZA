@@ -27,7 +27,7 @@ class ERPMaster:
 
     def setup_inbox_and_archives(self):
         """Auto-genera la infraestructura descentralizada v4.6 (Aislamiento Físico)."""
-        modulos = ['compras', 'tarjetas', 'bancos']
+        modulos = ['compras', 'tarjetas', 'bancos', 'pagos']
         self.inbox_paths = []
         self.crudos_paths = []
         self.archivos_paths = []
@@ -97,6 +97,13 @@ class ERPMaster:
                 try:
                     # --- DESPACHADOR INTELIGENTE v4.0 ---
                     
+                    # 0. MODULO PAGOS (Nuevo Procesador Autónomo v5.2)
+                    if "INBOX_PAGOS" in inbox_path.upper():
+                        from modulo_pagos import logic_pagos
+                        logic_pagos.procesar_inbox_pagos(inbox_path)
+                        # Este proceso es autónomo, saltamos al siguiente archivo
+                        continue
+
                     # 1. MODULO TARJETAS
                     if "PAYWAY" in f_upper and f_upper.endswith(".PDF"):
                         from modulo_tarjetas import parser_payway_liq
