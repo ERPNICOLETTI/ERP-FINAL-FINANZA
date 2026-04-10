@@ -22,7 +22,7 @@ def sanitize_filename(filename):
     """Limpia el nombre del archivo de caracteres no permitidos."""
     return re.sub(r'[^\w\.-]', '_', filename)
 
-def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=True, overwrite=False, subcategoria=None):
+def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=True, overwrite=False, subcategoria=None, forced_filename=None):
     """
     Mueve un archivo crudo analizado a la estructura jerárquica modular.
     Estructura v4.7: 
@@ -39,7 +39,19 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     # Seleccionar carpeta destino según propósito (Bóveda o Histórico)
     subfolder = f'archivos_{modulo.lower()}' if use_vault else f'crudos_{modulo.lower()}'
     
-    if subcategoria:
+    # LÓGICA ESPECIALIZADA PARA PAGOS v5.2 (Legajo Único)
+    if modulo.upper() == 'PAGOS' and use_vault:
+        # modulo_pagos/archivos_pagos/[CATEGORIA]/[CONCEPTO]/[AÑO]/[MES]/
+        target_dir = os.path.join(
+            BASE_DIR, 
+            f'modulo_{modulo.lower()}', 
+            subfolder,
+            subcategoria if subcategoria else 'OTROS',
+            entidad_clean,
+            str(anio),
+            str(mes).zfill(2)
+        ).replace('\\', '/')
+    elif subcategoria:
         target_dir = os.path.join(
             BASE_DIR, 
             f'modulo_{modulo.lower()}', 
@@ -65,8 +77,17 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
     # 1. Calcular Hash del archivo a archivar
     current_hash = calculate_hash(filepath_origen)
     
-    original_name = os.path.basename(filepath_origen)
-    target_filename = sanitize_filename(original_name)
+    if forced_filename:
+        target_filename = sanitize_filename(forced_filename)
+        # Aseguramos conservar la extensión original si forced_filename no la trae 
+        # (Aunque en general la construiremos con extensión)
+        if '.' not in target_filename:
+            ext = os.path.splitext(filepath_origen)[1]
+            target_filename += ext
+    else:
+        original_name = os.path.basename(filepath_origen)
+        target_filename = sanitize_filename(original_name)
+        
     target_path = os.path.join(target_dir, target_filename).replace('\\', '/')
 
     # 2. Política de Archivo Único por Hash

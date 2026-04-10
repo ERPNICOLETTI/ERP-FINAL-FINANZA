@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Módulo Pagos v5.2</title>
+    <link rel="stylesheet" href="style.css?v=5.2.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Pagos</span></h1>
+                <p>Gestión de Vencimientos y Servicios v5.2 💳</p>
+            </div>
+            <div class="header-actions">
+                <a href="index.html" class="btn-sync" style="background:#555; text-decoration:none;">◀️ Volver a Compras</a>
+            </div>
+        </header>
+
+        <main class="ecosystem-layout" style="display:block; padding: 20px;">
+            <section class="boveda-panel" style="width:100%; max-width: 1200px; margin:0 auto;">
+                
+                <div class="boveda-header">
+                    <div class="search-pro">
+                        <input type="text" id="pro-search" placeholder="🔍 Buscar categoría o concepto...">
+                    </div>
+                    <div class="cron-filters">
+                        <select id="filter-anio">
+                            <option value="2026">Año 2026</option>
+                            <option value="2025">Año 2025</option>
+                        </select>
+                        <select id="filter-mes">
+                            <option value="01">Enero</option>
+                            <option value="02">Febrero</option>
+                            <option value="03">Marzo</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Mayo</option>
+                            <option value="06">Junio</option>
+                            <option value="07">Julio</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Sep.</option>
+                            <option value="10">Oct.</option>
+                            <option value="11">Nov.</option>
+                            <option value="12">Dic.</option>
+                        </select>
+                        <select id="filter-estado">
+                            <option value="">Status Global</option>
+                            <option value="PENDIENTE">Solo Pendientes / Vencidas</option>
+                            <option value="PAGADO">Solo Pagados</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="status-pills">
+                    <button class="pill active" onclick="pagosApp.setEstado('')">Todas</button>
+                    <button class="pill pending" onclick="pagosApp.setEstado('PENDIENTE')">Pendientes 🔴</button>
+                    <button class="pill completed" onclick="pagosApp.setEstado('PAGADO')">Pagados 🟢</button>
+                </div>
+
+                <div class="table-container-final glass">
+                    <table id="table-pagos">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Vencimiento</th>
+                                <th>Categoría</th>
+                                <th>Concepto</th>
+                                <th>Monto</th>
+                                <th>Legajo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-pagos">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Visor Inteligente de PDFs (Acero) -->
+    <script src="app_pagos.js?v=5.2.0"></script>
+</body>
+</html>

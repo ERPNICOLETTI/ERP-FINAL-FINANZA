@@ -62,3 +62,26 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 - `status`: Campo vital para el ciclo de vida del dato (`NORMAL` | `SALA_ESPERA`).
 - `tiene_foto`: Booleano vital para el semáforo (Rojo/Verde) de vinculación de evidencias físicas.
 
+---
+
+## 🏦 Tabla: `pagos` — Schema v5.4.1 (Módulo Pagos)
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | Auto-incremental |
+| `categoria` | TEXT | SINDICALES / SERVICIOS / IMPUESTOS |
+| `concepto` | TEXT | SEC / FAECYS / INACAP / POLICIA / SERVICOOP / ... |
+| `periodo_mes` | TEXT | MM (ej: `"01"`) |
+| `periodo_anio` | TEXT | YYYY (ej: `"2026"`) |
+| `monto` | REAL | Monto del 1er vencimiento (exacto del PDF) |
+| `fecha_vencimiento` | TEXT | ISO `YYYY-MM-DD` — 1er vencimiento |
+| `monto_2` | REAL | Monto del 2do vencimiento (0 si no aplica) |
+| `fecha_vencimiento_2` | TEXT | ISO `YYYY-MM-DD` — 2do vencimiento (NULL si no aplica) |
+| `estado` | TEXT | `PENDIENTE` al ingestar boleta / `PAGADO` al vincular comprobante |
+| `path_boleta` | TEXT | Ruta **relativa** con `/` — se llena al procesar la boleta |
+| `path_comprobante` | TEXT | Ruta **relativa** con `/` — se llena al vincular el comprobante |
+| `hash_boleta` | TEXT | SHA256 para idempotencia |
+| `meta_json` | TEXT | JSON con `full_text` del PDF y montos auxiliares |
+
+> [!IMPORTANT]
+> `monto_2` y `fecha_vencimiento_2` se usan cuando el sindicato ofrece 2 opciones de pago (con/sin recargo). SEC y FAECYS siempre tienen doble vencimiento. INACAP y POLICIA tienen vencimiento único.
