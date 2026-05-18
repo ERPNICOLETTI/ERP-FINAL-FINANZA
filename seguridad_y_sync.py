@@ -47,7 +47,13 @@ def git_sync():
         else:
             print(f"✅ [GIT] Commit registrado localmente: '{commit_msg}'")
             
-        # 3. Push
+        # 3. Pull (Sincronizar cambios externos primero)
+        print("  -> Sincronizando con la nube ('git pull --rebase')...")
+        pull_res = subprocess.run(["git", "pull", "--rebase"], cwd=BASE_DIR, capture_output=True, text=True)
+        if pull_res.returncode != 0:
+            print(f"⚠️ [GIT] Advertencia al hacer pull (podría requerir tu atención manual):\n{pull_res.stderr}")
+            
+        # 4. Push
         print("  -> Ejecutando 'git push'")
         push_res = subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, text=True)
         
