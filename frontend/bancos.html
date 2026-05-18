@@ -126,6 +126,52 @@
                         </div>
                     </div>
                 </form>
+                
+                <div style="background: rgba(0,0,0,0.2); padding: 0.8rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 1rem;">
+                    <span style="color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Acción Múltiple:</span>
+                    <form id="bulk-edit-form" hx-post="/api/bancos/movimientos/bulk_categoria" hx-target="#tbody-bancos" hx-include="#filters-form" style="display: flex; gap: 0.5rem; align-items: center; margin: 0;">
+                        <style>
+                            #bulk-select option { background: #1e293b; color: #fff; }
+                            #bulk-select optgroup { background: #0f172a; color: #94a3b8; font-style: normal; font-weight: bold; }
+                        </style>
+                        <select id="bulk-select" name="new_categoria" style="padding: 0.4rem; background: rgba(30,41,59,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #fff; font-size: 0.85rem;" required>
+                            <option value="">Seleccionar nueva categoría...</option>
+                            <optgroup label="INGRESOS">
+                                <option value="Sueldo">Sueldo 💼</option>
+                                <option value="Ventas">Ventas 🧾</option>
+                                <option value="Transferencia recibida">Transferencia recibida 💸</option>
+                                <option value="Intereses">Intereses 🏦</option>
+                                <option value="Regalos">Regalos 🎁</option>
+                                <option value="Inversiones">Inversiones 📈</option>
+                                <option value="Reembolsos">Reembolsos 📦</option>
+                                <option value="Otros Ingresos">Otros Ingresos 🧮</option>
+                            </optgroup>
+                            <optgroup label="EGRESOS">
+                                <option value="Comida">Comida 🍔</option>
+                                <option value="Transporte">Transporte 🚗</option>
+                                <option value="Vivienda">Vivienda 🏠</option>
+                                <option value="Servicios">Servicios 💡</option>
+                                <option value="Impuestos">Impuestos 🧾</option>
+                                <option value="Salud">Salud 🏥</option>
+                                <option value="Educación">Educación 🎓</option>
+                                <option value="Ocio">Ocio 🎮</option>
+                                <option value="Compras">Compras 🛒</option>
+                                <option value="Ropa">Ropa 👕</option>
+                                <option value="Tecnología">Tecnología 💻</option>
+                                <option value="Deportes">Deportes 🏋️</option>
+                                <option value="Estética">Estética 💅</option>
+                                <option value="Mascotas">Mascotas 🐶</option>
+                                <option value="Pago Tarjeta">Pago Tarjeta 💳</option>
+                                <option value="Otros">Otros Egresos 📦</option>
+                            </optgroup>
+                            <optgroup label="OTROS">
+                                <option value="Movimiento Interno">Movimientos Internos 🔄</option>
+                                <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
+                            </optgroup>
+                        </select>
+                        <button type="submit" class="btn-primary-main" style="padding: 0.4rem 1rem; font-size: 0.85rem; border: none; color: white;" hx-confirm="¿Reclasificar TODOS los movimientos visibles con los filtros actuales?">Aplicar a Visibles</button>
+                    </form>
+                </div>
 
                 <div class="table-container-final glass">
                     <table id="table-compras-final">

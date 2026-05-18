@@ -1,20 +1,85 @@
-<div class="header">
-    <div style="flex:1;">
-        <h2>Categorías Maestras 🗂️</h2>
-        <p style="color: #888; font-size: 0.9rem;">El cerebro global de clasificación del ERP.</p>
-    </div>
-    <button class="btn btn-primary" hx-get="/api/categorias/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
-        <i class="fas fa-plus"></i> Nueva Categoría
-    </button>
-</div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Categorías Maestras</title>
+    <link rel="stylesheet" href="style.css?v=5.0.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        .cat-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        
+        /* Premium Table Styles */
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        
+        .action-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 0.5rem;
+        }
+        
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+        }
+        
+        /* Header Fixes */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Ajustes</span></h1>
+                <p>Centro de Clasificación 🗂️</p>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Inicio</a>
+                <button class="btn-sync" hx-get="/api/categorias/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+                    ➕ Nueva Categoría
+                </button>
+            </div>
+        </header>
 
-<div class="content" style="padding: 2rem;">
-    <!-- Lista de Categorías -->
-    <div id="categorias-list" hx-get="/api/categorias/list" hx-trigger="load">
-        Cargando categorías...
+        <main style="padding: 2rem; width: 100%; max-width: 1200px; margin: 0 auto;">
+            <div style="margin-bottom: 2rem;">
+                <h2>Categorías Maestras 🗂️</h2>
+                <p style="color: #888; font-size: 0.9rem;">El cerebro global de clasificación del ERP.</p>
+            </div>
+            
+            <!-- Lista de Categorías -->
+            <div id="categorias-list" hx-get="/api/categorias/list" hx-trigger="load">
+                Cargando categorías...
+            </div>
+        </main>
+        
+        <div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+            <!-- Modal content will be loaded here -->
+        </div>
     </div>
-</div>
-
-<div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
-    <!-- Modal content will be loaded here -->
-</div>
+</body>
+</html>

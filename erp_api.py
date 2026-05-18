@@ -51,12 +51,28 @@ def merge_files_to_pdf(existing_path: str, new_path: str, out_path: str):
         f.write(temp_buffer.getvalue())
 
 # ------------------------------------------------------------------------------------------
+# ENDPOINTS DE API - MÓDULO COMPRAS
+# ------------------------------------------------------------------------------------------
+
+class ImportRequest(BaseModel):
+    fuente: str
+    path: str
+
+class FacturaUpdate(BaseModel):
+    punto_venta: str = None
+    numero_comprobante: str = None
+
+app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
+
+# Motor de Plantillas para HTMX 🚀
+templates = Jinja2Templates(directory="frontend")
+# ------------------------------------------------------------------------------------------
 # ENDPOINTS DE API - CATEGORIAS MAESTRAS
 # ------------------------------------------------------------------------------------------
 
 @app.get("/categorias")
 async def categorias_page(request: Request):
-    return templates.TemplateResponse("categorias.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="categorias.html", context={"request": request})
 
 @app.get("/api/categorias/list")
 async def list_categorias(request: Request):
@@ -65,7 +81,7 @@ async def list_categorias(request: Request):
     conn.row_factory = storage_bancos.sqlite3.Row
     categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
     conn.close()
-    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+    return templates.TemplateResponse(request=request, name="categorias_list.html", context={"request": request, "categorias": categorias})
 
 @app.get("/api/categorias/form")
 async def form_categoria(request: Request, id: str = None):
@@ -76,7 +92,7 @@ async def form_categoria(request: Request, id: str = None):
         conn.row_factory = storage_bancos.sqlite3.Row
         cat = conn.execute("SELECT * FROM categorias_maestras WHERE id = ?", (id,)).fetchone()
         conn.close()
-    return templates.TemplateResponse("categorias_form.html", {"request": request, "cat": cat})
+    return templates.TemplateResponse(request=request, name="categorias_form.html", context={"request": request, "cat": cat})
 
 @app.post("/api/categorias/save")
 async def save_categoria(request: Request, id: str = Form(""), nombre: str = Form(...), tipo: str = Form(...), emoji: str = Form(""), color_css: str = Form(""), palabras_clave: str = Form("")):
@@ -93,7 +109,7 @@ async def save_categoria(request: Request, id: str = Form(""), nombre: str = For
     conn.row_factory = storage_bancos.sqlite3.Row
     categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
     conn.close()
-    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+    return templates.TemplateResponse(request=request, name="categorias_list.html", context={"request": request, "categorias": categorias})
 
 @app.delete("/api/categorias/{id}")
 async def delete_categoria(request: Request, id: str):
@@ -105,24 +121,8 @@ async def delete_categoria(request: Request, id: str):
     conn.row_factory = storage_bancos.sqlite3.Row
     categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
     conn.close()
-    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+    return templates.TemplateResponse(request=request, name="categorias_list.html", context={"request": request, "categorias": categorias})
 
-# ------------------------------------------------------------------------------------------
-# ENDPOINTS DE API - MÓDULO COMPRAS
-# ------------------------------------------------------------------------------------------
-
-class ImportRequest(BaseModel):
-    fuente: str
-    path: str
-
-class FacturaUpdate(BaseModel):
-    punto_venta: str = None
-    numero_comprobante: str = None
-
-app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
-
-# Motor de Plantillas para HTMX 🚀
-templates = Jinja2Templates(directory="frontend")
 # Workspace Context
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 master = ERPMaster(WORKSPACE)
@@ -308,7 +308,7 @@ async def list_bancos_movimientos(request: Request, cuenta: str = None, categori
     conn = storage_bancos.get_db_connection()
     conn.row_factory = storage_bancos.sqlite3.Row
     
-    query = "SELECT fecha, banco, cuenta, descripcion, categoria, importe, saldo FROM bancos_movimientos WHERE 1=1"
+    query = "SELECT id, fecha, banco, cuenta, descripcion, categoria, importe, saldo FROM bancos_movimientos WHERE 1=1"
     params = []
     
     if cuenta:
@@ -337,6 +337,56 @@ async def list_bancos_movimientos(request: Request, cuenta: str = None, categori
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(request=request, name="tabla_bancos.html", context={"request": request, "movimientos": movimientos})
     return movimientos
+
+@app.get("/api/bancos/movimientos/{id}/edit_categoria")
+async def edit_mov_categoria(request: Request, id: int):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.row_factory = storage_bancos.sqlite3.Row
+    categorias = conn.execute("SELECT nombre, emoji FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
+    conn.close()
+    return templates.TemplateResponse(request=request, name="bancos_inline_edit.html", context={"request": request, "id": id, "categorias": categorias})
+
+@app.put("/api/bancos/movimientos/{id}/categoria")
+async def save_mov_categoria(request: Request, id: int, categoria: str = Form(...)):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.execute("UPDATE bancos_movimientos SET categoria=? WHERE id=?", (categoria, id))
+    conn.commit()
+    conn.row_factory = storage_bancos.sqlite3.Row
+    mov = conn.execute("SELECT * FROM bancos_movimientos WHERE id=?", (id,)).fetchone()
+    conn.close()
+    return templates.TemplateResponse(request=request, name="bancos_badge_cell.html", context={"request": request, "mov": mov})
+
+@app.post("/api/bancos/movimientos/bulk_categoria")
+async def bulk_edit_categoria(request: Request, new_categoria: str = Form(...), cuenta: str = Form(None), categoria: str = Form(None), mes: str = Form(None), q: str = Form(None)):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    
+    where_clause = "1=1"
+    params = []
+    
+    if cuenta:
+        where_clause += " AND cuenta LIKE ?"
+        params.append(f"%{cuenta}%")
+    if categoria:
+        where_clause += " AND categoria = ?"
+        params.append(categoria)
+    if mes:
+        where_clause += " AND strftime('%m', fecha) = ?"
+        params.append(mes)
+    if q:
+        where_clause += " AND (descripcion LIKE ? OR CAST(importe AS TEXT) LIKE ?)"
+        params.extend([f"%{q}%", f"%{q}%"])
+        
+    query = f"UPDATE bancos_movimientos SET categoria = ? WHERE {where_clause}"
+    update_params = [new_categoria] + params
+    conn.execute(query, update_params)
+    conn.commit()
+    conn.close()
+    
+    # Return the updated list using the existing list function
+    return await list_bancos_movimientos(request, cuenta, categoria, mes, q)
 
 @app.get("/api/bancos/kpis")
 async def get_bancos_kpis(request: Request, cuenta: str = None, categoria: str = None, mes: str = None, q: str = None):

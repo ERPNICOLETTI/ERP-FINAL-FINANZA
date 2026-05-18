@@ -1,7 +1,18 @@
 # 🧬 NEURONA: MÓDULO BANCOS (Tesorería) 🏦🧠
-# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
+# Versión 5.0.0 - Motor Dinámico de Categorías y Auditaría Inline
 
 Esta neurona es la **"Cámara Acorazada"** del sistema, registrando cada extracto de Chubut, Credicoop e Hipotecario.
+
+---
+
+## 🗂️ Motor Dinámico de Categorías
+> [!IMPORTANT]
+> **Fin del Hardcodeo**: Las categorías ya no residen en código Python (`motor_categorias.py`). Todo el ecosistema consulta la tabla universal `categorias_maestras` en tiempo real para hacer matching de palabras clave.
+
+### Características del Motor (CRUD & UI)
+- **Auto-Asignación Heurística**: Al ingerir un archivo de banco, el motor compara la descripción contra una lista de `palabras_clave` configurables en la DB.
+- **Edición Inline HTMX**: El panel web permite hacer clic directo en el badge de categoría de cualquier movimiento para desplegar un `<select>` y reclasificarlo en vivo (sin refrescar).
+- **Acción Múltiple (Bulk Edit)**: Capacidad de reclasificación masiva inyectando una categoría a todos los resultados filtrados de la tabla con un solo clic.
 
 ---
 

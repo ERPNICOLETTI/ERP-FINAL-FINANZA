@@ -1,0 +1,8 @@
+<td id="cat-cell-{{id}}" hx-target="this" hx-swap="outerHTML">
+    <select name="categoria" hx-put="/api/bancos/movimientos/{{ id }}/categoria" hx-trigger="change" autofocus style="padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); font-size: 0.8rem; outline: none; box-shadow: 0 0 0 2px var(--accent-color, #3b82f6);">
+        <option value="">Seleccionar...</option>
+        {% for cat in categorias %}
+        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji }}</option>
+        {% endfor %}
+    </select>
+</td>

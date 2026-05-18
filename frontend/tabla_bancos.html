@@ -5,7 +5,11 @@
     <td style="max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ mov.descripcion }}">
         {{ mov.descripcion }}
     </td>
-    <td><span class="cat-badge cat-{{ mov.categoria.replace(' ', '_') }}">{{ mov.categoria }}</span></td>
+    <td id="cat-cell-{{mov.id}}" hx-target="this" hx-swap="outerHTML">
+        <div hx-get="/api/bancos/movimientos/{{ mov.id }}/edit_categoria" style="cursor:pointer; display:inline-block;" title="Click para reclasificar">
+            <span class="cat-badge cat-{{ mov.categoria.replace(' ', '_') }}">{{ mov.categoria }}</span>
+        </div>
+    </td>
     <td class="{{ 'val-positive' if mov.importe > 0 else 'val-negative' }}" style="font-weight: 600; text-align: right; white-space: nowrap;">
         $ {{ "{:,.2f}".format(mov.importe).replace(',', 'X').replace('.', ',').replace('X', '.') }}
     </td>

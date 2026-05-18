@@ -66,6 +66,22 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 
 ---
 
+## 🗂️ Tabla: `categorias_maestras` — Schema v5.0.0 (Global)
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | Auto-incremental |
+| `nombre` | TEXT | Nombre de la categoría (Ej: Comida, Sueldo) |
+| `tipo` | TEXT | INGRESO, EGRESO, OTRO |
+| `emoji` | TEXT | Icono representativo (Ej: 🍔) |
+| `color_css` | TEXT | Estilo CSS de la píldora (fondo;texto) |
+| `palabras_clave` | TEXT | Lista separada por comas para auto-detección |
+
+> [!TIP]
+> **Motor Dinámico**: Esta tabla es universal. Ningún módulo debe tener lógica de categorización *hardcodeada* en `.py`. Todo *parser* o motor debe consultar estas palabras clave.
+
+---
+
 ## 🏦 Tabla: `pagos_vencimientos` — Schema v5.4.1 (Módulo Pagos)
 
 | Columna | Tipo | Descripción |
