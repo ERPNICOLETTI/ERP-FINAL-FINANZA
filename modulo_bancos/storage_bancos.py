@@ -22,7 +22,7 @@ def get_db_connection():
 def init_db_bancos():
     """Crea las tablas del dominio Bancos con diseño híbrido v4.0."""
     conn = get_db_connection()
-    print("🧱 [BANCOS] Construyendo tablas Golden Master (Híbrido)...")
+    print("[BANCOS] Construyendo tablas Golden Master (Híbrido)...")
 
     # [CAUTION] Si ya existe, se intentará migrar o recrear. 
     # El usuario ha solicitado una limpieza pre-test.
@@ -38,6 +38,7 @@ def init_db_bancos():
             tipo_movimiento TEXT,
             importe         REAL DEFAULT 0,
             saldo           REAL,
+            categoria       TEXT DEFAULT 'SIN_CATEGORIZAR',
             path_archivo    TEXT, -- [NUEVO v4.0]
             hash_archivo    TEXT,
             metadata_cruda  TEXT DEFAULT '{}',
@@ -45,13 +46,26 @@ def init_db_bancos():
             UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)
         )
     ''')
+    
+    # [NUEVO] Tabla para Metadatos de Archivo (Evitar redundancia)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS bancos_archivos_metadata (
+            hash_archivo TEXT PRIMARY KEY,
+            banco TEXT,
+            metadata_global TEXT,
+            fecha_ingesta TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
     conn.commit()
     conn.close()
 
 
-def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
-    """Guarda masivamente movimientos bancarios con volcado híbrido v4.0. Retorna (agregados, last_id)."""
+def save_movimiento_banco(lista_movimientos: list, hash_archivo: str, metadatos_archivo: dict = None):
+    """
+    Inyecta movimientos bancarios usando el patrón Repositorio.
+    Si se proveen metadatos de archivo, se guardan en una tabla separada para no repetir por fila.
+    """
     conn = get_db_connection()
     agregados = 0
     last_id = None
@@ -59,7 +73,7 @@ def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
         for b in lista_movimientos:
             columnas_duras = {
                 'banco', 'cuenta', 'fecha', 'descripcion',
-                'tipo_movimiento', 'importe', 'saldo', 'hash_archivo', 'path_archivo'
+                'tipo_movimiento', 'importe', 'saldo', 'categoria', 'hash_archivo', 'path_archivo'
             }
             metadata = {k: v for k, v in b.items() if k not in columnas_duras}
 
@@ -67,39 +81,49 @@ def save_movimiento_banco(lista_movimientos: list, hash_archivo: str = None):
                 cursor = conn.execute('''
                     INSERT OR IGNORE INTO bancos_movimientos (
                         banco, cuenta, fecha, descripcion, tipo_movimiento,
-                        importe, saldo, hash_archivo, path_archivo, metadata_cruda
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        importe, saldo, categoria, hash_archivo, path_archivo, metadata_cruda
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'),
                     b.get('fecha'), b.get('descripcion'),
                     b.get('tipo_movimiento', b.get('codigo_movimiento', 'MOV')),
                     b.get('importe', 0), b.get('saldo'),
+                    b.get('categoria', 'SIN_CATEGORIZAR'),
                     b.get('hash_archivo', hash_archivo),
                     b.get('path_archivo'),
                     json.dumps(metadata, ensure_ascii=False, default=str)
                 ))
                 
-                row_id = cursor.lastrowid
+                if cursor.rowcount > 0:
+                    agregados += 1
+                    last_id = cursor.lastrowid
                 
                 # Fallback on IGNORE
-                if row_id == 0 or row_id is None:
+                if (cursor.rowcount == 0 or cursor.rowcount is None) and last_id is None:
                     res = conn.execute('''
                         SELECT id FROM bancos_movimientos 
                         WHERE banco = ? AND cuenta = ? AND fecha = ? AND descripcion = ? AND importe = ? AND saldo = ?
                     ''', (b.get('banco'), b.get('cuenta', 'SIN_ASIGNAR'), b.get('fecha'), b.get('descripcion'), b.get('importe', 0), b.get('saldo'))).fetchone()
                     if res: row_id = res['id']
-
-                if cursor.rowcount > 0:
-                    agregados += 1
+                    
+            except Exception as e:
+                print(f"Error al guardar movimiento en base de datos: {e}")
                 
-                last_id = row_id
-
-            except sqlite3.IntegrityError:
-                pass  # Duplicado
+        # Guardar metadatos del archivo una sola vez
+        if metadatos_archivo and agregados > 0:
+            conn.execute('''
+                INSERT OR IGNORE INTO bancos_archivos_metadata (hash_archivo, banco, metadata_global)
+                VALUES (?, ?, ?)
+            ''', (
+                hash_archivo,
+                lista_movimientos[0].get('banco', 'DESCONOCIDO') if lista_movimientos else 'DESCONOCIDO',
+                json.dumps(metadatos_archivo, ensure_ascii=False, default=str)
+            ))
+            
         conn.commit()
         return agregados, last_id
     except Exception as e:
-        logger.warning(f"Error guardando movimientos bancarios: {e}")
+        print(f"Error masivo en inyección bancaria: {e}")
         return 0, None
     finally:
         conn.close()

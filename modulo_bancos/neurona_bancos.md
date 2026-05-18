@@ -38,7 +38,8 @@ storage.update_record_path(last_id, "/ruta/final/en/archivo/legal.xlsx")
 
 ## 🧱 Tablas Clave
 - `bancos_movimientos`: Tabla unificada.
-- **Idempotencia**: `UNIQUE(banco, cuenta, fecha, descripcion, tipo_movimiento, importe)` + `INSERT OR IGNORE`.
+- **Idempotencia**: `UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)` + `INSERT OR IGNORE`.
+- **Estrategia Anti-Colisión (Filas Idénticas)**: Para evitar que SQLite ignore transacciones legítimas que el banco emite duplicadas en el mismo día (ej. 2 compras exactas y 2 devoluciones exactas que dejan los mismos saldos), los parsers implementan un tracker temporal que añade un sufijo `(2)`, `(3)` al final de la `descripcion` al detectar firmas `fecha_desc_monto_saldo` exactas dentro del mismo archivo.
 
 ---
 

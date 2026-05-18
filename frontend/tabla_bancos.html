@@ -1,0 +1,20 @@
+{% for mov in movimientos %}
+<tr>
+    <td style="white-space: nowrap; color: #888;">{{ mov.fecha }}</td>
+    <td><span class="badge" style="background:#222;" title="{{ mov.banco }}">{{ mov.cuenta if mov.cuenta else mov.banco }}</span></td>
+    <td style="max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ mov.descripcion }}">
+        {{ mov.descripcion }}
+    </td>
+    <td><span class="cat-badge cat-{{ mov.categoria }}">{{ mov.categoria.replace('_', ' ') }}</span></td>
+    <td class="{{ 'val-positive' if mov.importe > 0 else 'val-negative' }}" style="font-weight: 600; text-align: right; white-space: nowrap;">
+        $ {{ "{:,.2f}".format(mov.importe).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+    </td>
+    <td style="color: #666; text-align: right; white-space: nowrap;">
+        $ {{ "{:,.2f}".format(mov.saldo).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6" style="text-align: center; padding: 2rem; color: #666;">No hay movimientos que coincidan con los filtros.</td>
+</tr>
+{% endfor %}

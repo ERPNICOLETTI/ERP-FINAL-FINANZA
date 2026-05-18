@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Tesorería y Bancos</title>
+    <link rel="stylesheet" href="style.css?v=5.0.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        .kpi-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .kpi-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; flex: 1; text-align: center; }
+        .kpi-card h4 { color: #888; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.5rem; }
+        .kpi-card .value { font-size: 2rem; font-weight: 600; color: #fff; }
+        .val-positive { color: #10b981; }
+        .val-negative { color: #ef4444; }
+        .cat-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .cat-VENTA_COBRO { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .cat-GASTO_NEGOCIO { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .cat-GASTO_SUPERMERCADO { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .cat-GASTO_SALUD { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        .cat-GASTO_SERVICIOS { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .cat-GASTO_PERSONAL { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .cat-MOVIMIENTO_INTERNO { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+        .cat-IMPUESTOS_Y_COMISIONES { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .cat-SIN_CATEGORIZAR { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Bancos</span></h1>
+                <p>Tesorería y Movimientos Financieros 🏦</p>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver</a>
+                <button id="btn-process" class="btn-sync" onclick="alert('Funcionalidad de Subida en desarrollo')">⚡ Importar Extracto ⚡</button>
+            </div>
+        </header>
+
+        <main style="padding: 2rem;">
+            <!-- KPIS Financieros Rápidos -->
+            <div class="kpi-row" id="kpi-bancos" hx-get="/api/bancos/kpis" hx-trigger="load, htmx:afterSwap from:#tbody-bancos" hx-include="#filters-form">
+                <div class="kpi-card"><h4>Cargando KPIs...</h4></div>
+            </div>
+
+            <section class="boveda-panel" style="width: 100%;">
+                <form id="filters-form" hx-get="/api/bancos/movimientos" hx-target="#tbody-bancos" hx-trigger="change, keyup delay:300ms from:#search-bancos, submit">
+                    <div class="boveda-header">
+                        <div class="search-pro">
+                            <input type="text" id="search-bancos" name="q" placeholder="🔍 Buscar por descripción o importe exacto...">
+                        </div>
+                        
+                        <div class="cron-filters">
+                            <select name="cuenta">
+                                <option value="">Todas las Cuentas</option>
+                                <option value="CA$ ...8342567">Galicia (Caja Ahorro $)</option>
+                                <option value="CC$ ...3762569">Galicia (Cuenta Corriente $)</option>
+                                <option value="CA U$D ...9382561">Galicia (Caja Ahorro U$D)</option>
+                                <option value="CHUBUT">Chubut (Próximamente)</option>
+                                <option value="CREDICOOP">Credicoop (Próximamente)</option>
+                            </select>
+                            <select name="categoria">
+                                <option value="">Todas las Categorías</option>
+                                <option value="VENTA_COBRO">Ventas y Cobros</option>
+                                <option value="GASTO_NEGOCIO">Gastos del Negocio</option>
+                                <option value="GASTO_SUPERMERCADO">Supermercado y Alimentos</option>
+                                <option value="GASTO_SALUD">Salud y Estética</option>
+                                <option value="GASTO_SERVICIOS">Servicios (Luz, Internet, etc)</option>
+                                <option value="GASTO_PERSONAL">Gastos Personales y Ocio</option>
+                                <option value="MOVIMIENTO_INTERNO">Movimientos Internos</option>
+                                <option value="IMPUESTOS_Y_COMISIONES">Impuestos y Comisiones</option>
+                                <option value="SUELDOS_HONORARIOS">Sueldos y Honorarios</option>
+                                <option value="SIN_CATEGORIZAR">Sin Categorizar</option>
+                            </select>
+                            <select name="mes">
+                                <option value="">Todos los Meses</option>
+                                <option value="01">Enero</option>
+                                <option value="02">Febrero</option>
+                                <option value="03">Marzo</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Mayo</option>
+                                <option value="06">Junio</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="table-container-final glass">
+                    <table id="table-compras-final">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Banco</th>
+                                <th>Descripción</th>
+                                <th>Categoría</th>
+                                <th style="text-align: right;">Importe</th>
+                                <th style="text-align: right;">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-bancos" hx-get="/api/bancos/movimientos" hx-trigger="load">
+                            <tr><td colspan="6" style="text-align: center; padding: 2rem;">Cargando movimientos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

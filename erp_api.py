@@ -244,6 +244,87 @@ async def get_sueldos_bancarios(anio: str = "2026"):
     from modulo_bancos import storage_bancos
     return storage_bancos.get_sueldos(anio)
 
+@app.get("/api/bancos/movimientos")
+async def list_bancos_movimientos(request: Request, cuenta: str = None, categoria: str = None, mes: str = None, q: str = None):
+    """Filtra y devuelve movimientos bancarios para HTMX."""
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.row_factory = storage_bancos.sqlite3.Row
+    
+    query = "SELECT fecha, banco, cuenta, descripcion, categoria, importe, saldo FROM bancos_movimientos WHERE 1=1"
+    params = []
+    
+    if cuenta:
+        # Usamos LIKE para soportar "CHUBUT" que a veces no tiene nro de cuenta exacto aún
+        query += " AND cuenta LIKE ?"
+        params.append(f"%{cuenta}%")
+    if categoria:
+        query += " AND categoria = ?"
+        params.append(categoria)
+    if mes:
+        query += " AND strftime('%m', fecha) = ?"
+        params.append(mes)
+    if q:
+        query += " AND (descripcion LIKE ? OR CAST(importe AS TEXT) LIKE ?)"
+        params.extend([f"%{q}%", f"%{q}%"])
+        
+    # Ordenar por fecha ascendente (lo más viejo arriba). Si hay empate, id DESC para respetar la cronología del día
+    query += " ORDER BY fecha ASC, id DESC"
+    
+    cursor = conn.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    movimientos = [dict(r) for r in rows]
+    
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request=request, name="tabla_bancos.html", context={"request": request, "movimientos": movimientos})
+    return movimientos
+
+@app.get("/api/bancos/kpis")
+async def get_bancos_kpis(request: Request, cuenta: str = None, categoria: str = None, mes: str = None, q: str = None):
+    """Devuelve los KPIs financieros actualizados según los filtros actuales."""
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    
+    query = "SELECT sum(importe) FROM bancos_movimientos WHERE importe > 0"
+    query_neg = "SELECT sum(importe) FROM bancos_movimientos WHERE importe < 0"
+    
+    params = []
+    filtros = ""
+    if cuenta:
+        filtros += " AND cuenta LIKE ?"
+        params.append(f"%{cuenta}%")
+    if categoria:
+        filtros += " AND categoria = ?"
+        params.append(categoria)
+    if mes:
+        filtros += " AND strftime('%m', fecha) = ?"
+        params.append(mes)
+    if q:
+        filtros += " AND (descripcion LIKE ? OR CAST(importe AS TEXT) LIKE ?)"
+        params.extend([f"%{q}%", f"%{q}%"])
+        
+    ingresos = conn.execute(query + filtros, params).fetchone()[0] or 0.0
+    egresos = conn.execute(query_neg + filtros, params).fetchone()[0] or 0.0
+    conn.close()
+    
+    html = f'''
+        <div class="kpi-card">
+            <h4>Total Ingresos 📈</h4>
+            <div class="value val-positive">$ {"{:,.2f}".format(ingresos).replace(',', 'X').replace('.', ',').replace('X', '.')}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>Total Egresos 📉</h4>
+            <div class="value val-negative">$ {"{:,.2f}".format(egresos).replace(',', 'X').replace('.', ',').replace('X', '.')}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>Flujo Neto ⚖️</h4>
+            <div class="value" style="color: {'#10b981' if (ingresos+egresos) >= 0 else '#ef4444'}">$ {"{:,.2f}".format(ingresos + egresos).replace(',', 'X').replace('.', ',').replace('X', '.')}</div>
+        </div>
+    '''
+    return HTMLResponse(content=html)
+
 @app.get("/api/facturas")
 async def list_facturas(request: Request, anio: str = None, mes: str = None, estado: str = "all", q: str = None):
     """Listado de facturas con soporte HTMX y Jinja2."""
@@ -485,6 +566,10 @@ async def home_dashboard(request: Request):
 @app.get("/compras", response_class=HTMLResponse)
 async def vista_compras(request: Request):
     return templates.TemplateResponse(request=request, name="compras.html", context={"request": request})
+
+@app.get("/bancos", response_class=HTMLResponse)
+async def vista_bancos(request: Request):
+    return templates.TemplateResponse(request=request, name="bancos.html", context={"request": request})
 
 @app.get("/pagos", response_class=HTMLResponse)
 async def vista_pagos(request: Request):

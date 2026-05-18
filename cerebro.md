@@ -62,6 +62,9 @@ Control de boletas sindicales (SEC, FAECYS, INACAP, POLICIA), servicios e impues
 Todos los parsers de módulos core (Tarjetas, Compras, Bancos) implementan:
 `procesar_archivo(filepath) -> (bool, dict)`
 
+> [!TIP]
+> **Stack Tecnológico Recomendado**: Basado en arquitecturas globales (Medallion / Esquema en Lectura), los nuevos parsers deben priorizar **Pydantic V2** para la validación estricta de las "Columnas Duras" (evitando pérdidas de precisión decimal) y **Polars** (con estrategias de lectura monolítica `\x00` o ancho máximo) para ingerir archivos CSV/Excel caóticos y asimétricos, aislando el resto de los datos en el bloque JSON `metadata_cruda`.
+
 El parser de Pagos usa una interface propia:
 `procesar_pago(filepath) -> (bool, dict)`
 
