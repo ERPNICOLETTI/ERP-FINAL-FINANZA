@@ -5,7 +5,7 @@
     <td style="max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ mov.descripcion }}">
         {{ mov.descripcion }}
     </td>
-    <td><span class="cat-badge cat-{{ mov.categoria }}">{{ mov.categoria.replace('_', ' ') }}</span></td>
+    <td><span class="cat-badge cat-{{ mov.categoria.replace(' ', '_') }}">{{ mov.categoria }}</span></td>
     <td class="{{ 'val-positive' if mov.importe > 0 else 'val-negative' }}" style="font-weight: 600; text-align: right; white-space: nowrap;">
         $ {{ "{:,.2f}".format(mov.importe).replace(',', 'X').replace('.', ',').replace('X', '.') }}
     </td>

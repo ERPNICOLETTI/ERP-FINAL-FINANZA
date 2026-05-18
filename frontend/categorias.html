@@ -1,0 +1,20 @@
+<div class="header">
+    <div style="flex:1;">
+        <h2>Categorías Maestras 🗂️</h2>
+        <p style="color: #888; font-size: 0.9rem;">El cerebro global de clasificación del ERP.</p>
+    </div>
+    <button class="btn btn-primary" hx-get="/api/categorias/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+        <i class="fas fa-plus"></i> Nueva Categoría
+    </button>
+</div>
+
+<div class="content" style="padding: 2rem;">
+    <!-- Lista de Categorías -->
+    <div id="categorias-list" hx-get="/api/categorias/list" hx-trigger="load">
+        Cargando categorías...
+    </div>
+</div>
+
+<div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+    <!-- Modal content will be loaded here -->
+</div>

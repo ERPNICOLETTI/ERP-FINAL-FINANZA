@@ -12,17 +12,35 @@
         .kpi-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; flex: 1; text-align: center; }
         .kpi-card h4 { color: #888; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.5rem; }
         .kpi-card .value { font-size: 2rem; font-weight: 600; color: #fff; }
-        .val-positive { color: #10b981; }
-        .val-negative { color: #ef4444; }
-        .cat-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .cat-VENTA_COBRO { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .cat-GASTO_NEGOCIO { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .cat-GASTO_SUPERMERCADO { background: rgba(249, 115, 22, 0.2); color: #f97316; }
-        .cat-GASTO_SALUD { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
-        .cat-GASTO_SERVICIOS { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        .cat-GASTO_PERSONAL { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
-        .cat-MOVIMIENTO_INTERNO { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
-        .cat-IMPUESTOS_Y_COMISIONES { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        /* CSS para Egresos (Rojizos/Anaranjados/Violáceos) */
+        .cat-Comida { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .cat-Transporte { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .cat-Vivienda { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .cat-Servicios { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+        .cat-Impuestos { background: rgba(132, 204, 22, 0.2); color: #84cc16; }
+        .cat-Salud { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        .cat-Educación { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+        .cat-Ocio { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .cat-Compras { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
+        .cat-Ropa { background: rgba(217, 70, 239, 0.2); color: #d946ef; }
+        .cat-Tecnología { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+        .cat-Deportes { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+        .cat-Estética { background: rgba(244, 114, 182, 0.2); color: #f472b6; }
+        .cat-Mascotas { background: rgba(250, 204, 21, 0.2); color: #facc15; }
+        .cat-Otros { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+        .cat-Pago_Tarjeta { background: rgba(225, 29, 72, 0.2); color: #e11d48; }
+
+        /* CSS para Ingresos (Verdes/Azules) */
+        .cat-Sueldo { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .cat-Ventas { background: rgba(5, 150, 105, 0.2); color: #059669; }
+        .cat-Transferencia_recibida { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+        .cat-Intereses { background: rgba(20, 184, 166, 0.2); color: #14b8a6; }
+        .cat-Regalos { background: rgba(14, 165, 233, 0.2); color: #0ea5e9; }
+        .cat-Inversiones { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .cat-Reembolsos { background: rgba(94, 234, 212, 0.2); color: #5eead4; }
+        .cat-Otros_Ingresos { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+
+        .cat-Movimiento_Interno { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
         .cat-SIN_CATEGORIZAR { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
     </style>
 </head>
@@ -63,16 +81,38 @@
                             </select>
                             <select name="categoria">
                                 <option value="">Todas las Categorías</option>
-                                <option value="VENTA_COBRO">Ventas y Cobros</option>
-                                <option value="GASTO_NEGOCIO">Gastos del Negocio</option>
-                                <option value="GASTO_SUPERMERCADO">Supermercado y Alimentos</option>
-                                <option value="GASTO_SALUD">Salud y Estética</option>
-                                <option value="GASTO_SERVICIOS">Servicios (Luz, Internet, etc)</option>
-                                <option value="GASTO_PERSONAL">Gastos Personales y Ocio</option>
-                                <option value="MOVIMIENTO_INTERNO">Movimientos Internos</option>
-                                <option value="IMPUESTOS_Y_COMISIONES">Impuestos y Comisiones</option>
-                                <option value="SUELDOS_HONORARIOS">Sueldos y Honorarios</option>
-                                <option value="SIN_CATEGORIZAR">Sin Categorizar</option>
+                                <optgroup label="INGRESOS">
+                                    <option value="Sueldo">Sueldo 💼</option>
+                                    <option value="Ventas">Ventas 🧾</option>
+                                    <option value="Transferencia recibida">Transferencia recibida 💸</option>
+                                    <option value="Intereses">Intereses 🏦</option>
+                                    <option value="Regalos">Regalos 🎁</option>
+                                    <option value="Inversiones">Inversiones 📈</option>
+                                    <option value="Reembolsos">Reembolsos 📦</option>
+                                    <option value="Otros Ingresos">Otros Ingresos 🧮</option>
+                                </optgroup>
+                                <optgroup label="EGRESOS">
+                                    <option value="Comida">Comida 🍔</option>
+                                    <option value="Transporte">Transporte 🚗</option>
+                                    <option value="Vivienda">Vivienda 🏠</option>
+                                    <option value="Servicios">Servicios 💡</option>
+                                    <option value="Impuestos">Impuestos 🧾</option>
+                                    <option value="Salud">Salud 🏥</option>
+                                    <option value="Educación">Educación 🎓</option>
+                                    <option value="Ocio">Ocio 🎮</option>
+                                    <option value="Compras">Compras 🛒</option>
+                                    <option value="Ropa">Ropa 👕</option>
+                                    <option value="Tecnología">Tecnología 💻</option>
+                                    <option value="Deportes">Deportes 🏋️</option>
+                                    <option value="Estética">Estética 💅</option>
+                                    <option value="Mascotas">Mascotas 🐶</option>
+                                    <option value="Pago Tarjeta">Pago Tarjeta 💳</option>
+                                    <option value="Otros">Otros Egresos 📦</option>
+                                </optgroup>
+                                <optgroup label="OTROS">
+                                    <option value="Movimiento Interno">Movimientos Internos 🔄</option>
+                                    <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
+                                </optgroup>
                             </select>
                             <select name="mes">
                                 <option value="">Todos los Meses</option>

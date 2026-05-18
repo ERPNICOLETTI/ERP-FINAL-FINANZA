@@ -1,0 +1,41 @@
+<div class="card" style="width: 500px; padding: 2rem;">
+    <h3>{{ 'Editar Categoría' if cat else 'Nueva Categoría' }}</h3>
+    <form hx-post="/api/categorias/save" hx-target="#categorias-list" onsubmit="document.getElementById('modal-container').style.display='none'">
+        <input type="hidden" name="id" value="{{ cat.id if cat else '' }}">
+        
+        <div style="margin-bottom: 1rem;">
+            <label>Nombre:</label>
+            <input type="text" name="nombre" value="{{ cat.nombre if cat else '' }}" class="search-input" required>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label>Tipo:</label>
+            <select name="tipo" class="search-input" required>
+                <option value="INGRESO" {% if cat and cat.tipo == 'INGRESO' %}selected{% endif %}>INGRESO</option>
+                <option value="EGRESO" {% if cat and cat.tipo == 'EGRESO' %}selected{% endif %}>EGRESO</option>
+                <option value="OTRO" {% if cat and cat.tipo == 'OTRO' %}selected{% endif %}>OTRO</option>
+            </select>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label>Emoji:</label>
+            <input type="text" name="emoji" value="{{ cat.emoji if cat else '' }}" class="search-input" placeholder="Ej: 🍕">
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label>Color CSS (opcional):</label>
+            <input type="text" name="color_css" value="{{ cat.color_css if cat else 'rgba(156, 163, 175, 0.2); color: #9ca3af' }}" class="search-input">
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <label>Palabras Clave (separadas por coma):</label>
+            <textarea name="palabras_clave" class="search-input" style="height: 80px;" placeholder="Ej: supermercado, coto, despensa">{{ cat.palabras_clave if cat else '' }}</textarea>
+            <small style="color:#666;">El motor buscará estas palabras en los movimientos del banco para auto-asignar la categoría.</small>
+        </div>
+        
+        <div style="display:flex; gap:1rem;">
+            <button type="submit" class="btn btn-primary" style="flex:1;">Guardar</button>
+            <button type="button" class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('modal-container').style.display='none'">Cancelar</button>
+        </div>
+    </form>
+</div>

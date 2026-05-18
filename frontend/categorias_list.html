@@ -1,0 +1,33 @@
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Palabras Clave (Autodetección)</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat in categorias %}
+            <tr>
+                <td style="color:#666;">#{{ cat.id }}</td>
+                <td>
+                    <span class="cat-badge" style="background: {{ cat.color_css.split(';')[0].replace('background: ', '') }}; color: {{ cat.color_css.split(';')[1].replace(' color: ', '') }};">
+                        {{ cat.nombre }} {{ cat.emoji }}
+                    </span>
+                </td>
+                <td style="font-weight:bold; color: {% if cat.tipo == 'INGRESO' %}#10b981{% elif cat.tipo == 'EGRESO' %}#ef4444{% else %}#8b5cf6{% endif %};">{{ cat.tipo }}</td>
+                <td style="max-width: 400px; white-space: normal; color: #aaa; font-size: 0.85rem;">
+                    {{ cat.palabras_clave if cat.palabras_clave else 'N/A' }}
+                </td>
+                <td>
+                    <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem;" hx-get="/api/categorias/form?id={{ cat.id }}" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">Editar</button>
+                    <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; color:#ef4444;" hx-delete="/api/categorias/{{ cat.id }}" hx-confirm="¿Seguro que deseas eliminar esta categoría?" hx-target="#categorias-list">Eliminar</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

@@ -51,6 +51,63 @@ def merge_files_to_pdf(existing_path: str, new_path: str, out_path: str):
         f.write(temp_buffer.getvalue())
 
 # ------------------------------------------------------------------------------------------
+# ENDPOINTS DE API - CATEGORIAS MAESTRAS
+# ------------------------------------------------------------------------------------------
+
+@app.get("/categorias")
+async def categorias_page(request: Request):
+    return templates.TemplateResponse("categorias.html", {"request": request})
+
+@app.get("/api/categorias/list")
+async def list_categorias(request: Request):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.row_factory = storage_bancos.sqlite3.Row
+    categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
+    conn.close()
+    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+
+@app.get("/api/categorias/form")
+async def form_categoria(request: Request, id: str = None):
+    from modulo_bancos import storage_bancos
+    cat = None
+    if id:
+        conn = storage_bancos.get_db_connection()
+        conn.row_factory = storage_bancos.sqlite3.Row
+        cat = conn.execute("SELECT * FROM categorias_maestras WHERE id = ?", (id,)).fetchone()
+        conn.close()
+    return templates.TemplateResponse("categorias_form.html", {"request": request, "cat": cat})
+
+@app.post("/api/categorias/save")
+async def save_categoria(request: Request, id: str = Form(""), nombre: str = Form(...), tipo: str = Form(...), emoji: str = Form(""), color_css: str = Form(""), palabras_clave: str = Form("")):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    if id:
+        conn.execute("UPDATE categorias_maestras SET nombre=?, tipo=?, emoji=?, color_css=?, palabras_clave=? WHERE id=?", 
+                     (nombre, tipo, emoji, color_css, palabras_clave, id))
+    else:
+        conn.execute("INSERT INTO categorias_maestras (nombre, tipo, emoji, color_css, palabras_clave) VALUES (?, ?, ?, ?, ?)",
+                     (nombre, tipo, emoji, color_css, palabras_clave))
+    conn.commit()
+    
+    conn.row_factory = storage_bancos.sqlite3.Row
+    categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
+    conn.close()
+    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+
+@app.delete("/api/categorias/{id}")
+async def delete_categoria(request: Request, id: str):
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.execute("DELETE FROM categorias_maestras WHERE id=?", (id,))
+    conn.commit()
+    
+    conn.row_factory = storage_bancos.sqlite3.Row
+    categorias = conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
+    conn.close()
+    return templates.TemplateResponse("categorias_list.html", {"request": request, "categorias": categorias})
+
+# ------------------------------------------------------------------------------------------
 # ENDPOINTS DE API - MÓDULO COMPRAS
 # ------------------------------------------------------------------------------------------
 
