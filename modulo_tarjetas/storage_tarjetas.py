@@ -50,7 +50,7 @@ def init_db_tarjetas():
 
     # ── Liquidaciones (Detalle línea por línea) ────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS liquidaciones_detalles (
+        CREATE TABLE IF NOT EXISTS tarjetas_liquidaciones_detalles (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             liquidacion_id  INTEGER,
             fecha           TEXT,
