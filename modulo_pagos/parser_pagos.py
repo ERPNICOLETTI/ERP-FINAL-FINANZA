@@ -27,6 +27,7 @@ def procesar_pago(filepath):
         'monto_2':           None,
         'fecha_vencimiento_2': None,
         'es_comprobante':    False,  # SOLO True si el NOMBRE del archivo lo indica
+        'codigo_barras':     None,   # ID Único de 40-60 dígitos
         'meta_json':         {}
     }
 
@@ -44,6 +45,15 @@ def procesar_pago(filepath):
 
             info['meta_json']['full_text'] = full_text
             TU = full_text.upper()
+
+            # ─────────────────────────────────────────────
+            # 0. EXTRAER ID ÚNICO / CÓDIGO DE BARRAS (v5.7)
+            # ─────────────────────────────────────────────
+            # Removemos TODO espacio en blanco para capturar IDs fragmentados
+            text_clean = re.sub(r'\s+', '', full_text)
+            barras_match = re.search(r'(\d{40,65})', text_clean)
+            if barras_match:
+                info['codigo_barras'] = barras_match.group(1)
 
             # ─────────────────────────────────────────────
             # 1. IDENTIFICAR CONCEPTO / SINDICATO

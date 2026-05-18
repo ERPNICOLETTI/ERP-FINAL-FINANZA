@@ -5,3 +5,5 @@ pdfplumber
 openpyxl
 requests
 pydantic
+jinja2
+python-multipart

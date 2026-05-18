@@ -81,6 +81,17 @@ def procesar_inbox_pagos(inbox_path):
 
         anio = info.get('anio')
         mes  = info.get('mes')
+        barras = info.get('codigo_barras')
+
+        # 2.5 RECOBRO DE PERIODO (v5.7) 🧬
+        # Si no hay periodo pero hay barras, intentamos buscar la boleta para saber el periodo
+        if (not anio or not mes) and barras:
+            from modulo_pagos.storage_pagos import find_pago_record
+            reco = find_pago_record(codigo_barras=barras)
+            if reco:
+                mes = reco['periodo_mes']
+                anio = reco['periodo_anio']
+                print(f"🧬 [PAGOS] Periodo {mes}/{anio} recuperado vía Código de Barras.")
 
         if not anio or not mes:
             print(f"⚠️ [PAGOS] Sin periodo para {f}, saltando.")
@@ -126,7 +137,29 @@ def procesar_inbox_pagos(inbox_path):
             }
 
             if info.get('es_comprobante'):
-                data_sql['path_comprobante'] = path_relativo
+                # --- CONCILIACIÓN DE DOBLE FACTOR (v5.7) 🧬 ---
+                from modulo_pagos.storage_pagos import find_pago_record
+                
+                monto_pagado = info.get('monto') # El monto extraído del ticket
+                barras = info.get('codigo_barras')
+                
+                # Intentar encontrar la boleta correspondiente
+                boleta = find_pago_record(codigo_barras=barras, concepto=info['concepto'], mes=mes, anio=anio)
+                
+                if boleta:
+                    # Validar Monto Exacto
+                    m1 = boleta.get('monto', 0)
+                    m2 = boleta.get('monto_2', 0)
+                    
+                    if abs(monto_pagado - m1) < 0.01 or (m2 and abs(monto_pagado - m2) < 0.01):
+                        print(f"✅ [PAGOS] Match Atómico Confirmado: Barras + Monto (${monto_pagado})")
+                        data_sql['path_comprobante'] = path_relativo
+                    else:
+                        print(f"🚨 ALARMA [PAGOS] El código de barras coincide pero el monto NO. Boleta expects ${m1}/${m2}, Ticket says ${monto_pagado}. No se procesó.")
+                        continue # Salta este archivo (no se guarda el pago)
+                else:
+                    # Si no hay boleta, lo guardamos como un pago huérfano (para reconstrucción 2025)
+                    data_sql['path_comprobante'] = path_relativo
             else:
                 data_sql['path_boleta'] = path_relativo
 

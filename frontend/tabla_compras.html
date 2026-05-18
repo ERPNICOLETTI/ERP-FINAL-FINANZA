@@ -1,0 +1,38 @@
+{% for f in facturas %}
+<tr class="fade-in">
+    <td>
+        {% if f.tiene_foto or f.path_archivo %}
+            <span class="badge" style="background: rgba(34,197,94,0.1); color: #22c55e;">🟢 Archivada</span>
+        {% else %}
+            <span class="badge" style="background: rgba(239,68,68,0.1); color: #ef4444;">🔴 Pendiente</span>
+        {% endif %}
+    </td>
+    <td style="color: #94a3b8;">{{ f.fecha }}</td>
+    <td style="font-weight: 500; color: #f8fafc;">
+        {{ f.proveedor }}
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">CUIT: {{ f.cuit_proveedor }}</div>
+    </td>
+    <td style="color: #cbd5e1;">
+        {% if f.tipo_comprobante == "88" %}
+            PENDIENTE CALIM
+        {% else %}
+            FC {{ f.punto_venta }}-{{ f.numero_comprobante }}
+        {% endif %}
+    </td>
+    <td style="font-weight: 600; color: #38bdf8;">$ {{ "{:,.2f}".format(f.total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+    <td>
+        {% if f.tiene_foto or f.path_archivo %}
+            <a href="/archivos/compras/{{ f.path_archivo }}" target="_blank" class="btn-icon" title="Ver Evidencia">📄 Ver</a>
+        {% else %}
+            <button class="btn-icon" style="color: #ef4444;" title="Falta Evidencia" onclick="alert('Usa el panel izquierdo para subir la foto')">⚠️ Subir</button>
+        {% endif %}
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6" style="text-align: center; padding: 3rem; color: #64748b;">
+        <div style="font-size: 2rem; margin-bottom: 1rem;">📭</div>
+        No se encontraron facturas para estos filtros.
+    </td>
+</tr>
+{% endfor %}

@@ -13,8 +13,10 @@ Ningún módulo puede importar `sqlite3` ni ejecutar SQL directo sobre tablas aj
 
 ## 🛑 MANDAMIENTOS INNEGOCIABLES 🛑
 
-### 📏 REGLA 1: Nomenclatura Universal (El mismo dato, el mismo nombre)
-Si un campo representa el mismo concepto financiero o temporal, debe llamarse **exactamente igual** en todas las tablas del sistema.
+### 📏 REGLA 1: Nomenclatura Universal de Tablas y Columnas
+**Tablas:** Todas las tablas físicas DEBEN tener el prefijo de su módulo correspondiente para garantizar el aislamiento lógico en el único archivo de SQLite. (Ejemplo: `compras_facturas`, `compras_proveedores`, `pagos_vencimientos`, `tarjetas_liquidaciones`). ¡Está estrictamente prohibido crear tablas con nombres genéricos!
+
+**Columnas:** Si un campo representa el mismo concepto financiero o temporal, debe llamarse **exactamente igual** en todas las tablas del sistema.
 
 | Concepto | Nombre de Columna Único | Notas |
 | :--- | :--- | :--- |
@@ -64,7 +66,7 @@ La tabla virtual `search_index` (FTS5) indexa automáticamente el contenido del 
 
 ---
 
-## 🏦 Tabla: `pagos` — Schema v5.4.1 (Módulo Pagos)
+## 🏦 Tabla: `pagos_vencimientos` — Schema v5.4.1 (Módulo Pagos)
 
 | Columna | Tipo | Descripción |
 |---|---|---|

@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Query, UploadFile, File, Form
+from fastapi import FastAPI, Query, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import os
 import sys
 import shutil
@@ -63,6 +64,8 @@ class FacturaUpdate(BaseModel):
 
 app = FastAPI(title="ERP Final API - Área Inteligencia (DDD)", version="4.0.0")
 
+# Motor de Plantillas para HTMX 🚀
+templates = Jinja2Templates(directory="frontend")
 # Workspace Context
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 master = ERPMaster(WORKSPACE)
@@ -104,9 +107,68 @@ async def spotlight_search(q: str):
 # ------------------------------------------------------------------------------------------
 
 @app.get("/api/pagos")
-async def list_pagos(estado: str = None, categoria: str = None, periodo_anio: str = None, periodo_mes: str = None):
-    """Listar todos los vencimientos y pagos."""
-    return pagos_storage.get_pagos(estado=estado, categoria=categoria, periodo_anio=periodo_anio, periodo_mes=periodo_mes)
+async def list_pagos(request: Request, estado: str = None, categoria: str = None, periodo_anio: str = None, periodo_mes: str = None, q: str = None):
+    """Listar todos los vencimientos y pagos devolviendo fragmentos HTML para HTMX."""
+    pagos_db = pagos_storage.get_pagos_vencimientos(estado=estado, categoria=categoria, periodo_anio=periodo_anio, periodo_mes=periodo_mes)
+    
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    procesados = []
+    
+    for p in pagos_db:
+        p_dict = dict(p)
+        
+        # Búsqueda por concepto/categoría
+        if q and q.lower() not in str(p_dict.get('concepto', '')).lower() and q.lower() not in str(p_dict.get('categoria', '')).lower():
+            continue
+            
+        priorityLabel = "Pendiente"
+        priorityClass = "status-pendiente"
+        suggestedAmount = p_dict.get('monto', 0)
+        
+        vto1 = p_dict.get('fecha_vencimiento')
+        vto2 = p_dict.get('fecha_vencimiento_2')
+        estado_pago = p_dict.get('estado')
+        
+        if estado_pago == 'PAGADO':
+            priorityLabel = "PAGADO ✅"
+            priorityClass = "status-pagado"
+        else:
+            if vto2 and hoy > vto2:
+                priorityLabel = "VENCIDO 🔥"
+                priorityClass = "status-vencido"
+                suggestedAmount = p_dict.get('monto_2', 0)
+            elif not vto2 and vto1 and hoy > vto1:
+                priorityLabel = "VENCIDO 🔥"
+                priorityClass = "status-vencido"
+            elif vto1 and hoy == vto1:
+                priorityLabel = "VENCE HOY 🔔"
+                priorityClass = "status-vence-hoy"
+            elif vto2 and hoy == vto2:
+                priorityLabel = "VENCE HOY ⚠️"
+                priorityClass = "status-vence-hoy"
+                suggestedAmount = p_dict.get('monto_2', 0)
+            elif vto1 and hoy > vto1 and vto2 and hoy < vto2:
+                priorityLabel = "2DA OPORTUNID. 🟠"
+                priorityClass = "status-vence-proximo"
+                suggestedAmount = p_dict.get('monto_2', 0)
+            elif vto1 and hoy < vto1:
+                try:
+                    d1 = datetime.strptime(vto1, "%Y-%m-%d")
+                    dhoy = datetime.strptime(hoy, "%Y-%m-%d")
+                    days = (d1 - dhoy).days
+                    if days <= 3:
+                        priorityLabel = f"Vto 1 en {days}d 🟡"
+                        priorityClass = "status-vence-hoy"
+                except: pass
+                
+        p_dict['priorityLabel'] = priorityLabel
+        p_dict['priorityClass'] = priorityClass
+        p_dict['suggestedAmount'] = suggestedAmount
+        procesados.append(p_dict)
+        
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request=request, name="tabla_pagos.html", context={"request": request, "pagos": procesados, "hoy": hoy})
+    return procesados
 
 @app.post("/api/pagos")
 async def save_pago_record(data: dict):
@@ -120,7 +182,7 @@ async def save_pago_record(data: dict):
 @app.get("/summary")
 async def get_summary(anio: str = None):
     res_pw = tarjetas.resumen_ejecutivo(anio)
-    res_fac = facturas.resumen_facturacion(anio)
+    res_fac = storage.get_resumen_facturacion(anio)
     return {
         "tarjetas": res_pw,
         "facturacion": res_fac
@@ -183,9 +245,31 @@ async def get_sueldos_bancarios(anio: str = "2026"):
     return storage_bancos.get_sueldos(anio)
 
 @app.get("/api/facturas")
-async def list_facturas(anio: str = None, mes: str = None):
-    """Listado de facturas con soporte para selección cronológica (Modo ML)."""
-    return storage.get_all_facturas(anio, mes)
+async def list_facturas(request: Request, anio: str = None, mes: str = None, estado: str = "all", q: str = None):
+    """Listado de facturas con soporte HTMX y Jinja2."""
+    data = storage.get_all_compras_facturas(anio, mes)
+    
+    procesados = []
+    for f in data:
+        # Filtro de búsqueda (q)
+        if q:
+            term = q.lower()
+            if term not in str(f.get('proveedor', '')).lower() and \
+               term not in str(f.get('cuit_proveedor', '')).lower() and \
+               term not in str(f.get('numero_comprobante', '')).lower():
+                continue
+                
+        # Filtro por estado
+        tiene_foto = bool(f.get('tiene_foto') or f.get('path_archivo'))
+        if estado == "pending" and tiene_foto: continue
+        if estado == "completed" and not tiene_foto: continue
+        
+        procesados.append(f)
+        
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request=request, name="tabla_compras.html", context={"request": request, "facturas": procesados})
+    
+    return procesados
 
 @app.post("/api/facturas/update/{fid}")
 async def update_factura(fid: int, req: FacturaUpdate):
@@ -392,7 +476,23 @@ app.mount("/archivos/compras", StaticFiles(directory="modulo_compras/archivos_co
 app.mount("/archivos/pagos", StaticFiles(directory="modulo_pagos/archivos_pagos"), name="archivos_pagos")
 app.mount("/historico/compras", StaticFiles(directory="modulo_compras/crudos_compras"), name="crudos_compras")
 app.mount("/inbox", StaticFiles(directory="modulo_compras/inbox_compras"), name="inbox_local")
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+# ENDPOINTS DE VISTAS (HTMX + Jinja2)
+@app.get("/", response_class=HTMLResponse)
+async def home_dashboard(request: Request):
+    """Renderiza el dashboard inicial con soporte para contexto dinámico."""
+    return templates.TemplateResponse(request=request, name="index.html", context={"request": request})
+
+@app.get("/compras", response_class=HTMLResponse)
+async def vista_compras(request: Request):
+    return templates.TemplateResponse(request=request, name="compras.html", context={"request": request})
+
+@app.get("/pagos", response_class=HTMLResponse)
+async def vista_pagos(request: Request):
+    return templates.TemplateResponse(request=request, name="pagos.html", context={"request": request})
+
+# Montar servidores estáticos jerárquicos (Aislamiento v4.6)
+app.mount("/static", StaticFiles(directory="frontend"), name="static_frontend") # Para css/js futuros
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend_legacy")
 
 if __name__ == "__main__":
     import uvicorn

@@ -3,135 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Ecosistema Compras v4.9</title>
-    <link rel="stylesheet" href="style.css?v=4.9.1">
+    <title>ERP NICOLETTI - Dashboard Maestro v5.5</title>
+    <link rel="stylesheet" href="style.css?v=5.5.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
     <div class="app-wrapper">
-        <!-- CABECERA ÚNICA -->
         <header class="app-header">
             <div class="brand">
-                <h1 class="glow-text">ERP <span>Compras</span></h1>
-                <p>Terminal de Gestión Unificada v4.9.0</p>
+                <h1 class="glow-text">ERP <span>Nicoletti</span></h1>
+                <p>Centro de Control Inteligente v5.5.0 🚀</p>
             </div>
-            
             <div class="header-actions">
-                <button id="btn-process" class="btn-sync">⚡ Sincronizar Ecosistema ⚡</button>
-                <div id="status-message" class="mini-status"></div>
+                <a href="#" class="btn-sync" onclick="location.reload()">🔄 Actualizar Dashboard</a>
             </div>
         </header>
 
-        <main class="ecosystem-layout">
-            <!-- PANEL IZQUIERDO: INGESTA & CARGA -->
-            <aside class="ingesta-panel glass">
-                <div class="panel-header">
-                    <h3>📥 Terminal de Ingesta</h3>
-                    <p>Carga la foto y busca el número</p>
-                </div>
-
-                <!-- Controlador de Inbox -->
-                <div id="inbox-controller" class="inbox-controller hidden">
-                    <button id="inbox-prev" class="btn-icon" onclick="app.prevInbox()">◀️</button>
-                    <span id="inbox-status">Buzón: 0 pendientes</span>
-                    <button id="inbox-next" class="btn-icon" onclick="app.nextInbox()">▶️</button>
-                    <button id="inbox-refresh" class="btn-icon" onclick="app.fetchInbox()" title="Recargar Buzón">🔄</button>
-                </div>
-
-                <div id="drop-zone" class="dropzone-preview">
-                    <div id="sidebar-preview" class="preview-content">
-                        <p class="preview-placeholder">📁 Arrastrar PDF o Foto aquí</p>
+        <main class="dashboard-layout">
+            <div class="dashboard-grid">
+                
+                <!-- CARD: PAGOS Y VENCIMIENTOS -->
+                <div class="module-card glass" onclick="location.href='pagos.html'">
+                    <div class="card-header">
+                        <span class="card-icon">💰</span>
+                        <h3>Pagos y Vencimientos</h3>
                     </div>
-                    <input type="file" id="file-input" hidden accept="image/*,application/pdf">
-                </div>
-
-                <div class="ingesta-form">
-                    <div class="form-group">
-                        <input type="text" id="edit-full-number" class="big-input" placeholder="⌨️ Nro. Factura (Ej: 1234)" autocomplete="off">
-                    </div>
-
-                    <!-- Display de Match Atómico -->
-                    <div id="match-card" class="match-card hidden">
-                        <div class="match-header">
-                            <span id="match-origen" class="badge">AFIP</span>
-                            <span id="match-fecha">2026-04-05</span>
-                        </div>
-                        <div id="match-details" class="match-details">
-                            Match encontrado para este número.
+                    <div class="card-body">
+                        <p>Control de boletas sindicales, servicios e impuestos. Gestión de flujo de caja y vencimientos duales.</p>
+                        <div class="card-status">
+                            <span class="badge" style="background: var(--accent-color)">v5.4.1</span>
+                            <span class="pill pending">Control de Vencimientos</span>
                         </div>
                     </div>
-
-                    <!-- Excepción Pendiente CALIM -->
-                    <div id="calim-card" class="calim-card hidden">
-                        <div class="calim-header">⚠️ Factura No Encontrada</div>
-                        <p>No existe en la Base de Datos. Pasa la factura a la <strong>Sala de Espera</strong>.</p>
-                        
-                        <input type="text" id="pending-proveedor" class="calim-input" placeholder="Nombre Proveedor (Ej: VIA CARGO)">
-                        <button id="btn-pendiente" class="btn-warning" onclick="app.archivarPendiente()">Archivar como Pendiente CALIM ⏳</button>
-                    </div>
-                    
-                    <div id="sidebar-status" class="status-msg"></div>
-                    <button id="btn-confirmar" class="btn-primary-main" onclick="app.confirmarVinculacion()">Archivar en Bóveda 💾</button>
-                </div>
-            </aside>
-
-            <!-- PANEL CENTRAL: BÓVEDA & LISTADO -->
-            <section class="boveda-panel">
-                <div class="boveda-header">
-                    <div class="search-pro">
-                        <input type="text" id="pro-search" placeholder="🔍 Buscar por proveedor, CUIT o número...">
-                    </div>
-                    
-                    <div class="cron-filters">
-                        <select id="filter-anio">
-                            <option value="2026">Año 2026</option>
-                            <option value="2025">Año 2025</option>
-                        </select>
-                        <select id="filter-mes">
-                            <option value="">Todos los Meses</option>
-                            <option value="01">Enero</option>
-                            <option value="02">Febrero</option>
-                            <option value="03">Marzo</option>
-                            <option value="04">Abril</option>
-                            <option value="05">Mayo</option>
-                            <option value="06">Junio</option>
-                            <option value="07">Julio</option>
-                            <option value="08">Agosto</option>
-                            <option value="09">Sep.</option>
-                            <option value="10">Oct.</option>
-                            <option value="11">Nov.</option>
-                            <option value="12">Dic.</option>
-                        </select>
+                    <div class="card-footer">
+                        <button class="btn-primary-main">Acceder al Módulo 💳</button>
                     </div>
                 </div>
 
-                <div class="status-pills">
-                    <button class="pill active" data-filter="all">Todas (<span id="count-all">0</span>)</button>
-                    <button class="pill pending" data-filter="pending">Pendientes 🔴 (<span id="count-pending">0</span>)</button>
-                    <button class="pill completed" data-filter="completed">Archivadas 🟢 (<span id="count-completed">0</span>)</button>
+                <!-- CARD: COMPRAS -->
+                <div class="module-card glass" onclick="location.href='compras.html'">
+                    <div class="card-header">
+                        <span class="card-icon">🧾</span>
+                        <h3>Compras y Facturación</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Archivo legal de facturas, match atómico con AFIP/CALIM y gestión de Sala de Espera.</p>
+                        <div class="card-status">
+                            <span class="badge">v4.9.0</span>
+                            <span class="pill completed">Bóveda Operativa</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn-primary-main">Acceder al Módulo 📥</button>
+                    </div>
                 </div>
 
-                <div class="table-container-final glass">
-                    <table id="table-compras-final">
-                        <thead>
-                            <tr>
-                                <th>Status</th>
-                                <th>Fecha</th>
-                                <th>Proveedor</th>
-                                <th>Comprobante</th>
-                                <th>Monto</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-compras">
-                            <!-- JS Injected -->
-                        </tbody>
-                    </table>
+                <!-- CARD: BANCOS -->
+                <div class="module-card glass locked">
+                    <div class="card-header">
+                        <span class="card-icon">🏦</span>
+                        <h3>Bancos y Tesorería</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Conciliación bancaria, sueldos y auditoría de movimientos. Chubut, Credicoop e Hipotecario.</p>
+                        <div class="card-status">
+                            <span class="badge" style="background:#555">Próximamente</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn-disabled" disabled>Cargando Neurona... ⏳</button>
+                    </div>
                 </div>
-            </section>
+
+                <!-- CARD: TARJETAS -->
+                <div class="module-card glass locked">
+                    <div class="card-header">
+                        <span class="card-icon">💳</span>
+                        <h3>Tarjetas de Crédito</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Control de liquidaciones (Payway, Naranja, Patagonia). Auditoría de cobros y conciliación de cupones.</p>
+                        <div class="card-status">
+                            <span class="badge" style="background:#555">Próximamente</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn-disabled" disabled>Cargando Neurona... ⏳</button>
+                    </div>
+                </div>
+
+            </div>
         </main>
     </div>
-
-    <script src="app.js?v=4.9.1"></script>
 </body>
 </html>

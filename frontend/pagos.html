@@ -3,35 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Módulo Pagos v5.2</title>
-    <link rel="stylesheet" href="style.css?v=5.2.0">
+    <title>ERP Nicoletti - Pagos y Vencimientos v5.5</title>
+    <link rel="stylesheet" href="style.css?v=5.5.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
     <div class="app-wrapper">
         <header class="app-header">
             <div class="brand">
                 <h1 class="glow-text">ERP <span>Pagos</span></h1>
-                <p>Gestión de Vencimientos y Servicios v5.2 💳</p>
+                <p>Módulo de Vencimientos y Servicios v5.5 💰</p>
             </div>
             <div class="header-actions">
-                <a href="index.html" class="btn-sync" style="background:#555; text-decoration:none;">◀️ Volver a Compras</a>
+                <a href="index.html" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Dashboard</a>
+                <button class="btn-sync" onclick="document.getElementById('file-upload').click()">📁 Cargar Pagos</button>
+                <input type="file" id="file-upload" multiple style="display:none" onchange="pagosApp.uploadFiles(this.files)">
+                <button class="btn-sync" onclick="pagosApp.fetchPagos()">🔄 Sincronizar</button>
             </div>
         </header>
 
-        <main class="ecosystem-layout" style="display:block; padding: 20px;">
-            <section class="boveda-panel" style="width:100%; max-width: 1200px; margin:0 auto;">
+        <main class="ecosystem-layout">
+            <section class="boveda-panel" style="width:100%; max-width: 1400px; margin:0 auto;">
                 
                 <div class="boveda-header">
                     <div class="search-pro">
-                        <input type="text" id="pro-search" placeholder="🔍 Buscar categoría o concepto...">
+                        <input type="text" id="pro-search" name="q" placeholder="🔍 Buscar concepto o sindicato (ej: SEC)...">
                     </div>
+                    
+                    <input type="hidden" id="filter-estado" name="estado" class="filter-input" value="">
+                    
                     <div class="cron-filters">
-                        <select id="filter-anio">
-                            <option value="2026">Año 2026</option>
-                            <option value="2025">Año 2025</option>
+                        <select id="filter-anio" class="filter-input" name="periodo_anio">
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
                         </select>
-                        <select id="filter-mes">
+                        <select id="filter-mes" class="filter-input" name="periodo_mes">
+                            <option value="">Todos los Meses</option>
                             <option value="01">Enero</option>
                             <option value="02">Febrero</option>
                             <option value="03">Marzo</option>
@@ -40,47 +49,50 @@
                             <option value="06">Junio</option>
                             <option value="07">Julio</option>
                             <option value="08">Agosto</option>
-                            <option value="09">Sep.</option>
-                            <option value="10">Oct.</option>
-                            <option value="11">Nov.</option>
-                            <option value="12">Dic.</option>
+                            <option value="09">Septiembre</option>
+                            <option value="10">Octubre</option>
+                            <option value="11">Noviembre</option>
+                            <option value="12">Diciembre</option>
                         </select>
-                        <select id="filter-estado">
-                            <option value="">Status Global</option>
-                            <option value="PENDIENTE">Solo Pendientes / Vencidas</option>
-                            <option value="PAGADO">Solo Pagados</option>
+                        <select id="filter-categoria" class="filter-input" name="categoria">
+                            <option value="">Todas las Categorías</option>
+                            <option value="SINDICALES">SINDICALES</option>
+                            <option value="SERVICIOS">SERVICIOS</option>
+                            <option value="IMPUESTOS">IMPUESTOS</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="status-pills">
-                    <button class="pill active" onclick="pagosApp.setEstado('')">Todas</button>
-                    <button class="pill pending" onclick="pagosApp.setEstado('PENDIENTE')">Pendientes 🔴</button>
-                    <button class="pill completed" onclick="pagosApp.setEstado('PAGADO')">Pagados 🟢</button>
+                    <!-- Script simple inline para manejar las pastillas activas y establecer el estado -->
+                    <button class="pill active" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todos</button>
+                    <button class="pill pending" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PENDIENTE'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pendientes 🔴</button>
+                    <button class="pill completed" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PAGADO'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pagados 🟢</button>
                 </div>
 
                 <div class="table-container-final glass">
                     <table id="table-pagos">
                         <thead>
                             <tr>
-                                <th>Status</th>
-                                <th>Vencimiento</th>
-                                <th>Categoría</th>
+                                <th>Prioridad</th>
                                 <th>Concepto</th>
-                                <th>Monto</th>
-                                <th>Legajo</th>
+                                <th>Periodo</th>
+                                <th>Vencimiento(s)</th>
+                                <th>Monto sugerido</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-pagos">
-                            <!-- JS Injected -->
+                        <tbody id="tbody-pagos"
+                               hx-get="/api/pagos" 
+                               hx-trigger="load, change from:.filter-input, keyup changed delay:500ms from:#pro-search, refresh-table"
+                               hx-include=".filter-input, #pro-search"
+                               hx-target="this">
+                            <!-- HTMX inyectará las filas aquí mágicamente ✨ -->
                         </tbody>
                     </table>
                 </div>
             </section>
         </main>
-    </div>
-
-    <!-- Visor Inteligente de PDFs (Acero) -->
-    <script src="app_pagos.js?v=5.2.0"></script>
 </body>
 </html>

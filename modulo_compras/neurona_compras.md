@@ -8,7 +8,7 @@ Este documento es el manual de operaciones definitivo para el **Ecosistema de Co
 ## 🏛️ Patrón Repositorio (Regla Inquebrantable)
 > [!CAUTION]
 > **Prohibición de SQL Directo**: Ningún archivo de este módulo (parsers o lógica) puede importar `sqlite3`.
-> Toda la persistencia debe pasar por `storage_compras.py` para garantizar la integridad de los metadatos JSON.
+> Toda la persistencia debe pasar por `storage_compras.py` para garantizar la integridad de los metadatos JSON y respetar el nuevo esquema modular (`compras_facturas`, etc).
 
 ---
 
@@ -43,8 +43,7 @@ Al confirmar, el Motor Orquestador (`archiver_service.py`):
 ---
 
 ## 🛠️ Herramientas de Mantenimiento
-- `sync_dots.py`: (Uso interno) Sincroniza nombres de carpetas físicas con la base de datos.
-- `sanar_db.py`: (Uso interno) Repara rutas corruptas por codificaciones viejas.
+- `storage.smart_search_invoice(q)`: El corazón de la búsqueda elástica (FTS5).
 - `storage.smart_search_invoice(q)`: El corazón de la búsqueda elástica.
 
 ---

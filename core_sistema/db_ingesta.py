@@ -88,7 +88,7 @@ def update_search_index():
                    monto_total, fecha,
                    COALESCE(tipo_comprobante, '') || ' CUIT:' || COALESCE(cuit_proveedor, ''),
                    COALESCE(metadata_cruda, '')
-            FROM facturas
+            FROM compras_facturas
 
             UNION ALL
 
@@ -97,7 +97,7 @@ def update_search_index():
                    total_bruto, fecha_liquidacion,
                    'Periodo: ' || COALESCE(periodo, '') || ' Neto: ' || COALESCE(CAST(total_neto AS TEXT), ''),
                    COALESCE(metadata_cruda, '')
-            FROM liquidaciones_tarjetas
+            FROM tarjetas_liquidaciones
 
             UNION ALL
 
@@ -106,7 +106,7 @@ def update_search_index():
                    monto_bruto, fecha_compra,
                    COALESCE(marca, ''),
                    COALESCE(metadata_cruda, '')
-            FROM payway_records
+            FROM tarjetas_payway
 
             UNION ALL
 

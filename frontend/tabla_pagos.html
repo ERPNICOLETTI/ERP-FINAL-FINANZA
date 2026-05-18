@@ -1,0 +1,41 @@
+{% for p in pagos %}
+<tr>
+    <td><span class="status-pill {{ p.priorityClass }}">{{ p.priorityLabel }}</span></td>
+    <td>
+        <div style="font-weight:600; color:var(--accent-color)">{{ p.concepto }}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted)">{{ p.categoria }}</div>
+    </td>
+    <td>{{ p.periodo_mes }}/{{ p.periodo_anio }}</td>
+    <td>
+        <div style="{% if p.fecha_vencimiento < hoy and p.estado == 'PENDIENTE' %}text-decoration:line-through; opacity:0.5{% endif %}">
+            1ro: {{ p.fecha_vencimiento or '---' }}
+        </div>
+        {% if p.fecha_vencimiento_2 %}
+        <div style="font-size:0.8rem; color:{% if p.fecha_vencimiento_2 < hoy %}var(--danger){% else %}var(--text-muted){% endif %}">
+            2do: {{ p.fecha_vencimiento_2 }}
+        </div>
+        {% endif %}
+    </td>
+    <td style="font-family:monospace; font-weight:bold; font-size:1.1rem">
+        $ {{ "{:,.2f}".format(p.suggestedAmount|float) }}
+    </td>
+    <td>
+       <span class="badge" style="background:{% if p.estado == 'PAGADO' %}var(--success){% else %}#444{% endif %}">{{ p.estado }}</span>
+    </td>
+    <td>
+        <div style="display:flex; gap:8px;">
+            {% if p.path_boleta %}
+            <button class="pill" title="Ver Boleta" onclick="window.open('/archivos/pagos/' + '{{ p.path_boleta }}'.split('/').pop(), '_blank')">📄</button>
+            {% endif %}
+            {% if p.path_comprobante %}
+            <button class="pill completed" title="Ver Comprobante" onclick="window.open('/archivos/pagos/' + '{{ p.path_comprobante }}'.split('/').pop(), '_blank')">💵</button>
+            {% endif %}
+            {% if p.estado == 'PENDIENTE' %}
+            <button class="pill" title="Cargar Pago" onclick="alert('Función de vinculación rápida HTMX próximamente')">📤</button>
+            {% endif %}
+        </div>
+    </td>
+</tr>
+{% else %}
+<tr><td colspan="7" style="text-align:center;">No se encontraron vencimientos para este filtro.</td></tr>
+{% endfor %}

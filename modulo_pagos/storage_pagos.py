@@ -27,14 +27,14 @@ def get_db_connection():
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
-def init_db_pagos():
+def init_db_pagos_vencimientos():
     """Crea la tabla de Pagos con soporte para Legajo Único (Boleta + Comprobante)."""
     conn = get_db_connection()
     print("🧱 [PAGOS] Evolucionando tabla de Pagos v5.2 (Schema Trazabilidad Dual)...")
 
     # Migración/Creación: Usamos un diseño que soporta el ciclo de vida del pago
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS pagos (
+        CREATE TABLE IF NOT EXISTS pagos_vencimientos (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             categoria           TEXT,
             concepto            TEXT NOT NULL,
@@ -68,13 +68,24 @@ def save_pago(data: dict):
         periodo_mes = data.get('periodo_mes')
         periodo_anio = data.get('periodo_anio')
         
-        # Buscar Duplicados de Periodo
-        cursor = conn.execute('''
-            SELECT id, estado, path_boleta, path_comprobante FROM pagos 
-            WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?
-        ''', (concepto, periodo_mes, periodo_anio))
+        codigo_barras = data.get('codigo_barras')
         
-        res = cursor.fetchone()
+        # 1. PRIORIDAD: Buscar por Código de Barras Único (Cruce Atómico v5.7)
+        res = None
+        if codigo_barras:
+            cursor = conn.execute('''
+                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2 FROM pagos_vencimientos 
+                WHERE codigo_barras = ?
+            ''', (codigo_barras,))
+            res = cursor.fetchone()
+
+        # 2. SEGUNDA OPCIÓN: Buscar por Periodo (Fallback)
+        if not res:
+            cursor = conn.execute('''
+                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2 FROM pagos_vencimientos 
+                WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?
+            ''', (concepto, periodo_mes, periodo_anio))
+            res = cursor.fetchone()
         
         if res:
             pago_id = res['id']
@@ -96,7 +107,7 @@ def save_pago(data: dict):
             final_estado = 'PAGADO' if final_compro else 'PENDIENTE'
             
             conn.execute('''
-                UPDATE pagos SET 
+                UPDATE pagos_vencimientos SET 
                     categoria = COALESCE(?, categoria),
                     monto = COALESCE(?, monto),
                     fecha_vencimiento = COALESCE(?, fecha_vencimiento),
@@ -106,13 +117,14 @@ def save_pago(data: dict):
                     path_comprobante = ?,
                     hash_boleta = COALESCE(?, hash_boleta),
                     estado = ?,
+                    codigo_barras = COALESCE(?, codigo_barras),
                     meta_json = ?
                 WHERE id = ?
             ''', (
                 data.get('categoria'), data.get('monto'), data.get('fecha_vencimiento'),
                 data.get('monto_2'), data.get('fecha_vencimiento_2'),
                 final_boleta, final_compro, data.get('hash_boleta'), final_estado,
-                json.dumps(data.get('meta_json', {})), pago_id
+                codigo_barras, json.dumps(data.get('meta_json', {})), pago_id
             ))
             conn.commit()
             logger.info(f"🔄 [PAGOS] Registro actualizado: {concepto} {periodo_mes}/{periodo_anio} -> {final_estado}")
@@ -121,17 +133,17 @@ def save_pago(data: dict):
             # SI EL REGISTRO NO EXISTE: Crear uno nuevo desde cero
             estado_inicial = 'PAGADO' if p_comprobante else 'PENDIENTE'
             cursor = conn.execute('''
-                INSERT INTO pagos (
+                INSERT INTO pagos_vencimientos (
                     categoria, concepto, periodo_mes, periodo_anio, monto, fecha_vencimiento,
                     monto_2, fecha_vencimiento_2,
-                    estado, path_boleta, path_comprobante, hash_boleta, meta_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    estado, path_boleta, path_comprobante, hash_boleta, codigo_barras, meta_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 data.get('categoria', 'OTROS'), concepto, periodo_mes, periodo_anio,
                 data.get('monto', 0), data.get('fecha_vencimiento'),
                 data.get('monto_2', 0), data.get('fecha_vencimiento_2'),
                 estado_inicial, p_boleta, p_comprobante, data.get('hash_boleta'),
-                json.dumps(data.get('meta_json', {}))
+                codigo_barras, json.dumps(data.get('meta_json', {})),
             ))
             conn.commit()
             logger.info(f"✅ [PAGOS] Nuevo registro creado: {concepto} {periodo_mes}/{periodo_anio} -> {estado_inicial}")
@@ -142,9 +154,20 @@ def save_pago(data: dict):
     finally:
         conn.close()
 
-def get_pagos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None):
+def find_pago_record(codigo_barras=None, concepto=None, mes=None, anio=None):
+    """Busca un registro existente por barras o periodo."""
     conn = get_db_connection()
-    query = "SELECT * FROM pagos WHERE 1=1"
+    res = None
+    if codigo_barras:
+        res = conn.execute("SELECT * FROM pagos_vencimientos WHERE codigo_barras = ?", (codigo_barras,)).fetchone()
+    if not res and concepto and mes and anio:
+        res = conn.execute("SELECT * FROM pagos_vencimientos WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?", (concepto, mes, anio)).fetchone()
+    conn.close()
+    return dict(res) if res else None
+
+def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None):
+    conn = get_db_connection()
+    query = "SELECT * FROM pagos_vencimientos WHERE 1=1"
     params = []
     
     if estado:
@@ -167,4 +190,4 @@ def get_pagos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None):
     return [dict(r) for r in rows]
 
 if __name__ == "__main__":
-    init_db_pagos()
+    init_db_pagos_vencimientos()

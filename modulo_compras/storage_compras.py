@@ -40,7 +40,7 @@ def init_db_compras():
 
     # ── Tabla de Proveedores (Maestro) ──────────────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS proveedores (
+        CREATE TABLE IF NOT EXISTS compras_proveedores (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             cuit            TEXT UNIQUE,
             nombre_fantasia TEXT,
@@ -50,7 +50,7 @@ def init_db_compras():
 
     # ── Tabla Maestra de Facturas ──────────────────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS facturas (
+        CREATE TABLE IF NOT EXISTS compras_facturas (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha           TEXT,
             tipo_comprobante TEXT,
@@ -81,7 +81,7 @@ def init_db_compras():
 
     # ── Libro IVA Consolidado ──────────────────────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS libroiva (
+        CREATE TABLE IF NOT EXISTS compras_libroiva (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             periodo         TEXT UNIQUE,
             debito_fiscal   REAL DEFAULT 0,
@@ -97,7 +97,7 @@ def init_db_compras():
 
     # ── IVA Desglosado (Cross-Module Service) ──────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS iva_desglosado (
+        CREATE TABLE IF NOT EXISTS compras_iva_desglosado (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             modulo_origen   TEXT,
             fuente          TEXT,
@@ -134,7 +134,7 @@ def save_factura(f: dict):
         path_limpio = sanitize_path_db(f.get('path_archivo'))
 
         cursor = conn.execute('''
-            INSERT OR IGNORE INTO facturas (
+            INSERT OR IGNORE INTO compras_facturas (
                 fecha, tipo_comprobante, punto_venta, numero_comprobante,
                 cuit_proveedor, proveedor, neto, iva21, iva105,
                 iva27, exento, percepcion_iva, imp_internos, total, moneda,
@@ -156,7 +156,7 @@ def save_factura(f: dict):
         
         if last_id == 0 or last_id is None:
             res = conn.execute('''
-                SELECT id FROM facturas 
+                SELECT id FROM compras_facturas 
                 WHERE cuit_proveedor = ? AND punto_venta = ? AND numero_comprobante = ? AND tipo_comprobante = ?
             ''', (f.get('cuit_proveedor'), f.get('punto_venta'), f.get('numero_comprobante'), f.get('tipo_comprobante'))).fetchone()
             if res: last_id = res['id']
@@ -175,7 +175,7 @@ def upsert_proveedor(cuit, nombre):
     conn = get_db_connection()
     try:
         conn.execute('''
-            INSERT INTO proveedores (cuit, nombre_fantasia) VALUES (?, ?)
+            INSERT INTO compras_proveedores (cuit, nombre_fantasia) VALUES (?, ?)
             ON CONFLICT(cuit) DO UPDATE SET nombre_fantasia = excluded.nombre_fantasia
         ''', (cuit, nombre))
         conn.commit()
@@ -183,25 +183,25 @@ def upsert_proveedor(cuit, nombre):
         conn.close()
 
 
-def buscar_proveedores_fuzzy(termino):
-    """Búsqueda difusa de proveedores por nombre o CUIT."""
+def buscar_compras_proveedores_fuzzy(termino):
+    """Búsqueda difusa de compras_proveedores por nombre o CUIT."""
     import difflib
     conn = get_db_connection()
     try:
-        rows = conn.execute("SELECT cuit, nombre_fantasia FROM proveedores").fetchall()
-        proveedores = [dict(r) for r in rows]
+        rows = conn.execute("SELECT cuit, nombre_fantasia FROM compras_proveedores").fetchall()
+        compras_proveedores = [dict(r) for r in rows]
         
         # Primero Intentamos Match Exacto por CUIT
-        exacto = [p for p in proveedores if p['cuit'] == termino or termino in p['cuit']]
+        exacto = [p for p in compras_proveedores if p['cuit'] == termino or termino in p['cuit']]
         if exacto: return exacto
         
         # Búsqueda Difusa por Nombre
-        nombres = [p['nombre_fantasia'] for p in proveedores]
+        nombres = [p['nombre_fantasia'] for p in compras_proveedores]
         matches = difflib.get_close_matches(termino.upper(), [n.upper() for n in nombres], n=5, cutoff=0.4)
         
         resultado = []
         for m in matches:
-            for p in proveedores:
+            for p in compras_proveedores:
                 if p['nombre_fantasia'].upper() == m:
                     resultado.append(p)
         return resultado
@@ -243,7 +243,7 @@ def archivar_evidencia_visual(factura_id, source_path, cuit, nombre_proveedor, f
         
         # Actualizar DB
         conn = get_db_connection()
-        conn.execute("UPDATE facturas SET tiene_foto = 1, path_archivo = ?, status = 'ARCHIVADO' WHERE id = ?", (final_rel_path, factura_id))
+        conn.execute("UPDATE compras_facturas SET tiene_foto = 1, path_archivo = ?, status = 'ARCHIVADO' WHERE id = ?", (final_rel_path, factura_id))
         conn.commit()
         conn.close()
         
@@ -258,7 +258,7 @@ def save_libro_iva(data: dict):
     conn = get_db_connection()
     try:
         conn.execute('''
-            INSERT INTO libroiva (
+            INSERT INTO compras_libroiva (
                 periodo, debito_fiscal, credito_fiscal, saldo_tecnico, 
                 saldo_libre_disponibilidad, path_archivo, hash_archivo, meta_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -286,15 +286,15 @@ def save_libro_iva(data: dict):
         conn.close()
 
 
-def get_all_facturas(anio=None, mes=None):
-    """Retorna facturas de compras con soporte de filtrado cronológico v4.7."""
+def get_all_compras_facturas(anio=None, mes=None):
+    """Retorna compras_facturas de compras con soporte de filtrado cronológico v4.7."""
     conn = get_db_connection()
     try:
         query = '''
             SELECT id, fecha, tipo_comprobante, punto_venta, numero_comprobante, 
                    proveedor, cuit_proveedor, neto, iva21, total, status, 
                    tiene_foto, path_archivo, origen, meta_json
-            FROM facturas 
+            FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA'
         '''
         params = []
@@ -315,13 +315,13 @@ def get_all_facturas(anio=None, mes=None):
         conn.close()
 
 
-def update_record_path(record_id, new_path, table="facturas"):
+def update_record_path(record_id, new_path, table="compras_facturas"):
     """Actualiza la ruta física del archivo tras el archivado legal v4.5."""
     conn = get_db_connection()
     try:
-        if table not in ["facturas", "libroiva"]:
+        if table not in ["compras_facturas", "compras_libroiva"]:
             raise ValueError(f"Tabla no permitida: {table}")
-        if table == "facturas":
+        if table == "compras_facturas":
             conn.execute(f"UPDATE {table} SET path_archivo = ?, tiene_foto = 1, status = 'ARCHIVADO' WHERE id = ?", (new_path, record_id))
         else:
             conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
@@ -333,12 +333,12 @@ def update_record_path(record_id, new_path, table="facturas"):
 
 
 def get_reporte_discrepancias():
-    """Retorna facturas cruzadas que están en AFIP/Manual pero no en CALIM."""
+    """Retorna compras_facturas cruzadas que están en AFIP/Manual pero no en CALIM."""
     conn = get_db_connection()
     try:
         rows = conn.execute('''
             SELECT id, numero_comprobante, proveedor, fecha, total, origen, status 
-            FROM facturas 
+            FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA' AND status = 'SOLO_AFIP'
             ORDER BY fecha DESC
         ''').fetchall()
@@ -347,13 +347,13 @@ def get_reporte_discrepancias():
         conn.close()
 
 
-def get_facturas_sin_archivo():
-    """Retorna facturas importadas que aún no tienen evidencia visual vinculada."""
+def get_compras_facturas_sin_archivo():
+    """Retorna compras_facturas importadas que aún no tienen evidencia visual vinculada."""
     conn = get_db_connection()
     try:
         rows = conn.execute('''
             SELECT id, numero_comprobante, proveedor, fecha, total, origen 
-            FROM facturas 
+            FROM compras_facturas 
             WHERE tiene_foto = 0 OR path_archivo IS NULL
             ORDER BY fecha DESC
         ''').fetchall()
@@ -366,7 +366,7 @@ def update_factura_status(factura_id, status_nuevo):
     """Actualiza solo el status de una factura."""
     conn = get_db_connection()
     try:
-        conn.execute("UPDATE facturas SET status = ? WHERE id = ?", (status_nuevo, factura_id))
+        conn.execute("UPDATE compras_facturas SET status = ? WHERE id = ?", (status_nuevo, factura_id))
         conn.commit()
     except Exception as e:
         logger.warning(f"Error actualizando status en factura {factura_id}: {e}")
@@ -378,14 +378,14 @@ def get_factura_by_id(factura_id):
     """Retorna una factura completa por su ID."""
     conn = get_db_connection()
     try:
-        row = conn.execute("SELECT * FROM facturas WHERE id = ?", (factura_id,)).fetchone()
+        row = conn.execute("SELECT * FROM compras_facturas WHERE id = ?", (factura_id,)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
 
 
 def smart_search_invoice(query):
-    """Busca facturas por coincidencia en número o en metadatos (CAE) v4.9."""
+    """Busca compras_facturas por coincidencia en número o en metadatos (CAE) v4.9."""
     conn = get_db_connection()
     try:
         clean_q = query.strip().replace('-', '').lstrip('0')
@@ -397,7 +397,7 @@ def smart_search_invoice(query):
         
         rows = conn.execute("""
             SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
-            FROM facturas 
+            FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA' 
               AND (
                   numero_comprobante LIKE ? OR 
@@ -416,7 +416,7 @@ def update_factura_fields(factura_id, fields: dict):
     """Actualiza campos arbitrarios de una factura (punto_venta, numero_comprobante, etc)."""
     conn = get_db_connection()
     try:
-        query = "UPDATE facturas SET "
+        query = "UPDATE compras_facturas SET "
         sets = [f"{k} = ?" for k in fields.keys()]
         query += ", ".join(sets)
         query += " WHERE id = ?"
@@ -433,25 +433,25 @@ def update_factura_fields(factura_id, fields: dict):
 
 
 def get_resumen_facturacion(anio=None):
-    """Estadísticas de facturas v4.5."""
+    """Estadísticas de compras_facturas v4.5."""
     conn = get_db_connection()
     params = [f"{anio}%"] if anio else []
     where = " WHERE fecha LIKE ?" if anio else ""
     cur = conn.cursor()
-    count = cur.execute(f"SELECT COUNT(*) FROM facturas {where}", params).fetchone()[0] or 0
-    ventas = cur.execute(f"SELECT SUM(total) FROM facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'VENTA'", params).fetchone()[0] or 0.0
-    compras = cur.execute(f"SELECT SUM(total) FROM facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'COMPRA'", params).fetchone()[0] or 0.0
+    count = cur.execute(f"SELECT COUNT(*) FROM compras_facturas {where}", params).fetchone()[0] or 0
+    ventas = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'VENTA'", params).fetchone()[0] or 0.0
+    compras = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'COMPRA'", params).fetchone()[0] or 0.0
     conn.close()
     return {"total_count": count, "monto_ventas": ventas, "monto_compras": compras}
 
 
-def buscar_facturas(termino):
-    """Busca en facturas v4.5."""
+def buscar_compras_facturas(termino):
+    """Busca en compras_facturas v4.5."""
     conn = get_db_connection()
     cur = conn.cursor()
     q = f"%{termino}%"
     rows = cur.execute("""
-        SELECT * FROM facturas 
+        SELECT * FROM compras_facturas 
         WHERE numero_comprobante LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?
         ORDER BY fecha DESC LIMIT 20
     """, (q, q, q)).fetchall()
@@ -468,7 +468,7 @@ def registrar_impuesto(data: dict):
                                  'iva105', 'iva21', 'descripcion', 'extern_id',
                                  'hash_archivo'}}
         conn.execute('''
-            INSERT INTO iva_desglosado (
+            INSERT INTO compras_iva_desglosado (
                 modulo_origen, fuente, fecha, neto, iva105, iva21,
                 descripcion, extern_id, hash_archivo, meta_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

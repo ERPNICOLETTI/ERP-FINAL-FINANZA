@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Ecosistema Compras v4.9</title>
+    <link rel="stylesheet" href="style.css?v=4.9.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- CABECERA ÚNICA -->
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Compras</span></h1>
+                <p>Módulo de Facturación y Proveedores v4.9 🧾</p>
+            </div>
+            
+            <div class="header-actions">
+                <a href="index.html" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Dashboard</a>
+                <button id="btn-process" class="btn-sync">⚡ Sincronizar Ecosistema ⚡</button>
+            </div>
+        </header>
+
+        <main class="ecosystem-layout">
+            <!-- PANEL IZQUIERDO: INGESTA & CARGA -->
+            <aside class="ingesta-panel glass">
+                <div class="panel-header">
+                    <h3>📥 Terminal de Ingesta</h3>
+                    <p>Carga la foto y busca el número</p>
+                </div>
+
+                <!-- Controlador de Inbox -->
+                <div id="inbox-controller" class="inbox-controller hidden">
+                    <button id="inbox-prev" class="btn-icon" onclick="app.prevInbox()">◀️</button>
+                    <span id="inbox-status">Buzón: 0 pendientes</span>
+                    <button id="inbox-next" class="btn-icon" onclick="app.nextInbox()">▶️</button>
+                    <button id="inbox-refresh" class="btn-icon" onclick="app.fetchInbox()" title="Recargar Buzón">🔄</button>
+                </div>
+
+                <div id="drop-zone" class="dropzone-preview">
+                    <div id="sidebar-preview" class="preview-content">
+                        <p class="preview-placeholder">📁 Arrastrar PDF o Foto aquí</p>
+                    </div>
+                    <input type="file" id="file-input" hidden accept="image/*,application/pdf">
+                </div>
+
+                <div class="ingesta-form">
+                    <div class="form-group">
+                        <input type="text" id="edit-full-number" class="big-input" placeholder="⌨️ Nro. Factura (Ej: 1234)" autocomplete="off">
+                    </div>
+
+                    <!-- Display de Match Atómico -->
+                    <div id="match-card" class="match-card hidden">
+                        <div class="match-header">
+                            <span id="match-origen" class="badge">AFIP</span>
+                            <span id="match-fecha">2026-04-05</span>
+                        </div>
+                        <div id="match-details" class="match-details">
+                            Match encontrado para este número.
+                        </div>
+                    </div>
+
+                    <!-- Excepción Pendiente CALIM -->
+                    <div id="calim-card" class="calim-card hidden">
+                        <div class="calim-header">⚠️ Factura No Encontrada</div>
+                        <p>No existe en la Base de Datos. Pasa la factura a la <strong>Sala de Espera</strong>.</p>
+                        
+                        <input type="text" id="pending-proveedor" class="calim-input" placeholder="Nombre Proveedor (Ej: VIA CARGO)">
+                        <button id="btn-pendiente" class="btn-warning" onclick="app.archivarPendiente()">Archivar como Pendiente CALIM ⏳</button>
+                    </div>
+                    
+                    <div id="sidebar-status" class="status-msg"></div>
+                    <button id="btn-confirmar" class="btn-primary-main" onclick="app.confirmarVinculacion()">Archivar en Bóveda 💾</button>
+                </div>
+            </aside>
+
+            <!-- PANEL CENTRAL: BÓVEDA & LISTADO -->
+            <section class="boveda-panel">
+                <form id="filters-form" hx-get="/api/facturas" hx-target="#tbody-compras" hx-trigger="change, keyup delay:300ms from:#pro-search, submit">
+                    <div class="boveda-header">
+                        <div class="search-pro">
+                            <input type="text" id="pro-search" name="q" placeholder="🔍 Buscar por proveedor, CUIT o número...">
+                        </div>
+                        
+                        <div class="cron-filters">
+                            <select id="filter-anio" name="anio">
+                                <option value="">Todos los años</option>
+                                <option value="2026" selected>Año 2026</option>
+                                <option value="2025">Año 2025</option>
+                            </select>
+                            <select id="filter-mes" name="mes">
+                                <option value="">Todos los Meses</option>
+                                <option value="01">Enero</option>
+                                <option value="02">Febrero</option>
+                                <option value="03">Marzo</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Mayo</option>
+                                <option value="06">Junio</option>
+                                <option value="07">Julio</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Sep.</option>
+                                <option value="10">Oct.</option>
+                                <option value="11">Nov.</option>
+                                <option value="12">Dic.</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="status-pills">
+                        <!-- Usamos radio buttons ocultos estilizados como pills -->
+                        <label class="pill active">
+                            <input type="radio" name="estado" value="all" checked style="display:none;"> Todas
+                        </label>
+                        <label class="pill pending">
+                            <input type="radio" name="estado" value="pending" style="display:none;"> Pendientes 🔴
+                        </label>
+                        <label class="pill completed">
+                            <input type="radio" name="estado" value="completed" style="display:none;"> Archivadas 🟢
+                        </label>
+                    </div>
+                </form>
+
+                <div class="table-container-final glass">
+                    <table id="table-compras-final">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Fecha</th>
+                                <th>Proveedor</th>
+                                <th>Comprobante</th>
+                                <th>Monto</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-compras" hx-get="/api/facturas?anio=2026" hx-trigger="load">
+                            <tr><td colspan="6" style="text-align: center; padding: 2rem;">Cargando facturas...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <script>
+                // Script cortito para cambiar la clase "active" de los pills de estado al hacer clic
+                document.querySelectorAll('.status-pills label.pill').forEach(label => {
+                    label.addEventListener('click', function() {
+                        document.querySelectorAll('.status-pills label.pill').forEach(l => l.classList.remove('active'));
+                        this.classList.add('active');
+                    });
+                });
+            </script>
+        </main>
+</body>
+</html>

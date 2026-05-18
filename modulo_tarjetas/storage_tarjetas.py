@@ -26,7 +26,7 @@ def init_db_tarjetas():
 
     # ── Liquidaciones (Cabecera) ───────────────────────────────────
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS liquidaciones_tarjetas (
+        CREATE TABLE IF NOT EXISTS tarjetas_liquidaciones (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             fuente          TEXT,
             marca           TEXT,
@@ -62,14 +62,14 @@ def init_db_tarjetas():
             retenciones     REAL DEFAULT 0,
             monto_neto      REAL DEFAULT 0,
             metadata_cruda  TEXT DEFAULT '{}',
-            FOREIGN KEY(liquidacion_id) REFERENCES liquidaciones_tarjetas(id)
+            FOREIGN KEY(liquidacion_id) REFERENCES tarjetas_liquidaciones(id)
         )
     ''')
 
     # ── Payway Records (Cupones / Ventas Individuales) ──────────────
     # Reemplaza permanentemente a 'cupones_tarjetas'
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS payway_records (
+        CREATE TABLE IF NOT EXISTS tarjetas_payway (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             fuente          TEXT,
             fecha_compra    TEXT,
@@ -103,7 +103,7 @@ def save_liquidacion(data: dict):
         metadata = {k: v for k, v in data.items() if k not in columnas_duras}
 
         cursor = conn.execute('''
-            INSERT OR IGNORE INTO liquidaciones_tarjetas (
+            INSERT OR IGNORE INTO tarjetas_liquidaciones (
                 fuente, marca, tipo, fecha_liquidacion, periodo, establecimiento,
                 total_bruto, costo_arancel, costo_financiero, iva_21, iva_105,
                 retenciones, total_neto, hash_archivo, path_archivo, metadata_cruda
@@ -124,7 +124,7 @@ def save_liquidacion(data: dict):
         last_id = cursor.lastrowid
         if last_id == 0 or last_id is None:
             res = conn.execute(
-                "SELECT id FROM liquidaciones_tarjetas WHERE hash_archivo = ?",
+                "SELECT id FROM tarjetas_liquidaciones WHERE hash_archivo = ?",
                 (data.get('hash_archivo'),)
             ).fetchone()
             if res:
@@ -139,7 +139,7 @@ def save_liquidacion(data: dict):
         conn.close()
 
 
-def save_payway_records(lista_cupones: list, hash_archivo: str = None):
+def save_tarjetas_payway(lista_cupones: list, hash_archivo: str = None):
     """Persistencia masiva de registros de Payway v4.0."""
     conn = get_db_connection()
     try:
@@ -153,7 +153,7 @@ def save_payway_records(lista_cupones: list, hash_archivo: str = None):
 
             try:
                 conn.execute('''
-                    INSERT OR IGNORE INTO payway_records (
+                    INSERT OR IGNORE INTO tarjetas_payway (
                         fuente, fecha_compra, fecha_pago, lote, cupon,
                         marca, monto_bruto, hash_archivo, path_archivo, 
                         matching_tx_id, metadata_cruda
@@ -173,18 +173,18 @@ def save_payway_records(lista_cupones: list, hash_archivo: str = None):
         conn.commit()
         return agregados
     except Exception as e:
-        logger.warning(f"Error guardando payway_records: {e}")
+        logger.warning(f"Error guardando tarjetas_payway: {e}")
         return 0
     finally:
         conn.close()
 
 
-def update_record_path(record_id, new_path, table="payway_records"):
+def update_record_path(record_id, new_path, table="tarjetas_payway"):
     """Actualiza la ruta física del archivo tras el archivado legal v4.0."""
     conn = get_db_connection()
     try:
         # Validación básica de tabla para evitar inyecciones
-        if table not in ["payway_records", "liquidaciones_tarjetas"]:
+        if table not in ["tarjetas_payway", "tarjetas_liquidaciones"]:
             raise ValueError(f"Tabla no permitida: {table}")
             
         conn.execute(f"UPDATE {table} SET path_archivo = ? WHERE id = ?", (new_path, record_id))
@@ -202,7 +202,7 @@ def get_resumen_tarjetas(anio=None):
     params = [f"{anio}%"] if anio else []
     
     # 1. Ventas por Posnet
-    q_ventas = "SELECT COUNT(*), SUM(monto_bruto) FROM payway_records"
+    q_ventas = "SELECT COUNT(*), SUM(monto_bruto) FROM tarjetas_payway"
     if anio: q_ventas += " WHERE fecha_compra LIKE ?"
     res_v = cur.execute(q_ventas, params).fetchone()
 
@@ -210,7 +210,7 @@ def get_resumen_tarjetas(anio=None):
     q_liq = """
         SELECT fuente, tipo, COUNT(*), SUM(total_bruto), SUM(total_neto), 
                SUM(costo_arancel + costo_financiero + retenciones + iva_21 + iva_105) 
-        FROM liquidaciones_tarjetas
+        FROM tarjetas_liquidaciones
     """
     if anio: q_liq += " WHERE (fecha_liquidacion LIKE ? OR periodo LIKE ?)"
     
@@ -236,7 +236,7 @@ def get_cupon_detalle(cupon_id):
     cur = conn.cursor()
     q_pad = str(cupon_id).zfill(8)
     row = cur.execute("""
-        SELECT * FROM payway_records 
+        SELECT * FROM tarjetas_payway 
         WHERE cupon = ? OR cupon LIKE ? OR id = ?
     """, (q_pad, f"%{cupon_id}", cupon_id)).fetchone()
     conn.close()

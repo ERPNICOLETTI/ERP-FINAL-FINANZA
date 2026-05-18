@@ -11,3 +11,6 @@ __pycache__/
 # Crudos de Módulos (Ignorar contenido, mantener carpeta)
 modulo_*/crudos/*
 !modulo_*/crudos/.gitkeep
+
+# Directorio de Backups de Base de Datos
+backups/
