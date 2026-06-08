@@ -222,8 +222,8 @@ def delete_gasto_tipo(tipo_id):
 # REPOSITORIO DE REGISTROS DE GASTOS (gastos_registros)
 # ==========================================
 
-def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None):
-    """Retorna los registros de gastos manuales, opcionalmente filtrados por cuenta y periodo."""
+def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None, fuente=None):
+    """Retorna los registros de gastos manuales, opcionalmente filtrados por cuenta, periodo y fuente."""
     conn = get_db_connection()
     try:
         query = '''
@@ -242,6 +242,12 @@ def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None):
         elif anio:
             query += " AND r.fecha LIKE ?"
             params.append(f"{anio}%")
+        if fuente:
+            if fuente == 'Manual':
+                query += " AND (r.fuente IS NULL OR r.fuente = '' OR r.fuente = 'Manual')"
+            else:
+                query += " AND r.fuente = ?"
+                params.append(fuente)
         
         query += " ORDER BY r.fecha DESC, r.id DESC"
         rows = conn.execute(query, params).fetchall()

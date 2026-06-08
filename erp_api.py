@@ -265,7 +265,7 @@ async def gastos_page(request: Request):
     return templates.TemplateResponse(request=request, name="gastos.html", context={"request": request, "cuentas": cuentas})
 
 @app.get("/api/gastos/list")
-async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: str = Query(None)):
+async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: str = Query(None), fuente: str = Query(None)):
     anio = None
     mes_str = None
     if mes and "-" in mes:
@@ -274,7 +274,7 @@ async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: s
         anio = str(datetime.now().year)
         mes_str = mes
         
-    registros = storage_gastos.get_gastos_registros(cuenta_codigo, anio, mes_str)
+    registros = storage_gastos.get_gastos_registros(cuenta_codigo, anio, mes_str, fuente)
     return templates.TemplateResponse(request=request, name="gastos_list.html", context={"request": request, "registros": registros})
 
 @app.get("/api/gastos/form")

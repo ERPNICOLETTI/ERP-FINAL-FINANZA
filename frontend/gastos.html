@@ -115,6 +115,15 @@
                                         {% endfor %}
                                     </select>
                                 </div>
+                                <div style="flex: 1; min-width: 200px;">
+                                    <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Filtrar por Fuente:</label>
+                                    <select name="fuente" style="width: 100%; padding: 0.6rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color:#24292f; font-weight: 600;">
+                                        <option value="">Todas las Fuentes</option>
+                                        <option value="Manual">Manual ✍️</option>
+                                        <option value="Visa Galicia">Visa Galicia 💳</option>
+                                        <option value="Visa Hipotecario">Visa Hipotecario 💳</option>
+                                    </select>
+                                </div>
                                 <div style="flex: 2; min-width: 350px;">
                                     <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Período Mensual:</label>
                                     <input type="hidden" name="mes" id="filter-mes-input" value="2026-05">
