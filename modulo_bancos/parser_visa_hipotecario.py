@@ -173,15 +173,41 @@ def procesar_archivo(file_path, force_reprocess=False):
             matched_concept = None
             desc_lower = description.lower()
             
+            # Filtrar reglas: categorias de tarjeta y personales restringidas al titular y comunas
+            # Para reglas específicas (como compras), permitimos de cualquier cuenta para soportar compras cruzadas/aprendizaje
+            pref_accounts = ["JOA", "COMUN"]
+            valid_rules = []
+            for r in rules:
+                if r['nombre'] in ('Gasto Tarjeta', 'Intereses Tarjeta', 'Tarjeta', 'Gastos Personales', 'Gastos de Vida', 'Aportes de Capital', 'Impuestos Comerciales'):
+                    if r['cuenta'] in pref_accounts:
+                        valid_rules.append(r)
+                else:
+                    valid_rules.append(r)
+            
+            # Priorizar las reglas específicas del titular y comunas primero
+            prioritized_rules = sorted(
+                valid_rules,
+                key=lambda r: 0 if r['cuenta'] in pref_accounts else 1
+            )
+            
             # Caso especial: Google USD 19.99 (Gemini)
             if "google" in desc_lower and abs(val - 27986.0) < 10.0:
-                for r in rules:
+                for r in prioritized_rules:
                     if r['nombre'] == "GEMINI":
+                        matched_concept = r
+                        break
+
+            # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+            if not matched_concept and "esco" in desc_lower:
+                target_name = "ESCO Jorge" if abs(val - 102450.0) < 10.0 else "ESCO"
+                target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                for r in prioritized_rules:
+                    if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
                         matched_concept = r
                         break
             
             if not matched_concept:
-                for r in rules:
+                for r in prioritized_rules:
                     for kw in r['keywords']:
                         if kw in desc_lower:
                             matched_concept = r
@@ -191,14 +217,14 @@ def procesar_archivo(file_path, force_reprocess=False):
             
             # Fallback para Google / Instagram USD no clasificados
             if not matched_concept and ("google" in desc_lower or "instagra" in desc_lower):
-                for r in rules:
+                for r in valid_rules:
                     if r['nombre'] == "Gastos Personales" and r['cuenta'] == "JOA":
                         matched_concept = r
                         break
             
             # Fallback general a Gastos Personales (JOA)
             if not matched_concept:
-                for r in rules:
+                for r in valid_rules:
                     if r['nombre'] == "Gastos Personales" and r['cuenta'] == "JOA":
                         matched_concept = r
                         break
@@ -206,25 +232,27 @@ def procesar_archivo(file_path, force_reprocess=False):
             # Insertar registro en gastos_registros
             if matched_concept:
                 # Comprobar si ya existe el mismo registro para evitar duplicación
+                fecha_compra = f"20{year}-{month}-{day}"
                 conn_tx = storage_bancos.get_db_connection()
                 try:
                     exists_tx = conn_tx.execute(
-                        "SELECT 1 FROM gastos_registros WHERE gasto_tipo_id = ? AND monto = ? AND fecha = ? AND descripcion = ? AND fuente = ?",
-                        (matched_concept["id"], val, date_iso, f"{description}{cuota_str}", "Visa Hipotecario")
+                        "SELECT 1 FROM gastos_registros WHERE monto = ? AND fecha = ? AND descripcion = ? AND fuente = ? AND fecha_compra = ?",
+                        (val, date_iso, f"{description}{cuota_str}".strip(), "Visa Hipotecario", fecha_compra)
                     ).fetchone()
                 finally:
                     conn_tx.close()
 
                 if exists_tx:
-                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {description}{cuota_str} ($ {val}) el {date_iso}")
+                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {description}{cuota_str} ($ {val}) el {date_iso} (Compra: {fecha_compra})")
                     continue
 
                 storage_gastos.save_gasto_registro({
                     "gasto_tipo_id": matched_concept["id"],
                     "monto": val,
                     "fecha": date_iso,
-                    "descripcion": f"{description}{cuota_str}",
-                    "fuente": "Visa Hipotecario"
+                    "descripcion": f"{description}{cuota_str}".strip(),
+                    "fuente": "Visa Hipotecario",
+                    "fecha_compra": fecha_compra
                 })
                 registros_agregados += 1
 

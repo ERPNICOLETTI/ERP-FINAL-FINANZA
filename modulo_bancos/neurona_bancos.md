@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO BANCOS (Tesorería & Conciliación) 🏦🧠
-**Versión 6.0.0 — Optimizado y Consolidado**
+**Versión 6.1.0 — Optimizado y Consolidado**
 
 Este módulo registra y procesa los extractos bancarios de Chubut, Credicoop e Hipotecario (Pesos/USD), y maneja el clasificador automático de transacciones.
 
@@ -10,7 +10,7 @@ Este módulo registra y procesa los extractos bancarios de Chubut, Credicoop e H
 2.  **[conciliacion_bancaria.py](conciliacion_bancaria.py)**: Algoritmo de emparejamiento entre movimientos del banco y facturas de compras o pagos de servicios.
 3.  **Parsers Específicos**:
     -   `parser_chubut.py` / `parser_credicoop_joaquin.py` / `parser_hipotecario.py` (e `hipotecario_usd`): Traducen los formatos de planilla bancaria a diccionarios normalizados.
-    -   `parser_visa_hipotecario.py`: Extrae consumos del PDF de liquidación, detecta cuotas (ej. `05/06`), pesifica dólares e inserta los registros limpios en `gastos_registros` indicando la fuente.
+    -   `parser_visa_hipotecario.py` (y demás parsers de tarjetas de crédito como `parser_visa_galicia.py`, `parser_mastercard_galicia.py`, `parser_naranja_pdf.py`, `parser_patagonia_pdf.py`): Extraen consumos del PDF de liquidación, detectan cuotas (ej. `05/06`), pesifican dólares, guardan la fecha original de la compra en la columna `fecha_compra` y aplican un clasificador dinámico ordenado por prioridad de cuenta según la tarjeta para evitar asignaciones erróneas.
 4.  **Vistas Web**:
     -   `bancos.html`: Panel de tesorería. Contiene la barra de búsqueda y filtros rápidos.
     -   `tabla_bancos.html`: Listado dinámico de movimientos.

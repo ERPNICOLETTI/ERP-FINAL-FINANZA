@@ -265,7 +265,7 @@ async def gastos_page(request: Request):
     return templates.TemplateResponse(request=request, name="gastos.html", context={"request": request, "cuentas": cuentas})
 
 @app.get("/api/gastos/list")
-async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: str = Query(None), fuente: str = Query(None)):
+async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: str = Query(None), fuente: str = Query(None), q: str = Query(None)):
     anio = None
     mes_str = None
     if mes and "-" in mes:
@@ -274,7 +274,7 @@ async def list_gastos(request: Request, cuenta_codigo: str = Query(None), mes: s
         anio = str(datetime.now().year)
         mes_str = mes
         
-    registros = storage_gastos.get_gastos_registros(cuenta_codigo, anio, mes_str, fuente)
+    registros = storage_gastos.get_gastos_registros(cuenta_codigo, anio, mes_str, fuente, q)
     return templates.TemplateResponse(request=request, name="gastos_list.html", context={"request": request, "registros": registros})
 
 @app.get("/api/gastos/form")
@@ -318,6 +318,7 @@ async def save_gasto_record(
     fecha: str = Form(...), 
     descripcion: str = Form(""), 
     fuente: str = Form("Manual"),
+    fecha_compra: str = Form(None),
     cuenta_codigo: str = Form(None), 
     mes: str = Form(None)
 ):
@@ -365,7 +366,8 @@ async def save_gasto_record(
         "monto": monto,
         "fecha": fecha,
         "descripcion": descripcion,
-        "fuente": fuente
+        "fuente": fuente,
+        "fecha_compra": fecha_compra if fecha_compra else fecha
     }
     if id:
         data["id"] = int(id)
@@ -419,7 +421,13 @@ async def sincronizar_gastos(
     cuenta_codigo: str = Form(None),
     mes: str = Form(None)
 ):
-    from modulo_bancos import parser_visa_hipotecario, parser_visa_galicia
+    from modulo_bancos import (
+        parser_visa_hipotecario, 
+        parser_visa_galicia,
+        parser_mastercard_galicia,
+        parser_naranja_pdf,
+        parser_patagonia_pdf
+    )
     from erp_master import detectar_parser_pdf
     
     # Resolver WORKSPACE localmente para asegurar el path
@@ -436,8 +444,8 @@ async def sincronizar_gastos(
                 if file.upper().endswith(".PDF"):
                     files_to_process.append(os.path.join(root, file))
                     
-    # 2. Escanear crudos_bancos/VISA_HIPOTECARIO y crudos_bancos/VISA_GALICIA para reprocesar resúmenes históricos
-    for sub in ["VISA_HIPOTECARIO", "VISA_GALICIA"]:
+    # 2. Escanear crudos_bancos para reprocesar resúmenes históricos
+    for sub in ["VISA_HIPOTECARIO", "VISA_GALICIA", "MASTERCARD_GALICIA", "TARJETA_NARANJA", "PATAGONIA365"]:
         subdir = os.path.join(crudos_dir, sub)
         if os.path.exists(subdir):
             for root, _, files in os.walk(subdir):
@@ -456,6 +464,18 @@ async def sincronizar_gastos(
                     procesados += 1
             elif detected_type == "VISA_GALICIA":
                 success, info = parser_visa_galicia.procesar_archivo(filepath, force_reprocess=True)
+                if success:
+                    procesados += 1
+            elif detected_type == "MASTERCARD_GALICIA":
+                success, info = parser_mastercard_galicia.procesar_archivo(filepath, force_reprocess=True)
+                if success:
+                    procesados += 1
+            elif detected_type == "TARJETA_NARANJA":
+                success, info = parser_naranja_pdf.procesar_archivo(filepath, force_reprocess=True)
+                if success:
+                    procesados += 1
+            elif detected_type == "PATAGONIA365_PDF":
+                success, info = parser_patagonia_pdf.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
         except Exception as e:
@@ -1132,4 +1152,4 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend_lega
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=5005)
+    uvicorn.run(app, host="0.0.0.0", port=5005)

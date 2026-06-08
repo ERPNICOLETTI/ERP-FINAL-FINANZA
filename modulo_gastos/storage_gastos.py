@@ -63,10 +63,16 @@ def init_db_gastos():
             monto           REAL NOT NULL DEFAULT 0,
             fecha           TEXT NOT NULL, -- YYYY-MM-DD
             descripcion     TEXT,
-            fuente          TEXT DEFAULT 'Manual',
+            fuente          TEXT DEFAULT 'Efectivo',
+            fecha_compra    TEXT,          -- YYYY-MM-DD
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    try:
+        conn.execute("ALTER TABLE gastos_registros ADD COLUMN fecha_compra TEXT")
+        conn.commit()
+    except Exception:
+        pass
     
     # Sembrar cuentas por defecto si está vacía
     cursor = conn.execute("SELECT COUNT(*) FROM gastos_cuentas")
@@ -222,8 +228,8 @@ def delete_gasto_tipo(tipo_id):
 # REPOSITORIO DE REGISTROS DE GASTOS (gastos_registros)
 # ==========================================
 
-def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None, fuente=None):
-    """Retorna los registros de gastos manuales, opcionalmente filtrados por cuenta, periodo y fuente."""
+def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None, fuente=None, q=None):
+    """Retorna los registros de gastos manuales, opcionalmente filtrados por cuenta, periodo, fuente y busqueda."""
     conn = get_db_connection()
     try:
         query = '''
@@ -243,11 +249,14 @@ def get_gastos_registros(cuenta_codigo=None, anio=None, mes=None, fuente=None):
             query += " AND r.fecha LIKE ?"
             params.append(f"{anio}%")
         if fuente:
-            if fuente == 'Manual':
-                query += " AND (r.fuente IS NULL OR r.fuente = '' OR r.fuente = 'Manual')"
+            if fuente == 'Efectivo':
+                query += " AND (r.fuente IS NULL OR r.fuente = '' OR r.fuente = 'Manual' OR r.fuente = 'Efectivo')"
             else:
                 query += " AND r.fuente = ?"
                 params.append(fuente)
+        if q and q.strip():
+            query += " AND (COALESCE(r.descripcion, '') LIKE ? OR t.nombre LIKE ?)"
+            params.extend([f"%{q.strip()}%", f"%{q.strip()}%"])
         
         query += " ORDER BY r.fecha DESC, r.id DESC"
         rows = conn.execute(query, params).fetchall()
@@ -277,20 +286,21 @@ def save_gasto_registro(data: dict):
         monto = data.get('monto')
         fecha = data.get('fecha')
         descripcion = data.get('descripcion', '')
-        fuente = data.get('fuente', 'Manual')
+        fuente = data.get('fuente', 'Efectivo')
         
+        fecha_compra = data.get('fecha_compra') or data.get('fecha')
         if registro_id:
             conn.execute('''
                 UPDATE gastos_registros
-                SET gasto_tipo_id=?, monto=?, fecha=?, descripcion=?, fuente=?
+                SET gasto_tipo_id=?, monto=?, fecha=?, descripcion=?, fuente=?, fecha_compra=?
                 WHERE id=?
-            ''', (gasto_tipo_id, monto, fecha, descripcion, fuente, registro_id))
+            ''', (gasto_tipo_id, monto, fecha, descripcion, fuente, fecha_compra, registro_id))
             ret_id = registro_id
         else:
             cursor = conn.execute('''
-                INSERT INTO gastos_registros (gasto_tipo_id, monto, fecha, descripcion, fuente)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (gasto_tipo_id, monto, fecha, descripcion, fuente))
+                INSERT INTO gastos_registros (gasto_tipo_id, monto, fecha, descripcion, fuente, fecha_compra)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (gasto_tipo_id, monto, fecha, descripcion, fuente, fecha_compra))
             ret_id = cursor.lastrowid
         conn.commit()
         return ret_id

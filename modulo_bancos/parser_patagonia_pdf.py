@@ -139,33 +139,59 @@ def procesar_archivo(file_path, force_reprocess=False):
                 if is_usd:
                     val = round(val * 1400.0, 2)
                     
-                # Formatear fecha
-                month_num = MONTHS_MAP.get(month.upper(), "05")
-                date_iso = f"20{year}-{month_num}-{day}"
+                # Formatear fecha usando el período de facturación del resumen
+                date_iso = f"{billing_year}-{billing_month}-{day}"
                 
+                month_num = MONTHS_MAP.get(month.upper(), "05")
+                fecha_compra = f"20{year}-{month_num}-{day}"
                 txs.append({
                     "fecha": date_iso,
                     "descripcion": f"{description}{cuota_str}".strip(),
-                    "monto": val
+                    "monto": val,
+                    "fecha_compra": fecha_compra
                 })
 
         registros_agregados = 0
 
-        # 3. Clasificar e insertar en la base de datos (Cuenta JOR / COMUN)
-        valid_rules = [r for r in rules if r['cuenta'] in ('JOR', 'COMUN')]
+        # Filtrar reglas: categorias de tarjeta y personales restringidas al titular y comunas
+        # Para reglas específicas (como compras), permitimos de cualquier cuenta para soportar compras cruzadas/aprendizaje
+        pref_accounts = ["LDK", "COMUN", "JOR"]
+        valid_rules = []
+        for r in rules:
+            if r['nombre'] in ('Gasto Tarjeta', 'Intereses Tarjeta', 'Tarjeta', 'Gastos Personales', 'Gastos de Vida', 'Aportes de Capital', 'Impuestos Comerciales'):
+                if r['cuenta'] in pref_accounts:
+                    valid_rules.append(r)
+            else:
+                valid_rules.append(r)
+        
+        # Priorizar las reglas específicas del titular y comunas primero
+        prioritized_rules = sorted(
+            valid_rules,
+            key=lambda r: 0 if r['cuenta'] in pref_accounts else 1
+        )
 
         for tx in txs:
             matched_concept = None
             desc_lower = tx['descripcion'].lower()
             
-            # Clasificar según palabras clave
-            for r in valid_rules:
-                for kw in r['keywords']:
-                    if kw in desc_lower:
+            # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+            if "esco" in desc_lower:
+                target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
+                target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                for r in prioritized_rules:
+                    if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
                         matched_concept = r
                         break
-                if matched_concept:
-                    break
+
+            if not matched_concept:
+                # Clasificar según palabras clave
+                for r in prioritized_rules:
+                    for kw in r['keywords']:
+                        if kw in desc_lower:
+                            matched_concept = r
+                            break
+                    if matched_concept:
+                        break
                     
             # Fallback general a Gastos de Vida (JOR)
             if not matched_concept:
@@ -186,14 +212,14 @@ def procesar_archivo(file_path, force_reprocess=False):
                 conn_tx = storage_bancos.get_db_connection()
                 try:
                     exists_tx = conn_tx.execute(
-                        "SELECT 1 FROM gastos_registros WHERE gasto_tipo_id = ? AND monto = ? AND fecha = ? AND descripcion = ? AND fuente = ?",
-                        (matched_concept["id"], tx['monto'], tx['fecha'], tx['descripcion'], "Patagonia 365")
+                        "SELECT 1 FROM gastos_registros WHERE monto = ? AND fecha = ? AND descripcion = ? AND fuente = ? AND fecha_compra = ?",
+                        (tx['monto'], tx['fecha'], tx['descripcion'], "Patagonia 365", tx.get('fecha_compra') or tx['fecha'])
                     ).fetchone()
                 finally:
                     conn_tx.close()
 
                 if exists_tx:
-                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']}")
+                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx.get('fecha_compra') or tx['fecha']})")
                     continue
 
                 storage_gastos.save_gasto_registro({
@@ -201,7 +227,8 @@ def procesar_archivo(file_path, force_reprocess=False):
                     "monto": tx['monto'],
                     "fecha": tx['fecha'],
                     "descripcion": tx['descripcion'],
-                    "fuente": "Patagonia 365"
+                    "fuente": "Patagonia 365",
+                    "fecha_compra": tx.get('fecha_compra') or tx['fecha']
                 })
                 registros_agregados += 1
 

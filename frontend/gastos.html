@@ -94,6 +94,12 @@
                         onclick="document.getElementById('modal-container').style.display='flex'">
                     ➕ Registrar Gasto
                 </button>
+                <button class="btn-sync" 
+                        id="btn-toggle-resumen"
+                        onclick="toggleResumen()"
+                        style="background: rgba(9, 105, 218, 0.1); border-color: var(--accent-color); color: var(--accent-color);">
+                    📊 Ver Resumen
+                </button>
             </div>
         </header>
 
@@ -104,8 +110,20 @@
                 <div class="main-panel">
                     <!-- Barra de filtros -->
                     <div class="glass" style="border-radius: 12px; padding: 1.2rem; margin-bottom: 2rem; border: 1px solid rgba(0,0,0,0.05);">
-                        <form id="gastos-filters" hx-get="/api/gastos/list" hx-target="#gastos-table-container" hx-trigger="change, load, reload-gastos from:body">
+                        <form id="gastos-filters" hx-get="/api/gastos/list" hx-target="#gastos-table-container" hx-trigger="submit, change, load, reload-gastos from:body" onsubmit="return false;">
                             <div style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                                <div style="flex: 1.5; min-width: 250px;">
+                                    <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Buscar Gasto:</label>
+                                    <div style="position: relative; display: flex; align-items: center;">
+                                        <input type="text" name="q" placeholder="Buscar descripción o concepto..." 
+                                               hx-get="/api/gastos/list" 
+                                               hx-target="#gastos-table-container" 
+                                               hx-trigger="keyup changed delay:300ms"
+                                               hx-include="#gastos-filters"
+                                               style="width: 100%; padding: 0.6rem 0.6rem 0.6rem 2.2rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color:#24292f; font-weight: 500; font-size: 0.85rem;" autocomplete="off">
+                                        <span style="position: absolute; left: 0.7rem; color: #9ca3af; font-size: 0.9rem; pointer-events: none;">🔍</span>
+                                    </div>
+                                </div>
                                 <div style="flex: 1; min-width: 200px;">
                                     <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Filtrar por Cuenta:</label>
                                     <select name="cuenta_codigo" style="width: 100%; padding: 0.6rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color:#24292f; font-weight: 600;">
@@ -119,8 +137,12 @@
                                     <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Filtrar por Fuente:</label>
                                     <select name="fuente" style="width: 100%; padding: 0.6rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color:#24292f; font-weight: 600;">
                                         <option value="">Todas las Fuentes</option>
+                                        <option value="Efectivo">Efectivo 💵</option>
                                         <option value="Visa Galicia">Visa Galicia 💳</option>
                                         <option value="Visa Hipotecario">Visa Hipotecario 💳</option>
+                                        <option value="Mastercard Galicia">Mastercard Galicia 💳</option>
+                                        <option value="Tarjeta Naranja">Tarjeta Naranja 🍊</option>
+                                        <option value="Patagonia 365">Patagonia 365 🏔️</option>
                                     </select>
                                 </div>
                                 <div style="flex: 2; min-width: 350px;">
@@ -131,11 +153,6 @@
                                         <button type="button" class="action-btn" onclick="adjustMonth(-1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">◀️</button>
                                         <span id="current-month-label" style="font-weight: 600; min-width: 130px; text-align: center; font-size: 0.95rem; color: #24292f; background: #fff; padding: 0.55rem 1rem; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Mayo 2026</span>
                                         <button type="button" class="action-btn" onclick="adjustMonth(1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">▶️</button>
-                                        
-                                        <div style="display: flex; gap: 0.4rem; margin-left: 0.8rem;">
-                                            <button type="button" class="action-btn" id="pill-2026-05" onclick="setMonth('2026-05')" style="padding: 0.55rem 1rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color);">Mayo 2026</button>
-                                            <button type="button" class="action-btn" id="pill-2026-06" onclick="setMonth('2026-06')" style="padding: 0.55rem 1rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">Junio 2026</button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -149,7 +166,7 @@
                 </div>
 
                 <!-- PANEL LATERAL: RESUMEN ANALÍTICO -->
-                <div class="side-panel">
+                <div class="side-panel" style="display: none;">
                     <div class="glass resumen-card">
                         <h3 style="margin-bottom: 1.2rem; color: #24292f; font-weight: 600; font-size: 1.1rem; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
                             <span>Resumen de Carga</span>
@@ -177,20 +194,7 @@
             const [year, month] = value.split('-');
             const monthIndex = parseInt(month, 10) - 1;
             document.getElementById('current-month-label').textContent = `${monthsNames[monthIndex]} ${year}`;
-            
-            // Actualizar el estado visual de las píldoras de acceso rápido
-            document.querySelectorAll('[id^="pill-"]').forEach(pill => {
-                pill.style.background = '#fff';
-                pill.style.borderColor = 'rgba(0,0,0,0.15)';
-                pill.style.color = '#24292f';
-            });
-            
-            const activePill = document.getElementById(`pill-${value}`);
-            if (activePill) {
-                activePill.style.background = 'var(--accent-color)';
-                activePill.style.borderColor = 'var(--accent-color)';
-                activePill.style.color = '#fff';
-            }
+
             
             // Disparar recarga parcial vía HTMX
             const filterForm = document.getElementById('gastos-filters');
@@ -198,6 +202,18 @@
             
             // Forzar actualización del panel de resumen analítico
             htmx.ajax('GET', `/api/gastos/resumen?mes=${value}`, {target: '#gastos-resumen-container'});
+        }
+
+        function toggleResumen() {
+            const sidePanel = document.querySelector('.side-panel');
+            const btn = document.getElementById('btn-toggle-resumen');
+            if (sidePanel.style.display === 'none') {
+                sidePanel.style.display = 'block';
+                btn.innerHTML = '📊 Ocultar Resumen';
+            } else {
+                sidePanel.style.display = 'none';
+                btn.innerHTML = '📊 Ver Resumen';
+            }
         }
 
         function adjustMonth(delta) {

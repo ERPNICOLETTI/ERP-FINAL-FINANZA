@@ -5,7 +5,7 @@
     
     <form hx-post="/api/gastos/save" hx-target="#gastos-table-container" hx-include="#gastos-filters" onsubmit="document.getElementById('modal-container').style.display='none'">
         <input type="hidden" name="id" value="{{ reg.id if reg else '' }}">
-        <input type="hidden" name="fuente" value="{{ reg.fuente if reg else 'Manual' }}">
+        <input type="hidden" name="fuente" value="{{ reg.fuente if reg else 'Efectivo' }}">
         
         <!-- Selector de Cuenta para cargar dinámicamente sus categorías -->
         <div style="margin-bottom: 1.2rem;">
@@ -71,6 +71,13 @@
             </div>
         </div>
         
+        <!-- Fecha de Compra (Real) -->
+        <div style="margin-bottom: 1.2rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Fecha de Compra (Real):</label>
+            <input type="date" name="fecha_compra" value="{{ reg.fecha_compra if (reg and reg.fecha_compra) else '' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); font-weight: 600;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Dejar vacío para usar la fecha del período seleccionado arriba.</span>
+        </div>
+
         <!-- Descripción / Notas -->
         <div style="margin-bottom: 2rem;">
             <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Detalle / Notas:</label>

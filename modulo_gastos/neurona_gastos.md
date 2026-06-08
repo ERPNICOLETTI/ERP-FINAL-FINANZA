@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO GASTOS (Libro Diario & Cuentas) 🏛️🧠
-**Versión 6.0.0 — Optimizado y Consolidado**
+**Versión 6.1.0 — Optimizado y Consolidado**
 
 Este módulo gestiona la asignación manual de consumos diarios e imputaciones a titulares o esferas de imputación financiera.
 
@@ -9,8 +9,8 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
 1.  **[storage_gastos.py](storage_gastos.py)**: Capa de persistencia. Expone la API para guardar cuentas, tipos y registros individuales.
 2.  **Vistas Web**:
     -   `gastos.html`: Dashboard principal. Integra botones para sincronizar tarjetas, registrar gastos y barra de filtros rápidos interactivos (por Cuenta, Fuente de origen y Período Mensual).
-    -   `gastos_list.html`: Renderiza el listado histórico de gastos filtrado con ordenamiento client-side interactivo por columnas y badges visuales para identificar gastos automáticos a revisar (`⚠️ Revisar`).
-    -   `gastos_form.html`: Formulario modal de creación/edición.
+    -   `gastos_list.html`: Renderiza el listado histórico de gastos filtrado con ordenamiento client-side interactivo por columnas, incluyendo badges visuales para identificar gastos automáticos a revisar (`⚠️ Revisar`) y una columna dedicada para la fecha real de consumo (`Fecha Compra`).
+    -   `gastos_form.html`: Formulario modal de creación/edición, incluyendo un selector de fecha real para la compra (`Fecha de Compra (Real)`).
     -   `gastos_resumen.html`: Desglose analítico lateral consolidado por mes y cuenta (COMUN divide al 50%).
 
 ---
@@ -28,8 +28,8 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
 
 ### Tabla `gastos_registros`
 -   El libro diario de transacciones manuales e importadas.
--   **Columna `fuente`:** Almacena el origen de la transacción (`Manual` o `Visa Hipotecario`).
--   Columnas Core: `id` (INTEGER PK), `gasto_tipo_id` (INTEGER FK), `monto` (REAL), `fecha` (TEXT), `descripcion` (TEXT), `fuente` (TEXT DEFAULT 'Manual').
+-   **Columna `fuente`:** Almacena el origen de la transacción (`Manual`, `Visa Hipotecario`, `Visa Galicia`, `Mastercard Galicia`, `Tarjeta Naranja`, `Patagonia 365`).
+-   Columnas Core: `id` (INTEGER PK), `gasto_tipo_id` (INTEGER FK), `monto` (REAL), `fecha` (TEXT - Período de facturación), `descripcion` (TEXT), `fuente` (TEXT DEFAULT 'Manual'), `fecha_compra` (TEXT - Fecha de consumo real, por defecto igual a `fecha`).
 
 ---
 

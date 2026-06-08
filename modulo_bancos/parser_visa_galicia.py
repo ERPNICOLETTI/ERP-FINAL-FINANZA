@@ -135,8 +135,8 @@ def procesar_archivo(file_path, force_reprocess=False):
             description = re.sub(r'^(\*|K)\*?', '', description).strip() # Limpiar prefijo de tarjeta JOR
             description = re.sub(r'\s+\$\s*$', '', description).strip() # Quitar signo pesos sobrante
             
-            # Formatear fecha de la transacción
-            date_iso = f"20{year}-{month}-{day}"
+            # Formatear fecha de la transacción usando el período de facturación del resumen
+            date_iso = f"{billing_year}-{billing_month}-{day}"
             
             # Convertir valor de string a float
             val = float(amount_str.replace('.', '').replace(',', '.'))
@@ -145,18 +145,45 @@ def procesar_archivo(file_path, force_reprocess=False):
             matched_concept = None
             desc_lower = description.lower()
             
-            # Intentar clasificar según palabras clave de las categorías
+            # Filtrar reglas: categorias de tarjeta y personales restringidas al titular y comunas
+            # Para reglas específicas (como compras), permitimos de cualquier cuenta para soportar compras cruzadas/aprendizaje
+            pref_accounts = ["JOR", "COMUN", "LDK"]
+            valid_rules = []
             for r in rules:
-                for kw in r['keywords']:
-                    if kw in desc_lower:
+                if r['nombre'] in ('Gasto Tarjeta', 'Intereses Tarjeta', 'Tarjeta', 'Gastos Personales', 'Gastos de Vida', 'Aportes de Capital', 'Impuestos Comerciales'):
+                    if r['cuenta'] in pref_accounts:
+                        valid_rules.append(r)
+                else:
+                    valid_rules.append(r)
+            
+            # Priorizar las reglas específicas del titular y comunas primero
+            prioritized_rules = sorted(
+                valid_rules,
+                key=lambda r: 0 if r['cuenta'] in pref_accounts else 1
+            )
+            
+            # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+            if "esco" in desc_lower:
+                target_name = "ESCO Jorge" if abs(val - 102450.0) < 10.0 else "ESCO"
+                target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                for r in prioritized_rules:
+                    if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
                         matched_concept = r
                         break
-                if matched_concept:
-                    break
+            
+            if not matched_concept:
+                # Intentar clasificar según palabras clave de las categorías
+                for r in prioritized_rules:
+                    for kw in r['keywords']:
+                        if kw in desc_lower:
+                            matched_concept = r
+                            break
+                    if matched_concept:
+                        break
             
             # Fallback general a Gastos de Vida (JOR)
             if not matched_concept:
-                for r in rules:
+                for r in valid_rules:
                     if r['nombre'] == "Gastos de Vida" and r['cuenta'] == "JOR":
                         matched_concept = r
                         break
@@ -164,25 +191,27 @@ def procesar_archivo(file_path, force_reprocess=False):
             # Insertar registro en gastos_registros
             if matched_concept:
                 # Comprobar si ya existe el mismo registro para evitar duplicación
+                fecha_compra = f"20{year}-{month}-{day}"
                 conn_tx = storage_bancos.get_db_connection()
                 try:
                     exists_tx = conn_tx.execute(
-                        "SELECT 1 FROM gastos_registros WHERE gasto_tipo_id = ? AND monto = ? AND fecha = ? AND descripcion = ? AND fuente = ?",
-                        (matched_concept["id"], val, date_iso, f"{description}{cuota_str}", "Visa Galicia")
+                        "SELECT 1 FROM gastos_registros WHERE monto = ? AND fecha = ? AND descripcion = ? AND fuente = ? AND fecha_compra = ?",
+                        (val, date_iso, f"{description}{cuota_str}".strip(), "Visa Galicia", fecha_compra)
                     ).fetchone()
                 finally:
                     conn_tx.close()
 
                 if exists_tx:
-                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {description}{cuota_str} ($ {val}) el {date_iso}")
+                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {description}{cuota_str} ($ {val}) el {date_iso} (Compra: {fecha_compra})")
                     continue
 
                 storage_gastos.save_gasto_registro({
                     "gasto_tipo_id": matched_concept["id"],
                     "monto": val,
                     "fecha": date_iso,
-                    "descripcion": f"{description}{cuota_str}",
-                    "fuente": "Visa Galicia"
+                    "descripcion": f"{description}{cuota_str}".strip(),
+                    "fuente": "Visa Galicia",
+                    "fecha_compra": fecha_compra
                 })
                 registros_agregados += 1
 
