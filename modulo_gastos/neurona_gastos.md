@@ -8,8 +8,8 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
 ## 📂 Componentes del Módulo
 1.  **[storage_gastos.py](storage_gastos.py)**: Capa de persistencia. Expone la API para guardar cuentas, tipos y registros individuales.
 2.  **Vistas Web**:
-    -   `gastos.html`: Dashboard principal. Integra botones para sincronizar tarjetas y registrar gastos.
-    -   `gastos_list.html`: Renderiza el listado histórico de gastos con ordenamiento client-side interactivo por columnas.
+    -   `gastos.html`: Dashboard principal. Integra botones para sincronizar tarjetas, registrar gastos y barra de filtros rápidos interactivos (por Cuenta, Fuente de origen y Período Mensual).
+    -   `gastos_list.html`: Renderiza el listado histórico de gastos filtrado con ordenamiento client-side interactivo por columnas y badges visuales para identificar gastos automáticos a revisar (`⚠️ Revisar`).
     -   `gastos_form.html`: Formulario modal de creación/edición.
     -   `gastos_resumen.html`: Desglose analítico lateral consolidado por mes y cuenta (COMUN divide al 50%).
 
