@@ -6,7 +6,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'erp_ni
 def get_categorias_from_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    rows = cursor.execute("SELECT nombre, palabras_clave, tipo FROM categorias_maestras").fetchall()
+    rows = cursor.execute("SELECT nombre, palabras_clave, tipo FROM gastos_tipos").fetchall()
     conn.close()
     return rows
 

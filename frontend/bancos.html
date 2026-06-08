@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Final - Tesorería y Bancos</title>
-    <link rel="stylesheet" href="style.css?v=5.0.0">
+    <link rel="stylesheet" href="style.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
     <style>
         .kpi-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
-        .kpi-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; flex: 1; text-align: center; }
-        .kpi-card h4 { color: #888; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.5rem; }
-        .kpi-card .value { font-size: 2rem; font-weight: 600; color: #fff; }
+        .kpi-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; padding: 1.5rem; flex: 1; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .kpi-card h4 { color: #57606a; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.5rem; }
+        .kpi-card .value { font-size: 2rem; font-weight: 600; color: var(--text-main); }
         /* CSS para Egresos (Rojizos/Anaranjados/Violáceos) */
         .cat-Comida { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .cat-Transporte { background: rgba(249, 115, 22, 0.2); color: #f97316; }
@@ -52,7 +53,7 @@
                 <p>Tesorería y Movimientos Financieros 🏦</p>
             </div>
             <div class="header-actions">
-                <a href="/" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver</a>
+                <a href="/" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver</a>
                 <button id="btn-process" class="btn-sync" onclick="alert('Funcionalidad de Subida en desarrollo')">⚡ Importar Extracto ⚡</button>
             </div>
         </header>
@@ -79,50 +80,52 @@
                                 <option value="CHUBUT">Chubut (Próximamente)</option>
                                 <option value="CREDICOOP">Credicoop (Próximamente)</option>
                             </select>
+                            <select name="area">
+                                <option value="">Todas las Cuentas</option>
+                                {% for c in cuentas %}
+                                <option value="{{ c.codigo }}">{{ c.nombre }} {{ c.emoji }}</option>
+                                {% endfor %}
+                            </select>
                             <select name="categoria">
                                 <option value="">Todas las Categorías</option>
                                 <optgroup label="INGRESOS">
-                                    <option value="Sueldo">Sueldo 💼</option>
-                                    <option value="Ventas">Ventas 🧾</option>
-                                    <option value="Transferencia recibida">Transferencia recibida 💸</option>
-                                    <option value="Intereses">Intereses 🏦</option>
-                                    <option value="Regalos">Regalos 🎁</option>
-                                    <option value="Inversiones">Inversiones 📈</option>
-                                    <option value="Reembolsos">Reembolsos 📦</option>
-                                    <option value="Otros Ingresos">Otros Ingresos 🧮</option>
+                                    {% for cat in categorias %}
+                                        {% if cat.tipo == 'INGRESO' %}
+                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                        {% endif %}
+                                    {% endfor %}
                                 </optgroup>
                                 <optgroup label="EGRESOS">
-                                    <option value="Comida">Comida 🍔</option>
-                                    <option value="Transporte">Transporte 🚗</option>
-                                    <option value="Vivienda">Vivienda 🏠</option>
-                                    <option value="Servicios">Servicios 💡</option>
-                                    <option value="Impuestos">Impuestos 🧾</option>
-                                    <option value="Salud">Salud 🏥</option>
-                                    <option value="Educación">Educación 🎓</option>
-                                    <option value="Ocio">Ocio 🎮</option>
-                                    <option value="Compras">Compras 🛒</option>
-                                    <option value="Ropa">Ropa 👕</option>
-                                    <option value="Tecnología">Tecnología 💻</option>
-                                    <option value="Deportes">Deportes 🏋️</option>
-                                    <option value="Estética">Estética 💅</option>
-                                    <option value="Mascotas">Mascotas 🐶</option>
-                                    <option value="Pago Tarjeta">Pago Tarjeta 💳</option>
-                                    <option value="Otros">Otros Egresos 📦</option>
+                                    {% for cat in categorias %}
+                                        {% if cat.tipo == 'EGRESO' %}
+                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                        {% endif %}
+                                    {% endfor %}
                                 </optgroup>
                                 <optgroup label="OTROS">
-                                    <option value="Movimiento Interno">Movimientos Internos 🔄</option>
+                                    {% for cat in categorias %}
+                                        {% if cat.tipo != 'INGRESO' and cat.tipo != 'EGRESO' %}
+                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                        {% endif %}
+                                    {% endfor %}
                                     <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
                                 </optgroup>
                             </select>
-                            <select name="mes">
-                                <option value="">Todos los Meses</option>
-                                <option value="01">Enero</option>
-                                <option value="02">Febrero</option>
-                                <option value="03">Marzo</option>
-                                <option value="04">Abril</option>
-                                <option value="05">Mayo</option>
-                                <option value="06">Junio</option>
-                            </select>
+                            <input type="hidden" name="mes" id="filter-mes-input" value="">
+                            <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15);">
+                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Mes:</span>
+                                <button type="button" id="btn-mes-all" onclick="setBancosMonth('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Todos</button>
+                                <button type="button" id="btn-mes-01" onclick="setBancosMonth('01')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Ene</button>
+                                <button type="button" id="btn-mes-02" onclick="setBancosMonth('02')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Feb</button>
+                                <button type="button" id="btn-mes-03" onclick="setBancosMonth('03')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Mar</button>
+                                <button type="button" id="btn-mes-04" onclick="setBancosMonth('04')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Abr</button>
+                                <button type="button" id="btn-mes-05" onclick="setBancosMonth('05')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">May</button>
+                                <button type="button" id="btn-mes-06" onclick="setBancosMonth('06')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Jun</button>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; color: #aaa; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" name="agrupar" value="1" style="cursor: pointer;">
+                                Agrupar Iguales
+                            </label>
                         </div>
                     </div>
                 </form>
@@ -131,41 +134,31 @@
                     <span style="color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Acción Múltiple:</span>
                     <form id="bulk-edit-form" hx-post="/api/bancos/movimientos/bulk_categoria" hx-target="#tbody-bancos" hx-include="#filters-form" style="display: flex; gap: 0.5rem; align-items: center; margin: 0;">
                         <style>
-                            #bulk-select option { background: #1e293b; color: #fff; }
-                            #bulk-select optgroup { background: #0f172a; color: #94a3b8; font-style: normal; font-weight: bold; }
+                            #bulk-select option { background: #fff; color: #24292f; }
+                            #bulk-select optgroup { background: #f8fafc; color: #57606a; font-style: normal; font-weight: bold; }
                         </style>
-                        <select id="bulk-select" name="new_categoria" style="padding: 0.4rem; background: rgba(30,41,59,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #fff; font-size: 0.85rem;" required>
+                        <select id="bulk-select" name="new_categoria" style="padding: 0.4rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 4px; color: #24292f; font-size: 0.85rem;" required>
                             <option value="">Seleccionar nueva categoría...</option>
                             <optgroup label="INGRESOS">
-                                <option value="Sueldo">Sueldo 💼</option>
-                                <option value="Ventas">Ventas 🧾</option>
-                                <option value="Transferencia recibida">Transferencia recibida 💸</option>
-                                <option value="Intereses">Intereses 🏦</option>
-                                <option value="Regalos">Regalos 🎁</option>
-                                <option value="Inversiones">Inversiones 📈</option>
-                                <option value="Reembolsos">Reembolsos 📦</option>
-                                <option value="Otros Ingresos">Otros Ingresos 🧮</option>
+                                {% for cat in categorias %}
+                                    {% if cat.tipo == 'INGRESO' %}
+                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                    {% endif %}
+                                {% endfor %}
                             </optgroup>
                             <optgroup label="EGRESOS">
-                                <option value="Comida">Comida 🍔</option>
-                                <option value="Transporte">Transporte 🚗</option>
-                                <option value="Vivienda">Vivienda 🏠</option>
-                                <option value="Servicios">Servicios 💡</option>
-                                <option value="Impuestos">Impuestos 🧾</option>
-                                <option value="Salud">Salud 🏥</option>
-                                <option value="Educación">Educación 🎓</option>
-                                <option value="Ocio">Ocio 🎮</option>
-                                <option value="Compras">Compras 🛒</option>
-                                <option value="Ropa">Ropa 👕</option>
-                                <option value="Tecnología">Tecnología 💻</option>
-                                <option value="Deportes">Deportes 🏋️</option>
-                                <option value="Estética">Estética 💅</option>
-                                <option value="Mascotas">Mascotas 🐶</option>
-                                <option value="Pago Tarjeta">Pago Tarjeta 💳</option>
-                                <option value="Otros">Otros Egresos 📦</option>
+                                {% for cat in categorias %}
+                                    {% if cat.tipo == 'EGRESO' %}
+                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                    {% endif %}
+                                {% endfor %}
                             </optgroup>
                             <optgroup label="OTROS">
-                                <option value="Movimiento Interno">Movimientos Internos 🔄</option>
+                                {% for cat in categorias %}
+                                    {% if cat.tipo != 'INGRESO' and cat.tipo != 'EGRESO' %}
+                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
+                                    {% endif %}
+                                {% endfor %}
                                 <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
                             </optgroup>
                         </select>
@@ -193,5 +186,30 @@
             </section>
         </main>
     </div>
+    
+    <script>
+        function setBancosMonth(value) {
+            document.getElementById('filter-mes-input').value = value;
+            
+            // Reset state for all month buttons
+            document.querySelectorAll('[id^="btn-mes-"]').forEach(btn => {
+                btn.style.background = '#fff';
+                btn.style.borderColor = 'rgba(0,0,0,0.15)';
+                btn.style.color = '#24292f';
+            });
+            
+            // Set active state for selected button
+            const activeBtn = document.getElementById(value ? `btn-mes-${value}` : 'btn-mes-all');
+            if (activeBtn) {
+                activeBtn.style.background = 'var(--accent-color)';
+                activeBtn.style.borderColor = 'var(--accent-color)';
+                activeBtn.style.color = '#fff';
+            }
+            
+            // Trigger HTMX change on filters form
+            const form = document.getElementById('filters-form');
+            htmx.trigger(form, 'change');
+        }
+    </script>
 </body>
 </html>

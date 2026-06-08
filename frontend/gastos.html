@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Registro de Gastos</title>
+    <link rel="stylesheet" href="style.css?v=6.0.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
+    <style>
+        .split-layout { display: flex; gap: 2rem; }
+        .main-panel { flex: 2; }
+        .side-panel { flex: 1; }
+        .action-btn {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            color: #24292f;
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .action-btn:hover { background: #f3f4f6; transform: translateY(-1px); border-color: rgba(0,0,0,0.25); }
+        .btn-delete:hover { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #cf222e; }
+        .resumen-card { background: #ffffff; border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 12px; padding: 1.5rem; }
+        .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05); border: 1px solid rgba(0,0,0,0.05); }
+        
+        /* Estilos modernos para el indicador de progreso */
+        .sync-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(16, 185, 129, 0.3);
+            border-radius: 50%;
+            border-top-color: #10b981;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .sync-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .htmx-indicator {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .htmx-request .htmx-indicator {
+            display: inline-flex;
+            opacity: 1;
+        }
+        .htmx-request.htmx-indicator {
+            display: inline-flex;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Gastos</span></h1>
+                <p>Libro de Gastos y Conciliación Manual 📊</p>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Inicio</a>
+                
+                <div class="sync-container">
+                    <div id="sync-loader" class="htmx-indicator" style="align-items: center; gap: 8px; color: #10b981; font-weight: 600; font-size: 0.85rem; background: rgba(16, 185, 129, 0.05); padding: 0.5rem 0.8rem; border-radius: 6px; border: 1px dashed #10b981;">
+                        <span class="sync-spinner"></span> Sincronizando...
+                    </div>
+                    <button class="btn-sync" 
+                            hx-post="/api/gastos/sincronizar" 
+                            hx-target="#gastos-table-container" 
+                            hx-include="#gastos-filters"
+                            hx-indicator="#sync-loader"
+                            style="background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #10b981;">
+                        🔄 Sincronizar
+                    </button>
+                </div>
+
+                <button class="btn-sync" 
+                        hx-get="/api/gastos/form" 
+                        hx-target="#modal-container" 
+                        hx-include="#gastos-filters"
+                        onclick="document.getElementById('modal-container').style.display='flex'">
+                    ➕ Registrar Gasto
+                </button>
+            </div>
+        </header>
+
+        <main style="padding: 2rem; width: 100%; max-width: 1400px; margin: 0 auto;">
+            
+            <div class="split-layout">
+                <!-- PANEL PRINCIPAL: LISTADO Y FILTROS -->
+                <div class="main-panel">
+                    <!-- Barra de filtros -->
+                    <div class="glass" style="border-radius: 12px; padding: 1.2rem; margin-bottom: 2rem; border: 1px solid rgba(0,0,0,0.05);">
+                        <form id="gastos-filters" hx-get="/api/gastos/list" hx-target="#gastos-table-container" hx-trigger="change, load, reload-gastos from:body">
+                            <div style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Filtrar por Cuenta:</label>
+                                    <select name="cuenta_codigo" style="width: 100%; padding: 0.6rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color:#24292f; font-weight: 600;">
+                                        <option value="">Todas las Cuentas</option>
+                                        {% for c in cuentas %}
+                                        <option value="{{ c.codigo }}">{{ c.nombre }} {{ c.emoji }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div style="flex: 2; min-width: 350px;">
+                                    <label style="color:#6b7280; font-size:0.75rem; text-transform:uppercase; display:block; margin-bottom:0.4rem; font-weight: 600;">Período Mensual:</label>
+                                    <input type="hidden" name="mes" id="filter-mes-input" value="2026-05">
+                                    
+                                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                        <button type="button" class="action-btn" onclick="adjustMonth(-1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">◀️</button>
+                                        <span id="current-month-label" style="font-weight: 600; min-width: 130px; text-align: center; font-size: 0.95rem; color: #24292f; background: #fff; padding: 0.55rem 1rem; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Mayo 2026</span>
+                                        <button type="button" class="action-btn" onclick="adjustMonth(1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">▶️</button>
+                                        
+                                        <div style="display: flex; gap: 0.4rem; margin-left: 0.8rem;">
+                                            <button type="button" class="action-btn" id="pill-2026-05" onclick="setMonth('2026-05')" style="padding: 0.55rem 1rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color);">Mayo 2026</button>
+                                            <button type="button" class="action-btn" id="pill-2026-06" onclick="setMonth('2026-06')" style="padding: 0.55rem 1rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f;">Junio 2026</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tabla de resultados -->
+                    <div id="gastos-table-container">
+                        <div style="text-align: center; padding: 3rem; color: #888;">Cargando registros...</div>
+                    </div>
+                </div>
+
+                <!-- PANEL LATERAL: RESUMEN ANALÍTICO -->
+                <div class="side-panel">
+                    <div class="glass resumen-card">
+                        <h3 style="margin-bottom: 1.2rem; color: #24292f; font-weight: 600; font-size: 1.1rem; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Resumen de Carga</span>
+                            <span style="font-size: 0.75rem; color: var(--accent-color); font-weight: normal;">Consolidado</span>
+                        </h3>
+                        <div id="gastos-resumen-container">
+                            <div style="text-align: center; padding: 2rem; color: #888;">Cargando resumen mensual...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </main>
+        
+        <div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:999; justify-content:center; align-items:center;">
+            <!-- Contenido cargado dinámicamente -->
+        </div>
+    </div>
+
+    <script>
+        const monthsNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        
+        function updatePeriodUI(value) {
+            document.getElementById('filter-mes-input').value = value;
+            const [year, month] = value.split('-');
+            const monthIndex = parseInt(month, 10) - 1;
+            document.getElementById('current-month-label').textContent = `${monthsNames[monthIndex]} ${year}`;
+            
+            // Actualizar el estado visual de las píldoras de acceso rápido
+            document.querySelectorAll('[id^="pill-"]').forEach(pill => {
+                pill.style.background = '#fff';
+                pill.style.borderColor = 'rgba(0,0,0,0.15)';
+                pill.style.color = '#24292f';
+            });
+            
+            const activePill = document.getElementById(`pill-${value}`);
+            if (activePill) {
+                activePill.style.background = 'var(--accent-color)';
+                activePill.style.borderColor = 'var(--accent-color)';
+                activePill.style.color = '#fff';
+            }
+            
+            // Disparar recarga parcial vía HTMX
+            const filterForm = document.getElementById('gastos-filters');
+            htmx.trigger(filterForm, 'change');
+            
+            // Forzar actualización del panel de resumen analítico
+            htmx.ajax('GET', `/api/gastos/resumen?mes=${value}`, {target: '#gastos-resumen-container'});
+        }
+
+        function adjustMonth(delta) {
+            const input = document.getElementById('filter-mes-input');
+            const [year, month] = input.value.split('-').map(Number);
+            let date = new Date(year, month - 1 + delta, 1);
+            const newYear = date.getFullYear();
+            const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+            updatePeriodUI(`${newYear}-${newMonth}`);
+        }
+
+        function setMonth(value) {
+            updatePeriodUI(value);
+        }
+
+        // Carga inicial correcta del resumen al entrar
+        document.addEventListener("DOMContentLoaded", function() {
+            setTimeout(function() {
+                updatePeriodUI('2026-05');
+            }, 100);
+
+            // Auto-refrescar el resumen cuando se dispara 'reload-gastos' (tras borrar o sincronizar)
+            document.body.addEventListener("reload-gastos", function() {
+                const mes = document.getElementById('filter-mes-input').value;
+                htmx.ajax('GET', `/api/gastos/resumen?mes=${mes}`, {target: '#gastos-resumen-container'});
+            });
+        });
+    </script>
+</body>
+</html>

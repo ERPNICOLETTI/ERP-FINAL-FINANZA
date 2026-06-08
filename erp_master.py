@@ -80,14 +80,20 @@ class ERPMaster:
         archivos_totales = 0
         for inbox_path in self.inbox_paths:
             if not os.path.exists(inbox_path): continue
-            archivos = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
-            if not archivos: continue
             
-            print(f"\n🚀 [MASTER] Procesando {len(archivos)} archivos en {os.path.basename(inbox_path)}...")
-            archivos_totales += len(archivos)
+            # Recolectar archivos de forma recursiva para soportar carpetas por fuente
+            archivos_encontrados = []
+            for root, dirs, files in os.walk(inbox_path):
+                for f in files:
+                    filepath = os.path.join(root, f)
+                    archivos_encontrados.append((f, filepath))
+                    
+            if not archivos_encontrados: continue
+            
+            print(f"\n🚀 [MASTER] Procesando {len(archivos_encontrados)} archivos en {os.path.basename(inbox_path)}...")
+            archivos_totales += len(archivos_encontrados)
 
-            for f in archivos:
-                filepath = os.path.join(inbox_path, f)
+            for f, filepath in archivos_encontrados:
                 f_upper = f.upper()
                 print(f"\n📦 INGESTANDO: {f}")
                 
@@ -147,6 +153,10 @@ class ERPMaster:
                         else:
                             from modulo_bancos import parser_hipotecario
                             success, info = parser_hipotecario.procesar_archivo(filepath)
+                            
+                    elif ("HIPOTECARIO" in f_upper or "HIPOTECARIO" in filepath.replace('\\', '/').upper() or "ULTIMALIQUIDACION" in f_upper or "LIQUIDACION" in f_upper) and f_upper.endswith(".PDF"):
+                        from modulo_bancos import parser_visa_hipotecario
+                        success, info = parser_visa_hipotecario.procesar_archivo(filepath)
                     
                     else:
                         print(f"❓ [MASTER] Sin parser para: {f}")

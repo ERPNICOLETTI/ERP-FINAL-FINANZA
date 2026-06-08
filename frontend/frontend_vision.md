@@ -1,50 +1,39 @@
-# 🎨 Visión del Frontend - ERP NICOLETTI 🚀💎
+# 🎨 Visión del Frontend & UI (Premium Design) 🚀💎
+**Versión 6.0.0 — Optimizado y Consolidado**
 
-Este documento define la dirección estética y funcional de la interfaz de usuario (UI) para el ERP. Buscamos una experiencia **premium**, **oscura** y **altamente interactiva**.
-
----
-
-## 🏛️ Concepto Core: "The Launchpad" (Lanzadera)
-
-La pantalla inicial (`index.html`) debe dejar de ser un módulo específico (como Compras) para convertirse en un **Dashboard Maestro**. 
-
-### 🎴 Diseño de Módulos (Cards)
-Cada módulo del sistema se representará mediante una tarjeta (Card) con las siguientes características:
-- **Glassmorphism**: Fondo translúcido con desenfoque (`backdrop-filter: blur`).
-- **Glow-text**: Títulos que resaltan con sombras de neón sutiles.
-- **Acciones Rápidas**: Cada card mostrará mini-estadísticas (ej: "3 vencimientos hoy") y un botón principal de acceso.
-- **Micro-animaciones**: Hover effects que den sensación de profundidad y respuesta.
+Este documento define la dirección de diseño y los componentes interactivos de la interfaz del ERP. Apuntamos a una experiencia premium, minimalista y ultra-reactiva.
 
 ---
 
-## 💰 Módulo: Pagos y Vencimientos
-
-El objetivo es tener un control absoluto sobre el flujo de caja y las obligaciones sindicales/servicios.
-
-### 🎯 Objetivos de la Pantalla de Pagos:
-1.  **Semáforo de Prioridad**: 
-    - 🔴 **Rojo**: Vencido.
-    - 🟡 **Amarillo**: Vence hoy o mañana (1er vencimiento).
-    - 🟠 **Naranja**: Segundo vencimiento aproximándose.
-    - 🟢 **Verde**: Pagado (Comprobante vinculado).
-2.  **Soporte Dual (v5.4)**: Visualización clara de `Monto 1 / Vto 1` y `Monto 2 / Vto 2`. Si el primer vencimiento pasó, resaltar automáticamente el segundo.
-3.  **Vinculación Rápida**: Arrastrar un comprobante de pago sobre una fila para marcarla como **PAGADO** y archivar el archivo automáticamente.
-4.  **Buscador Inteligente**: Filtrado instantáneo por concepto (SEC, FAECYS) o categoría (SINDICALES, SERVICIOS).
+## 🏛️ Componentes y Estructura
+1.  **[index.html](index.html) (El "Launchpad")**: Panel de control general de la aplicación. Organiza los módulos en tarjetas adaptables (Cards).
+2.  **[style.css](style.css)**: Sistema de diseño. Contiene variables CSS (`--accent-color`, `--success`, etc.) y clases de utilidad transversales.
+3.  **[table_sort.js](table_sort.js)**: Script ligero en vanilla Javascript que añade capacidades de ordenamiento interactivo (numérico, alfabético y de fechas) a las cabeceras `<th>` de las tablas vía delegación de eventos.
+4.  **Plantillas Jinja2**: Fragmentos dinámicos devueltos por la API para inyecciones específicas vía HTMX (ej: `tabla_pagos.html`, `gastos_list.html`).
 
 ---
 
-## 🛠️ Tecnologías y Estética
-- **Framework**: HTMX + Jinja2 (Cero JavaScript pesado, lógica centralizada en FastAPI).
-- **Estilos**: CSS Custom Properties (Vanilla CSS).
-- **Iconografía**: Emojis potentes y modernos para feedback visual rápido.
-- **Layout**: CSS Grid para el Dashboard maestro y Flexbox para componentes internos.
-- **Tipografía**: 'Inter' (Google Fonts) para máxima legibilidad.
+## 🎨 Principios de Diseño Estético
+
+### 🎴 Glassmorphism & Glow
+Las tarjetas y paneles del sistema emplean fondos semi-translúcidos y bordes finos con colores difusos que transmiten profundidad:
+```css
+.glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+```
+Los títulos usan text-shadows sutiles para emular brillos LED (`glow-text`).
+
+### ⚡ Interactividad Reactiva (HTMX & Micro-animaciones)
+-   **Sin recarga completa de página:** El paso de datos, los envíos de formularios y los borrados se resuelven reemplazando fragmentos específicos del DOM (`hx-target`, `hx-swap`).
+-   **Indicadores visuales ("Spinners"):** Toda operación asíncrona de procesamiento (sincronizar, procesar boletas) muestra una animación fluida (`.sync-spinner`) para notificar el progreso al usuario.
+-   **Efectos Hover:** Las tarjetas y filas reaccionan de manera suave ante el puntero del ratón, mejorando la sensación de interactividad.
 
 ---
 
-## 🗺️ Mapa de Navegación
-- `/` -> **Dashboard / Launchpad**
-- `/compras.html` -> Gestión de Facturas y Proveedores
-- `/pagos.html` -> Vencimientos, Boletas y Comprobantes
-- `/tarjetas.html` -> Resúmenes y Liquidaciones (Próximamente)
-- `/bancos.html` -> Extractos y Sueldos (Próximamente)
+## ⚖️ Filosofía UX: Minimalismo Joaquín (Reglas de Oro)
+-   **Cero datos inútiles:** Diseñado para uso personal y familiar. Se suprimen formularios corporativos burocráticos y campos innecesarios.
+-   **Semáforo de Pagos:** El módulo de vencimientos se asiste de colores atómicos intuitivos (Rojo = Vencido | Amarillo = Vence Hoy | Naranja = 2do Vencimiento | Verde = Pagado).
+-   **No-Wrap y Compactación:** Para evitar que la información se corte o desborde, los importes, fechas e identificadores numéricos se configuran con `white-space: nowrap` y se suprimen ceros innecesarios a la izquierda.

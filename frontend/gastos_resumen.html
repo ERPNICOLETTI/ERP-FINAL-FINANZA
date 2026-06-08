@@ -1,0 +1,56 @@
+<!-- Consolidado General -->
+<div style="text-align: center; margin-bottom: 2rem; background: rgba(0, 0, 0, 0.02); padding: 1.2rem; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.05);">
+    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Gasto Total Consolidado ({{ periodo_label }})</div>
+    <div style="font-size: 2.2rem; font-weight: 600; color: #cf222e; margin-top: 0.4rem; font-family: monospace; text-shadow: 0 0 10px rgba(239, 68, 68, 0.05);">
+        $ {{"{:,.2f}".format(total_general).replace(',', 'X').replace('.', ',').replace('X', '.')}}
+    </div>
+</div>
+
+<!-- Desglose por Cuenta -->
+<div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    {% if por_cuenta %}
+        {% for codigo, info in por_cuenta.items() %}
+        {% set c_info = cuenta_map.get(codigo) %}
+        <div style="background: #ffffff; border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 8px; padding: 1.2rem; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(0, 0, 0, 0.05); padding-bottom: 0.4rem;">
+                <span style="font-weight: 600; font-size: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                    <span>{{ c_info.emoji if c_info else '🏛️' }}</span>
+                    <span>{{ c_info.nombre if c_info else codigo }}</span>
+                </span>
+                <span style="font-weight: 600; color: #cf222e; font-family: monospace; font-size: 1.05rem;">
+                    $ {{"{:,.2f}".format(info.total).replace(',', 'X').replace('.', ',').replace('X', '.')}}
+                </span>
+            </div>
+            
+            <!-- Items de la cuenta -->
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                {% for item in info.tipos %}
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                    <span style="color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                        <span>{{ item.gasto_tipo_emoji if item.gasto_tipo_emoji else '🔸' }}</span>
+                        <span>{{ item.gasto_tipo_nombre }}</span>
+                    </span>
+                    <span style="color: var(--text-main); font-family: monospace;">
+                        $ {{"{:,.2f}".format(item.total).replace(',', 'X').replace('.', ',').replace('X', '.')}}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Nota de reparto para cuenta común -->
+            {% if codigo == 'COMUN' %}
+            <div style="margin-top: 1rem; background: rgba(234, 179, 8, 0.08); border: 1px dashed rgba(234, 179, 8, 0.3); border-radius: 6px; padding: 0.6rem; font-size: 0.75rem; color: #9a6700; text-align: center; display: flex; flex-direction: column; gap: 2px;">
+                <span>⚖️ División 50% de convivencia</span>
+                <strong style="font-size: 0.85rem; font-family: monospace; color: #9a6700; margin-top: 2px;">
+                    $ {{"{:,.2f}".format(info.total / 2).replace(',', 'X').replace('.', ',').replace('X', '.')}} c/u
+                </strong>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.85rem;">
+            Sin consumos en este mes.
+        </div>
+    {% endif %}
+</div>

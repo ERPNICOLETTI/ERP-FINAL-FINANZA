@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Final - Ecosistema Compras v4.9</title>
-    <link rel="stylesheet" href="style.css?v=4.9.1">
+    <link rel="stylesheet" href="style.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
 </head>
 <body>
     <div class="app-wrapper">
@@ -19,7 +20,7 @@
             </div>
             
             <div class="header-actions">
-                <a href="index.html" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Dashboard</a>
+                <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
                 <button id="btn-process" class="btn-sync">⚡ Sincronizar Ecosistema ⚡</button>
             </div>
         </header>
@@ -86,26 +87,26 @@
                         </div>
                         
                         <div class="cron-filters">
-                            <select id="filter-anio" name="anio">
-                                <option value="">Todos los años</option>
-                                <option value="2026" selected>Año 2026</option>
-                                <option value="2025">Año 2025</option>
-                            </select>
-                            <select id="filter-mes" name="mes">
-                                <option value="">Todos los Meses</option>
-                                <option value="01">Enero</option>
-                                <option value="02">Febrero</option>
-                                <option value="03">Marzo</option>
-                                <option value="04">Abril</option>
-                                <option value="05">Mayo</option>
-                                <option value="06">Junio</option>
-                                <option value="07">Julio</option>
-                                <option value="08">Agosto</option>
-                                <option value="09">Sep.</option>
-                                <option value="10">Oct.</option>
-                                <option value="11">Nov.</option>
-                                <option value="12">Dic.</option>
-                            </select>
+                            <input type="hidden" name="anio" id="filter-anio-input" value="2026">
+                            <input type="hidden" name="mes" id="filter-mes-input" value="">
+                            
+                            <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15); margin-right: 1rem;">
+                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Año:</span>
+                                <button type="button" id="btn-anio-2026" onclick="setComprasYear('2026')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">2026</button>
+                                <button type="button" id="btn-anio-2025" onclick="setComprasYear('2025')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">2025</button>
+                                <button type="button" id="btn-anio-all" onclick="setComprasYear('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Todos</button>
+                            </div>
+                            
+                            <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15);">
+                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Mes:</span>
+                                <button type="button" id="btn-mes-all" onclick="setComprasMonth('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Todos</button>
+                                <button type="button" id="btn-mes-01" onclick="setComprasMonth('01')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Ene</button>
+                                <button type="button" id="btn-mes-02" onclick="setComprasMonth('02')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Feb</button>
+                                <button type="button" id="btn-mes-03" onclick="setComprasMonth('03')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Mar</button>
+                                <button type="button" id="btn-mes-04" onclick="setComprasMonth('04')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Abr</button>
+                                <button type="button" id="btn-mes-05" onclick="setComprasMonth('05')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">May</button>
+                                <button type="button" id="btn-mes-06" onclick="setComprasMonth('06')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Jun</button>
+                            </div>
                         </div>
                     </div>
 
@@ -150,6 +151,46 @@
                         this.classList.add('active');
                     });
                 });
+
+                function setComprasYear(value) {
+                    document.getElementById('filter-anio-input').value = value;
+                    
+                    document.querySelectorAll('[id^="btn-anio-"]').forEach(btn => {
+                        btn.style.background = '#fff';
+                        btn.style.borderColor = 'rgba(0,0,0,0.15)';
+                        btn.style.color = '#24292f';
+                    });
+                    
+                    const activeBtn = document.getElementById(value ? `btn-anio-${value}` : 'btn-anio-all');
+                    if (activeBtn) {
+                        activeBtn.style.background = 'var(--accent-color)';
+                        activeBtn.style.borderColor = 'var(--accent-color)';
+                        activeBtn.style.color = '#fff';
+                    }
+                    
+                    const form = document.getElementById('filters-form');
+                    htmx.trigger(form, 'change');
+                }
+
+                function setComprasMonth(value) {
+                    document.getElementById('filter-mes-input').value = value;
+                    
+                    document.querySelectorAll('[id^="btn-mes-"]').forEach(btn => {
+                        btn.style.background = '#fff';
+                        btn.style.borderColor = 'rgba(0,0,0,0.15)';
+                        btn.style.color = '#24292f';
+                    });
+                    
+                    const activeBtn = document.getElementById(value ? `btn-mes-${value}` : 'btn-mes-all');
+                    if (activeBtn) {
+                        activeBtn.style.background = 'var(--accent-color)';
+                        activeBtn.style.borderColor = 'var(--accent-color)';
+                        activeBtn.style.color = '#fff';
+                    }
+                    
+                    const form = document.getElementById('filters-form');
+                    htmx.trigger(form, 'change');
+                }
             </script>
         </main>
 </body>

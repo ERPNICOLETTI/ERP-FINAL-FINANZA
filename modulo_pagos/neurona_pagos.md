@@ -1,119 +1,80 @@
-# 🧬 NEURONA: MÓDULO PAGOS (Vencimientos Sindicales y Servicios) 💳🧠
-# Versión 5.4.1 - Parser Inteligente Multi-Formato + Schema Dual-Vencimiento
+# 🧬 NEURONA: MÓDULO PAGOS (Vencimientos & Impuestos) 💳🧠
+**Versión 6.0.0 — Consolidado con pagos_recurrentes.md**
 
-Este módulo gestiona el ciclo de vida completo de un pago: desde la digitalización de la boleta hasta la vinculación del comprobante. Mantiene una bóveda física independiente y una tabla SQL con trazabilidad dual (2 montos + 2 vencimientos por registro).
-
----
-
-## 🏛️ Patrón Repositorio (Regla Inquebrantable)
-> [!CAUTION]
-> **Prohibición de SQL Directo**: Ningún archivo de este módulo puede importar `sqlite3`.
-> Toda la persistencia debe pasar por `storage_pagos.py`.
+Este módulo gestiona la digitalización de boletas de servicios, sindicatos e impuestos, y la vinculación de sus correspondientes comprobantes de pago, manteniendo la trazabilidad financiera de vencimientos duales.
 
 ---
 
-## 🛰️ Flujo Completo de Ingesta (v5.4)
-
-```
-boleta.pdf → inbox_pagos/
-    ↓
-erp_master.py detecta INBOX_PAGOS → llama logic_pagos.procesar_inbox_pagos(inbox_path)
-    ↓
-parser_pagos.procesar_pago(filepath) → extrae concepto, periodo, monto(s), vencimiento(s)
-    ↓
-archiver_service.archivar_documento(entidad=concepto, subcategoria=categoria)
-    → modulo_pagos/archivos_pagos/[CATEGORIA]/[CONCEPTO]/[YYYY]/[MM]/Boleta_CONCEPTO_MM_YYYY.pdf
-    ↓
-storage_pagos.save_pago(data_sql) → tabla `pagos` en erp_nicoletti.db
-    ↓
-Inbox limpiado (archivo eliminado tras procesar)
-```
-
-> [!IMPORTANT]
-> `erp_master.py` llama `procesar_inbox_pagos(inbox_path)` pasando el **path del inbox directamente**, no el workspace. La función NO debe volver a agregar `modulo_pagos/inbox_pagos`.
+## 📂 Componentes del Módulo y Lectura de Código
+1.  **[storage_pagos.py](storage_pagos.py)**: Capa repositorio. Único archivo que realiza consultas SQL directas sobre la tabla `pagos`. Prohíbe el uso de `sqlite3` externo.
+2.  **[parser_pagos.py](parser_pagos.py)**: Motor de extracción de textos y patrones en PDFs. Identifica conceptos, periodos, montos y fechas de vencimiento.
+3.  **[logic_pagos.py](logic_pagos.py)**: Orquestador de flujo de entrada. Ingesta las boletas desde el `inbox_pagos`, las procesa y las archiva.
+4.  **Vistas Web**:
+    -   `pagos.html`: Panel principal con la tabla general y terminal de arrastre (Dropzone).
+    -   `tabla_pagos.html`: Renderiza dinámicamente las filas de la tabla de vencimientos con un semáforo de prioridades (Rojo/Amarillo/Naranja/Verde).
 
 ---
 
-## 🧠 Parser Inteligente (`parser_pagos.py`)
-
-### Regla Crítica: `es_comprobante` NUNCA desde el PDF
-El texto de las boletas contiene la palabra "PAGO" (ej: "VOLANTE DE PAGO SINDICAL"), lo que causaría falsos positivos. La detección de comprobante se hace **exclusivamente por nombre de archivo** en `logic_pagos.py`.
-
-### Formatos de Periodo por Sindicato
-Cada sindicato usa un formato distinto para indicar el periodo:
-
-| Concepto | Formato en PDF | Ejemplo | Regex |
-|---|---|---|---|
-| **FAECYS / INACAP** | `PERIODO: MM/YYYY` | `PERIODO: 01/2026` | `PER[IÍ]ODO[:\s]+(\d{2})/(\d{4})` |
-| **POLICIA** | `PERIODO: YYYYMM` | `PERIODO: 202601` | `PER[IÍ]ODO[:\s]+(\d{4})(\d{2})\b` |
-| **SEC** | `YYYY-MM` en ítems tabla | `2026-01 Sec.00 FONDO SOCIAL` | `\b(\d{4})-(\d{2})\s+SEC` |
-| **Fallback** | Nombre de archivo | `_01-2026_` | `_(\d{2})-(\d{4})_` |
-
-### Formatos de Montos y Vencimientos
-
-| Concepto | Formato | Campos extraídos |
-|---|---|---|
-| **FAECYS** | `Fecha Primer Vto. : DD/MM/YYYY $ X.XXX,XX` | monto_1 + vto_1, monto_2 + vto_2 |
-| **INACAP** | `VENCIMIENTO: DD/MM/YYYY` + `Monto Total: $ X.XXX,XX` | Vencimiento único |
-| **POLICIA** | `VENCIMIENTO: DD/MM/YYYY` + `TOTAL A PAGAR $ X.XXX,XX` | Vencimiento único |
-| **SEC** | `Fecha 1er Vto: DD/MM/YYYY` + pares fecha/importe en tabla | Doble vencimiento |
-
----
-
-## 🏛️ Schema SQL (`pagos`) — v5.4
+## 🏛️ Estructura de Datos (Tabla `pagos`)
 
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | Auto-incremental |
-| `categoria` | TEXT | SINDICALES / SERVICIOS / IMPUESTOS |
-| `concepto` | TEXT | SEC / FAECYS / INACAP / POLICIA / ... |
-| `periodo_mes` | TEXT | MM (ej: "01") |
-| `periodo_anio` | TEXT | YYYY (ej: "2026") |
-| `monto` | REAL | Monto del 1er vencimiento |
-| `fecha_vencimiento` | TEXT | ISO: YYYY-MM-DD — 1er vencimiento |
-| `monto_2` | REAL | Monto del 2do vencimiento (0 si no aplica) |
-| `fecha_vencimiento_2` | TEXT | ISO: YYYY-MM-DD — 2do vto (NULL si no aplica) |
-| `estado` | TEXT | PENDIENTE / PAGADO |
-| `path_boleta` | TEXT | Ruta **relativa** con `/` — se llena al ingestar la boleta |
-| `path_comprobante` | TEXT | Ruta **relativa** con `/` — se llena al vincular el comprobante |
-| `hash_boleta` | TEXT | SHA256 para idempotencia |
-| `meta_json` | TEXT | JSON con `full_text` del PDF y montos extraídos intermedios |
-
-> [!IMPORTANT]
-> Las rutas en `path_boleta` y `path_comprobante` son **RELATIVAS** al workspace (sin prefijo de disco `C:\`). Formato: `modulo_pagos/archivos_pagos/SINDICALES/SEC/2026/01/Boleta_SEC_01_2026.pdf`
-
-### Estados del Dato
-
-- **PENDIENTE**: Boleta cargada, sin comprobante de pago vinculado.
-- **PAGADO**: Comprobante vinculado (`path_comprobante` poblado).
-
-El estado se determina automáticamente en `storage_pagos.save_pago()`:
-```python
-estado = 'PAGADO' if path_comprobante else 'PENDIENTE'
-```
+| `categoria` | TEXT | `SERVICIOS` | `IMPUESTOS` | `SINDICALES` |
+| `concepto` | TEXT | Identificador único del servicio/sindicato (ej: SEC, FAECYS, SERVICOOP) |
+| `periodo_mes` | TEXT | Mes de la obligación (MM, ej: "01") |
+| `periodo_anio` | TEXT | Año de la obligación (YYYY, ej: "2026") |
+| `monto` | REAL | Importe primer vencimiento |
+| `fecha_vencimiento` | TEXT | Vencimiento 1 (ISO YYYY-MM-DD) |
+| `monto_2` | REAL | Importe segundo vencimiento (0.0 si no aplica) |
+| `fecha_vencimiento_2` | TEXT | Vencimiento 2 (ISO YYYY-MM-DD, NULL si no aplica) |
+| `estado` | TEXT | `PENDIENTE` (al ingestar boleta) | `PAGADO` (al vincular comprobante) |
+| `path_boleta` | TEXT | Ruta del PDF de la boleta (relativa, SASH-SAFE con `/`) |
+| `path_comprobante` | TEXT | Ruta del PDF de pago (relativa, SASH-SAFE con `/`, NULL si pendiente) |
+| `hash_boleta` | TEXT | Hash SHA-256 para evitar duplicaciones |
+| `meta_json` | TEXT | JSON con textos planos y campos intermedios |
 
 ---
 
-## 📁 Jerarquía de Archivos (Bóveda)
+## ⚡ Taxonomía de Conceptos
 
-```
-modulo_pagos/
-├── inbox_pagos/          ← Drop aquí. Se limpia tras procesar.
-├── archivos_pagos/       ← Bóveda permanente
-│   └── [CATEGORIA]/      ← SINDICALES / SERVICIOS / IMPUESTOS
-│       └── [CONCEPTO]/   ← SEC / FAECYS / INACAP / POLICIA
-│           └── [YYYY]/
-│               └── [MM]/
-│                   ├── Boleta_[CONCEPTO]_[MM]_[YYYY].pdf
-│                   └── Comprobante_[CONCEPTO]_[MM]_[YYYY].pdf
-├── logic_pagos.py        ← Orquestador de ingesta
-├── parser_pagos.py       ← Motor de extracción PDF (Inteligencia)
-└── storage_pagos.py      ← Única puerta a la DB (Patrón Repositorio)
-```
+-   **SERVICIOS**:
+    -   `Servicoop` (Cooperativa de servicios públicos).
+    -   `Reduno` (Internet).
+    -   `Alquiler` (Locación de inmuebles).
+    -   `Tiendanube` (Pasarela/tienda web).
+    -   `Contador` (Honorarios contables).
+-   **IMPUESTOS**:
+    -   `931` (Cargas sociales AFIP).
+    -   `Autonomo` (Aportes jubilatorios).
+    -   `IVA` (F.2002).
+    -   `IIBB` (Ingresos Brutos).
+-   **SINDICALES** (Crítico: SEC y FAECYS admiten doble vencimiento/monto):
+    -   `SEC` (Sindicato Empleados de Comercio Trelew).
+    -   `FAECYS` (Federación de Comercio).
+    -   `POLICIA` (Tasas Secretaría de Trabajo Trelew, vencimiento único).
+    -   `INACAP` (Capacitación de Comercio, vencimiento único).
 
-> [!TIP]
-> Si aparece un nuevo tipo de boleta (ej: Servicoop, AFIP, IIBB), agregar en `parser_pagos.py`:
-> 1. Identificación del concepto en la sección "IDENTIFICAR CONCEPTO"
-> 2. Regex específico de periodo en sección "EXTRAER PERIODO"
-> 3. Regex de montos/vencimientos en sección correspondiente al formato
-> 4. Documentar el formato en `pagos_recurrentes.md` y en esta neurona.
+---
+
+## 📋 Reglas de Extracción del Parser (PDF)
+
+El parser `parser_pagos.py` resuelve en cascada:
+1.  **Concepto**: Identificado por cadenas duras (ej. "FAECYS", "INACAP", "POLICÍA DEL TRABAJO").
+2.  **Periodo**: Extraído estrictamente del PDF (representa la obligación, no la fecha de cobro):
+    -   *FAECYS / INACAP*: `PERIODO: MM/YYYY`
+    -   *POLICIA*: `PERIODO: YYYYMM`
+    -   *SEC*: `YYYY-MM` en líneas de la tabla del documento.
+    -   *Fallback*: Si no hay coincidencia, lee patrones `_MM-YYYY_` en el nombre de archivo.
+3.  **Montos y Vencimientos**:
+    -   *SEC y FAECYS*: Doble vencimiento. Se parsean `Fecha 1er Vto` y `Fecha 2do Vto` con sus importes respectivos.
+    -   *INACAP y POLICIA*: Un solo vencimiento. Se busca `Monto Total` o `TOTAL A PAGAR` y su fecha única.
+
+---
+
+## 📥 Ingesta y Archivado Legal (Bóveda)
+-   **Detalle vs. Comprobante**: La boleta contiene palabras como "PAGO" (ej: "VOLANTE DE PAGO"). Por tanto, las boletas se detectan al caer en `inbox_pagos/`. Los comprobantes de pago correspondientes se detectan **exclusivamente por nombre de archivo** que contenga `comprobante` o similar.
+-   **Ruta de Archivación (Bóveda Relativa)**:
+    `/modulo_pagos/archivos_pagos/[CATEGORIA]/[CONCEPTO]/[YYYY]/[MM]/`
+    -   Nombre Boleta: `Boleta_[CONCEPTO]_[MM]_[YYYY].pdf`
+    -   Nombre Comprobante: `Comprobante_[CONCEPTO]_[MM]_[YYYY].pdf`

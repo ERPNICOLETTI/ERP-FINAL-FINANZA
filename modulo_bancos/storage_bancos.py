@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 import logging
+from modulo_gastos.storage_gastos import init_db_gastos, get_cuentas, save_cuenta, delete_cuenta
 
 # STORAGE BANCOS - v4.0 GOLDEN MASTER 🏦🧱🧠⚖️
 # Diseño Híbrido: Columnas Duras + metadata_cruda (JSON) + path_archivo
@@ -21,6 +22,7 @@ def get_db_connection():
 
 def init_db_bancos():
     """Crea las tablas del dominio Bancos con diseño híbrido v4.0."""
+    init_db_gastos()
     conn = get_db_connection()
     print("[BANCOS] Construyendo tablas Golden Master (Híbrido)...")
 
@@ -156,3 +158,8 @@ def get_sueldos(anio):
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+# ==========================================
+# REPOSITORIO DE CUENTAS MAESTRAS [NUEVO v1.0] (Importado de modulo_gastos)
+# ==========================================

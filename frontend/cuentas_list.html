@@ -1,0 +1,47 @@
+<div class="glass" style="border-radius: 12px; overflow: hidden; border: 1px solid rgba(0,0,0,0.05); background: #ffffff;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+            <tr style="background: #f8fafc; border-bottom: 1px solid rgba(0,0,0,0.08);">
+                <th style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">ID</th>
+                <th style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Nombre</th>
+                <th style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Código</th>
+                <th style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Descripción</th>
+                <th style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cuentas %}
+            <tr style="border-bottom: 1px solid rgba(0,0,0,0.08); transition: background 0.2s;" onmouseover="this.style.background='rgba(9, 105, 218, 0.05)'" onmouseout="this.style.background='transparent'">
+                <td style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-family: monospace; font-size: 0.9rem;">#{{ c.id }}</td>
+                <td style="padding: 1.2rem 1.5rem;">
+                    {% set style_val = c.color_css %}
+                    {% if 'background' not in style_val %}
+                        {% set style_val = 'background: ' ~ style_val %}
+                    {% endif %}
+                    <span class="cat-badge" {{ ('style="' ~ style_val ~ '; font-size: 0.85rem; padding: 6px 12px;"')|safe }}>
+                        {{ c.nombre }} {{ c.emoji }}
+                    </span>
+                </td>
+                <td style="padding: 1.2rem 1.5rem; font-weight: 600; font-size: 0.85rem; letter-spacing: 1px; color: var(--accent-color);">
+                    {{ c.codigo }}
+                </td>
+                <td style="padding: 1.2rem 1.5rem; color: var(--text-muted); font-size: 0.85rem; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ c.descripcion }}">
+                    {{ c.descripcion }}
+                </td>
+                <td style="padding: 1.2rem 1.5rem; text-align: right; white-space: nowrap;">
+                    <button class="action-btn btn-edit" hx-get="/api/cuentas/form?id={{ c.id }}" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+                        ✏️ Editar
+                    </button>
+                    <button class="action-btn btn-delete" hx-delete="/api/cuentas/{{ c.id }}" hx-confirm="¿Seguro que deseas eliminar la cuenta '{{ c.nombre }}'? Las categorías asignadas quedarán huérfanas." hx-target="#cuentas-list">
+                        🗑️
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted); font-style: italic;">No hay cuentas registradas.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

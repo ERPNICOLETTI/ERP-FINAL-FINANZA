@@ -1,0 +1,143 @@
+<div class="glass" style="width: 500px; padding: 2rem; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); background: #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
+    <h3 style="margin-bottom: 1.5rem; color: var(--text-main); font-weight: 600;">
+        {{ 'Editar Registro de Gasto' if reg else 'Nuevo Registro de Gasto' }}
+    </h3>
+    
+    <form hx-post="/api/gastos/save" hx-target="#gastos-table-container" hx-include="#gastos-filters" onsubmit="document.getElementById('modal-container').style.display='none'">
+        <input type="hidden" name="id" value="{{ reg.id if reg else '' }}">
+        <input type="hidden" name="fuente" value="{{ reg.fuente if reg else 'Manual' }}">
+        
+        <!-- Selector de Cuenta para cargar dinámicamente sus categorías -->
+        <div style="margin-bottom: 1.2rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Cuenta / Área:</label>
+            <select name="cuenta_codigo_form" 
+                    hx-get="/api/gastos/form/tipos" 
+                    hx-target="#gasto_tipo_id" 
+                    hx-trigger="change" 
+                    style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); font-weight: 600;" required>
+                <option value="">Seleccionar cuenta...</option>
+                {% for c in cuentas %}
+                <option value="{{ c.codigo }}" {% if selected_cuenta == c.codigo %}selected{% endif %}>{{ c.nombre }} {{ c.emoji }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Selector de Tipo de Gasto (se llena dinámicamente) -->
+        <div style="margin-bottom: 1.2rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Concepto Gasto:</label>
+            <select id="gasto_tipo_id" name="gasto_tipo_id" 
+                    onchange="document.getElementById('nuevo-concepto-container').style.display = (this.value === 'NUEVO') ? 'block' : 'none'; if(this.value === 'NUEVO') { document.getElementById('nuevo_concepto_nombre').required = true; } else { document.getElementById('nuevo_concepto_nombre').required = false; }"
+                    style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); font-weight: 600;" required>
+                <option value="">Seleccionar tipo...</option>
+                {% for t in tipos_gastos %}
+                <option value="{{ t.id }}" {% if reg and reg.gasto_tipo_id == t.id %}selected{% endif %}>{{ t.nombre }} {{ t.emoji }}</option>
+                {% endfor %}
+                <option value="NUEVO">➕ [Crear Concepto Nuevo...]</option>
+            </select>
+        </div>
+
+        <!-- Campos para Nuevo Concepto (mostrados condicionalmente) -->
+        <div id="nuevo-concepto-container" style="display: none; margin-bottom: 1.2rem; padding: 1rem; background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.05); border-radius: 8px;">
+            <div style="margin-bottom: 0.8rem;">
+                <label style="display: block; margin-bottom: 0.4rem; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;">Nombre Concepto Nuevo:</label>
+                <input type="text" id="nuevo_concepto_nombre" name="nuevo_concepto_nombre" style="width: 100%; padding: 0.6rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main);" placeholder="Ej: Netflix, Steam">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.4rem; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;">Emoji Concepto Nuevo (opcional):</label>
+                <input type="text" id="nuevo_concepto_emoji" name="nuevo_concepto_emoji" style="width: 100%; padding: 0.6rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main);" placeholder="Ej: 🎬">
+            </div>
+        </div>
+        
+        <!-- Importe y Fecha -->
+        <div style="margin-bottom: 1.2rem; display: flex; gap: 1rem;">
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Importe ($):</label>
+                <input type="number" name="monto" step="0.01" min="0.01" value="{{ reg.monto if reg else '' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); font-weight: 600;" required>
+            </div>
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Período:</label>
+                <input type="hidden" name="fecha" id="form-fecha-input" value="{{ reg.fecha if reg else '2026-05' }}">
+                
+                <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem;">
+                    <button type="button" onclick="adjustFormMonth(-1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; border-radius: 6px; cursor: pointer; transition: 0.2s;">◀️</button>
+                    <span id="form-fecha-label" style="font-weight: 600; flex: 1; text-align: center; font-size: 0.9rem; color: #24292f; background: #fff; padding: 0.55rem 0.5rem; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; display: inline-block; white-space: nowrap;">Mayo 2026</span>
+                    <button type="button" onclick="adjustFormMonth(1)" style="padding: 0.55rem 0.8rem; font-weight: bold; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; border-radius: 6px; cursor: pointer; transition: 0.2s;">▶️</button>
+                </div>
+                
+                <div style="display: flex; gap: 0.4rem;">
+                    <button type="button" id="form-pill-2026-05" onclick="setFormFecha('2026-05')" style="flex: 1; padding: 0.45rem; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Mayo 26</button>
+                    <button type="button" id="form-pill-2026-06" onclick="setFormFecha('2026-06')" style="flex: 1; padding: 0.45rem; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Junio 26</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Descripción / Notas -->
+        <div style="margin-bottom: 2rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Detalle / Notas:</label>
+            <textarea name="descripcion" style="width: 100%; height: 80px; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); resize: vertical;" placeholder="Ej: Pago de boleta del mes, compra en efectivo...">{{ reg.descripcion if reg else '' }}</textarea>
+        </div>
+        
+        <!-- Acciones -->
+        <div style="display:flex; gap:1rem;">
+            <button type="submit" style="flex:1; background: var(--accent-color, #0969da); color: white; border: none; padding: 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
+                Guardar Registro
+            </button>
+            <button type="button" style="flex:1; background: #f3f4f6; color: #24292f; border: 1px solid rgba(0,0,0,0.15); padding: 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'" onclick="document.getElementById('modal-container').style.display='none'">
+                Cancelar
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    (function() {
+        const monthsNamesForm = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+        window.updateFormFechaUI = function(value) {
+            const input = document.getElementById('form-fecha-input');
+            if (!input) return;
+            input.value = value;
+            
+            const [year, month] = value.split('-');
+            const monthIndex = parseInt(month, 10) - 1;
+            const label = document.getElementById('form-fecha-label');
+            if (label) {
+                label.textContent = `${monthsNamesForm[monthIndex]} ${year}`;
+            }
+            
+            // Update quick pills states
+            document.querySelectorAll('[id^="form-pill-"]').forEach(pill => {
+                pill.style.background = '#fff';
+                pill.style.borderColor = 'rgba(0,0,0,0.15)';
+                pill.style.color = '#24292f';
+            });
+            
+            const activePill = document.getElementById(`form-pill-${value}`);
+            if (activePill) {
+                activePill.style.background = 'var(--accent-color)';
+                activePill.style.borderColor = 'var(--accent-color)';
+                activePill.style.color = '#fff';
+            }
+        };
+
+        window.adjustFormMonth = function(delta) {
+            const input = document.getElementById('form-fecha-input');
+            if (!input) return;
+            const [year, month] = input.value.split('-').map(Number);
+            let date = new Date(year, month - 1 + delta, 1);
+            const newYear = date.getFullYear();
+            const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+            window.updateFormFechaUI(`${newYear}-${newMonth}`);
+        };
+
+        window.setFormFecha = function(value) {
+            window.updateFormFechaUI(value);
+        };
+
+        // Initial highlight after short delay to ensure DOM parsing
+        setTimeout(function() {
+            const initialVal = document.getElementById('form-fecha-input').value;
+            window.updateFormFechaUI(initialVal);
+        }, 20);
+    })();
+</script>

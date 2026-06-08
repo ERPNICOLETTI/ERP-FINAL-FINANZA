@@ -1,0 +1,68 @@
+<div class="glass" style="border-radius: 12px; overflow: hidden; border: 1px solid rgba(0,0,0,0.05); background: #ffffff;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+            <tr style="background: #f8fafc; border-bottom: 1px solid rgba(0,0,0,0.08);">
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">Período</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">Cuenta</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">Concepto Gasto</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">Detalle / Notas</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">Fuente</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; text-align: right;">Importe</th>
+                <th style="padding: 1rem 1.2rem; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; text-align: right;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if registros %}
+                {% for reg in registros %}
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.08); transition: background 0.2s;" onmouseover="this.style.background='rgba(9, 105, 218, 0.05)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 1rem 1.2rem; color: var(--text-main);">{{ reg.fecha }}</td>
+                    <td style="padding: 1rem 1.2rem;">
+                        <span class="badge" style="background: rgba(9, 105, 218, 0.1); color: var(--accent-color); border: 1px solid rgba(9, 105, 218, 0.2); font-size: 0.8rem; text-transform: uppercase;">
+                            {{ reg.cuenta_codigo }}
+                        </span>
+                    </td>
+                    <td style="padding: 1rem 1.2rem; font-weight: 600; color: var(--text-main);">
+                        {{ reg.gasto_tipo_nombre }} {{ reg.gasto_tipo_emoji if reg.gasto_tipo_emoji else '' }}
+                    </td>
+                    <td style="padding: 1rem 1.2rem; color: var(--text-muted); font-style: italic; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ reg.descripcion if reg.descripcion else '-' }}
+                    </td>
+                    <td style="padding: 1rem 1.2rem;">
+                        {% if not reg.fuente or reg.fuente == 'Manual' %}
+                        <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: 600;">
+                            Manual
+                        </span>
+                        {% else %}
+                        <span class="badge" style="background: rgba(9, 105, 218, 0.1); color: var(--accent-color); border: 1px solid rgba(9, 105, 218, 0.2); font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: 600;">
+                            {{ reg.fuente }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 1rem 1.2rem; text-align: right; font-weight: 600; color: #cf222e; font-family: monospace;">
+                        $ {{"{:,.2f}".format(reg.monto).replace(',', 'X').replace('.', ',').replace('X', '.')}}
+                    </td>
+                    <td style="padding: 1rem 1.2rem; text-align: right; white-space: nowrap;">
+                        <button class="action-btn" hx-get="/api/gastos/form?id={{ reg.id }}" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+                            ✏️
+                        </button>
+                        <button class="action-btn btn-delete" 
+                                hx-delete="/api/gastos/{{ reg.id }}" 
+                                hx-confirm="¿Eliminar este gasto por $ {{"{:,.2f}".format(reg.monto).replace(',', 'X').replace('.', ',').replace('X', '.')}}?" 
+                                hx-target="#gastos-table-container"
+                                hx-include="#gastos-filters"
+                                hx-swap="innerHTML">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" style="padding: 3rem; text-align: center; color: #666; font-style: italic;">
+                        Sin gastos registrados en este período.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>

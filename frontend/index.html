@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP NICOLETTI - Dashboard Maestro v5.5</title>
-    <link rel="stylesheet" href="style.css?v=5.5.0">
+    <link rel="stylesheet" href="style.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -78,6 +78,24 @@
                     </div>
                 </div>
 
+                <!-- CARD: GASTOS MANUALES -->
+                <div class="module-card glass" onclick="location.href='gastos'">
+                    <div class="card-header">
+                        <span class="card-icon">📊</span>
+                        <h3>Registro de Gastos</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Carga y conciliación manual de gastos puntuales, abonos y servicios por Cuenta/Área.</p>
+                        <div class="card-status">
+                            <span class="badge" style="background: var(--accent-color)">v1.0.0</span>
+                            <span class="pill completed">Libro Diario Activo</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn-primary-main">Registrar Gastos</button>
+                    </div>
+                </div>
+
                 <!-- CARD: TARJETAS -->
                 <div class="module-card glass locked">
                     <div class="card-header">
@@ -96,10 +114,10 @@
                 </div>
 
                 <!-- CARD: CATEGORIAS MAESTRAS -->
-                <div class="module-card glass" onclick="location.href='categorias'">
+                <div class="module-card glass" onclick="location.href='tipos_gastos'">
                     <div class="card-header">
                         <span class="card-icon">🗂️</span>
-                        <h3>Categorías Maestras</h3>
+                        <h3>Tipos de Gastos</h3>
                     </div>
                     <div class="card-body">
                         <p>Gestión centralizada del motor de reglas para auto-clasificar movimientos en todo el ERP.</p>
@@ -108,7 +126,24 @@
                         </div>
                     </div>
                     <div class="card-footer">
-                        <button class="btn-primary-main">Administrar Categorías</button>
+                        <button class="btn-primary-main">Administrar Tipos</button>
+                    </div>
+                </div>
+
+                <!-- CARD: CUENTAS MAESTRAS -->
+                <div class="module-card glass" onclick="location.href='cuentas'">
+                    <div class="card-header">
+                        <span class="card-icon">🏛️</span>
+                        <h3>Cuentas / Áreas</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Administración de las esferas financieras (Joa, Jor, LDK, En Común) y atribución de gastos.</p>
+                        <div class="card-status">
+                            <span class="badge" style="background: var(--accent-color)">CRUD Activo</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn-primary-main">Administrar Cuentas</button>
                     </div>
                 </div>
 

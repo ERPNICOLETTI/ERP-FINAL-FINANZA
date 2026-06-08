@@ -1,9 +1,12 @@
 {% for mov in movimientos %}
 <tr>
-    <td style="white-space: nowrap; color: #888;">{{ mov.fecha }}</td>
-    <td><span class="badge" style="background:#222;" title="{{ mov.banco }}">{{ mov.cuenta if mov.cuenta else mov.banco }}</span></td>
-    <td style="max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ mov.descripcion }}">
+    <td style="white-space: nowrap; color: var(--text-muted);">{{ mov.fecha }}</td>
+    <td><span class="badge" style="background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1;" title="{{ mov.banco }}">{{ mov.cuenta if mov.cuenta else mov.banco }}</span></td>
+    <td style="max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);" title="{{ mov.descripcion }}">
         {{ mov.descripcion }}
+        {% if mov.qty > 1 %}
+        <span style="background: rgba(9, 105, 218, 0.1); color: var(--accent-color); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; font-weight: bold; vertical-align: middle;">{{ mov.qty }} repeticiones</span>
+        {% endif %}
     </td>
     <td id="cat-cell-{{mov.id}}" hx-target="this" hx-swap="outerHTML">
         <div hx-get="/api/bancos/movimientos/{{ mov.id }}/edit_categoria" style="cursor:pointer; display:inline-block;" title="Click para reclasificar">
@@ -13,12 +16,12 @@
     <td class="{{ 'val-positive' if mov.importe > 0 else 'val-negative' }}" style="font-weight: 600; text-align: right; white-space: nowrap;">
         $ {{ "{:,.2f}".format(mov.importe).replace(',', 'X').replace('.', ',').replace('X', '.') }}
     </td>
-    <td style="color: #666; text-align: right; white-space: nowrap;">
+    <td style="color: var(--text-muted); text-align: right; white-space: nowrap; font-family: monospace;">
         $ {{ "{:,.2f}".format(mov.saldo).replace(',', 'X').replace('.', ',').replace('X', '.') }}
     </td>
 </tr>
 {% else %}
 <tr>
-    <td colspan="6" style="text-align: center; padding: 2rem; color: #666;">No hay movimientos que coincidan con los filtros.</td>
+    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay movimientos que coincidan con los filtros.</td>
 </tr>
 {% endfor %}

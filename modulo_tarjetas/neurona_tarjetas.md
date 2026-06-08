@@ -1,49 +1,32 @@
 # 🧬 NEURONA: MÓDULO TARJETAS (Recaudación) 💳🧠
-# Versión 4.6.2 - Consolidación de Flujo (Hash Único)
+**Versión 6.0.0 — Optimizado y Consolidado**
 
-Esta neurona es responsable de la **ingesta, normalización y auditoría** de transacciones con tarjeta.
-
----
-
-## 🏛️ Patrón Repositorio (Regla Inquebrantable)
-> [!CAUTION]
-> **Prohibición de SQL Directo**: Está terminantemente prohibido importar `sqlite3` o ejecutar SQL en cualquier archivo de lógica o parsing.
-> Toda la persistencia debe delegarse exclusivamente a `storage_tarjetas.py`.
-
-### Ejemplo de Uso del Repositorio:
-```python
-from . import storage_tarjetas as storage
-
-# Guardar una liquidación con metadata híbrida
-liq_id = storage.save_liquidacion({
-    "fuente": "PAYWAY",
-    "total_bruto": 1500.50,
-    "meta_json": meta_json_dict  # Diseño Híbrido
-})
-```
+Este módulo controla las ventas cobradas a través de terminales de pago, procesando liquidaciones y cupones individuales para cruzar contra los depósitos bancarios.
 
 ---
 
-## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
-1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
-    - `inbox_tarjetas/`: Puerta de entrada. El Orquestador escanea aquí.
-    - `crudos_tarjetas/` (Histórico): Los reportes se mueven aquí tras la ingesta exitosa.
-    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox.
-    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió.
-2.  **Archivos de Bóveda**: Reservado para evidencias manuales vinculadas en `/archivos_tarjetas/`.
-3.  **Firma Estándar**: El parser retorna `(True, info_dict)` al orquestador para gatillar el archivado legal.
-4.  **Archivado Legal**: El destino final responde a la jerarquía obligatoria `/modulo_tarjetas/archivos_tarjetas/[Nombre_Entidad_o_Marca]/[Año]/[Mes]/`.
-5.  **Auditoría 360**: Cruce de `payway_records` (POS) vs `liquidaciones_tarjetas` (Banco).
+## 📂 Componentes del Módulo
+1.  **[storage_tarjetas.py](storage_tarjetas.py)**: Capa de persistencia. Procesa y almacena las liquidaciones y cupones individuales.
+2.  **[logica_tarjetas.py](logica_tarjetas.py)**: Motor de analíticas. Realiza cálculos de aranceles y reconciliaciones.
+3.  **Parsers de Liquidación**:
+    -   `parser_payway_liq.py`: Ingesta cupones y resúmenes de Payway.
+    -   `parser_naranja_xlsx.py`: Ingesta liquidaciones de Tarjeta Naranja.
+    -   `parser_patagonia.py`: Ingesta liquidaciones de Patagonia 365.
+4.  **[neuron_tarjetas.py](neuron_tarjetas.py)**: Router CLI para disparar comandos y reportes manuales.
 
 ---
 
-## 🧱 Estructura de Datos
-- `payway_records`: Cupones individuales. **Clave Unique**: `(fecha_compra, cupon, lote, marca, monto_bruto)`.
-- `liquidaciones_tarjetas`: Resumen bancario. Indexado en **FTS5** vía `meta_json`.
+## 🗄️ Estructura de Datos
+
+### Tabla `payway_records` (Cupones individuales)
+-   Guarda el detalle de cada ticket o cobro individual en los POS de la tienda.
+-   **Idempotencia:** Restricción `UNIQUE(fecha_compra, cupon, lote, marca, monto_bruto)`.
+
+### Tabla `liquidaciones_tarjetas` (Resúmenes consolidados)
+-   Registra las liquidaciones bancarias periódicas de las tarjetas de crédito y débito.
+-   **Diseño Híbrido:** Las columnas core guardan totales brutos/netos y fechas, mientras que el resto de las variables se inyecta en `meta_json` (indexado por FTS5).
 
 ---
 
-## 🛠️ Comandos y Herramientas
-- `resumen [anio]`: Visión gerencial de ingresos por marca.
-- `audit`: El detective que busca dinero no depositado.
-- `procesar_archivo(path)`: Punto de entrada para el orquestador global.
+## 📥 Ingesta
+-   **Flujo de 3 Capas:** Los resúmenes originales se colocan en `inbox_tarjetas/`. Al procesarse correctamente, se verifica su hash SHA-256 para evitar duplicaciones, se eliminan del inbox y se guardan de forma permanente en `modulo_tarjetas/archivos_tarjetas/[Marca]/[Año]/[Mes]/`.

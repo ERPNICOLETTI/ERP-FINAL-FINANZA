@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Categorías Maestras</title>
-    <link rel="stylesheet" href="style.css?v=5.0.0">
+    <title>ERP Final - Cuentas Maestras</title>
+    <link rel="stylesheet" href="style.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
     <style>
         .cat-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
         
         /* Premium Table Styles */
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05); border: 1px solid rgba(0,0,0,0.05); }
         
         .action-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e2e8f0;
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            color: #24292f;
             padding: 0.4rem 0.8rem;
             border-radius: 6px;
             font-size: 0.8rem;
@@ -29,14 +30,15 @@
         }
         
         .action-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: #f3f4f6;
             transform: translateY(-1px);
+            border-color: rgba(0,0,0,0.25);
         }
         
         .btn-delete:hover {
-            background: rgba(239, 68, 68, 0.2);
-            border-color: rgba(239, 68, 68, 0.4);
-            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #cf222e;
         }
         
         /* Header Fixes */
@@ -45,8 +47,8 @@
             justify-content: space-between;
             align-items: center;
             padding: 1rem 2rem;
-            background: rgba(15, 23, 42, 0.8);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--glass-border);
         }
     </style>
 </head>
@@ -55,25 +57,25 @@
         <header class="app-header">
             <div class="brand">
                 <h1 class="glow-text">ERP <span>Ajustes</span></h1>
-                <p>Centro de Clasificación 🗂️</p>
+                <p>Centro de Clasificación / Cuentas 🏛️</p>
             </div>
             <div class="header-actions">
-                <a href="/" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Inicio</a>
-                <button class="btn-sync" hx-get="/api/categorias/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
-                    ➕ Nueva Categoría
+                <a href="/" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Inicio</a>
+                <button class="btn-sync" hx-get="/api/cuentas/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+                    ➕ Nueva Cuenta
                 </button>
             </div>
         </header>
 
         <main style="padding: 2rem; width: 100%; max-width: 1200px; margin: 0 auto;">
             <div style="margin-bottom: 2rem;">
-                <h2>Categorías Maestras 🗂️</h2>
-                <p style="color: #888; font-size: 0.9rem;">El cerebro global de clasificación del ERP.</p>
+                <h2>Cuentas Maestras / Áreas Financieras 🏛️</h2>
+                <p style="color: #888; font-size: 0.9rem;">Ámbitos de distribución de gastos y balances del ERP (Joa, Jor, LDK, En Común).</p>
             </div>
             
-            <!-- Lista de Categorías -->
-            <div id="categorias-list" hx-get="/api/categorias/list" hx-trigger="load">
-                Cargando categorías...
+            <!-- Lista de Cuentas -->
+            <div id="cuentas-list" hx-get="/api/cuentas/list" hx-trigger="load">
+                Cargando cuentas...
             </div>
         </main>
         

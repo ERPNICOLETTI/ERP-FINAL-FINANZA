@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Nicoletti - Pagos y Vencimientos v5.5</title>
-    <link rel="stylesheet" href="style.css?v=5.5.0">
+    <link rel="stylesheet" href="style.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
 </head>
 <body>
     <div class="app-wrapper">
@@ -17,7 +18,7 @@
                 <p>Módulo de Vencimientos y Servicios v5.5 💰</p>
             </div>
             <div class="header-actions">
-                <a href="index.html" class="btn-sync" style="background:#444; text-decoration:none;">◀️ Volver al Dashboard</a>
+                <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
                 <button class="btn-sync" onclick="document.getElementById('file-upload').click()">📁 Cargar Pagos</button>
                 <input type="file" id="file-upload" multiple style="display:none" onchange="pagosApp.uploadFiles(this.files)">
                 <button class="btn-sync" onclick="pagosApp.fetchPagos()">🔄 Sincronizar</button>
@@ -34,26 +35,27 @@
                     
                     <input type="hidden" id="filter-estado" name="estado" class="filter-input" value="">
                     
+                    <input type="hidden" id="filter-anio" class="filter-input" name="periodo_anio" value="2026">
+                    <input type="hidden" id="filter-mes" class="filter-input" name="periodo_mes" value="">
+                    
                     <div class="cron-filters">
-                        <select id="filter-anio" class="filter-input" name="periodo_anio">
-                            <option value="2026">2026</option>
-                            <option value="2025">2025</option>
-                        </select>
-                        <select id="filter-mes" class="filter-input" name="periodo_mes">
-                            <option value="">Todos los Meses</option>
-                            <option value="01">Enero</option>
-                            <option value="02">Febrero</option>
-                            <option value="03">Marzo</option>
-                            <option value="04">Abril</option>
-                            <option value="05">Mayo</option>
-                            <option value="06">Junio</option>
-                            <option value="07">Julio</option>
-                            <option value="08">Agosto</option>
-                            <option value="09">Septiembre</option>
-                            <option value="10">Octubre</option>
-                            <option value="11">Noviembre</option>
-                            <option value="12">Diciembre</option>
-                        </select>
+                        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15); margin-right: 1rem;">
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Año:</span>
+                            <button type="button" id="btn-anio-2026" onclick="setPagosYear('2026')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">2026</button>
+                            <button type="button" id="btn-anio-2025" onclick="setPagosYear('2025')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">2025</button>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15); margin-right: 1rem;">
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Mes:</span>
+                            <button type="button" id="btn-mes-all" onclick="setPagosMonth('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Todos</button>
+                            <button type="button" id="btn-mes-01" onclick="setPagosMonth('01')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Ene</button>
+                            <button type="button" id="btn-mes-02" onclick="setPagosMonth('02')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Feb</button>
+                            <button type="button" id="btn-mes-03" onclick="setPagosMonth('03')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Mar</button>
+                            <button type="button" id="btn-mes-04" onclick="setPagosMonth('04')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Abr</button>
+                            <button type="button" id="btn-mes-05" onclick="setPagosMonth('05')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">May</button>
+                            <button type="button" id="btn-mes-06" onclick="setPagosMonth('06')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Jun</button>
+                        </div>
+
                         <select id="filter-categoria" class="filter-input" name="categoria">
                             <option value="">Todas las Categorías</option>
                             <option value="SINDICALES">SINDICALES</option>
@@ -94,5 +96,49 @@
                 </div>
             </section>
         </main>
+        
+        <script>
+            function setPagosYear(value) {
+                const input = document.getElementById('filter-anio');
+                input.value = value;
+                
+                document.querySelectorAll('[id^="btn-anio-"]').forEach(btn => {
+                    btn.style.background = '#fff';
+                    btn.style.borderColor = 'rgba(0,0,0,0.15)';
+                    btn.style.color = '#24292f';
+                });
+                
+                const activeBtn = document.getElementById(`btn-anio-${value}`);
+                if (activeBtn) {
+                    activeBtn.style.background = 'var(--accent-color)';
+                    activeBtn.style.borderColor = 'var(--accent-color)';
+                    activeBtn.style.color = '#fff';
+                }
+                
+                // Trigger change event to fire HTMX
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            function setPagosMonth(value) {
+                const input = document.getElementById('filter-mes');
+                input.value = value;
+                
+                document.querySelectorAll('[id^="btn-mes-"]').forEach(btn => {
+                    btn.style.background = '#fff';
+                    btn.style.borderColor = 'rgba(0,0,0,0.15)';
+                    btn.style.color = '#24292f';
+                });
+                
+                const activeBtn = document.getElementById(value ? `btn-mes-${value}` : 'btn-mes-all');
+                if (activeBtn) {
+                    activeBtn.style.background = 'var(--accent-color)';
+                    activeBtn.style.borderColor = 'var(--accent-color)';
+                    activeBtn.style.color = '#fff';
+                }
+                
+                // Trigger change event to fire HTMX
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        </script>
 </body>
 </html>

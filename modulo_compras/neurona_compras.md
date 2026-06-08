@@ -1,50 +1,30 @@
-# 🧬 NEURONA: MÓDULO COMPRAS (Facturación) 🧾🧠
-# Versión 5.0.0 - Ecosistema Estable: Match CAE, Sala de Espera y Bóveda Blindada
+# 🧬 NEURONA: MÓDULO COMPRAS (Fiscal & Facturación) 🧾🧠
+**Versión 6.0.0 — Optimizado y Consolidado**
 
-Este documento es el manual de operaciones definitivo para el **Ecosistema de Compras**. Diseñado para ser portátil, rápido y a prueba de errores de codificación.
-
----
-
-## 🏛️ Patrón Repositorio (Regla Inquebrantable)
-> [!CAUTION]
-> **Prohibición de SQL Directo**: Ningún archivo de este módulo (parsers o lógica) puede importar `sqlite3`.
-> Toda la persistencia debe pasar por `storage_compras.py` para garantizar la integridad de los metadatos JSON y respetar el nuevo esquema modular (`compras_facturas`, etc).
+Este módulo controla las compras comerciales de la tienda (facturas, notas de crédito/débito y libro IVA), vinculándolas con sus respectivas evidencias digitales y físicas.
 
 ---
 
-## 🛰️ Ecosistema de Ingesta Unificado (v5.0)
-
-### 1. Match Atómico Inteligente (Búsqueda 360) 🔍
-- **Input Único**: El formulario usa un solo buscador inteligente.
-- **Detección CAE**: Si se ingresa el número de CAE, el sistema busca dentro del `meta_json` (AFIP/CALIM) y lo asocia instantáneamente al archivo.
-- **Limpieza de Ceros**: El sistema ignora ceros a la izquierda y guiones para que el match sea siempre exitoso.
-
-### 2. Flujo de Ingesta (El "Mazo de Cartas")
-1. **Drop & HD Visor**: Se suelta el archivo en el panel. El visor permite Zoom dinámico y Paneo (arrastrar con mouse) para leer tickets pequeños.
-2. **Match o Sala de Espera**:
-   - **Match**: Si existe en la base, se vincula y archiva.
-   - **Sala de Espera (Cuarentena CALIM)**: Si el ticket no es encontrado (no está en AFIP ni CALIM), se usa el botón **"Archivar como Pendiente CALIM"**. 
-   - El archivo se mueve a la carpeta `00000000000 - PENDIENTES CALIM` y el registro queda marcado en **AMARILLO** con el texto **⏳ PENDIENTE**.
-
-### 3. Archivador Nominal y Engrapadora Virtual 📎
-Al confirmar, el Motor Orquestador (`archiver_service.py`):
-- **Normalización de Slashes**: Todas las rutas se guardan con diagonales frontales (`/`) para evitar errores de escape en Windows.
-- **Engrapadora PDF**: Si la factura ya tenía una foto, el sistema **las fusiona en un solo PDF multi-página** en tiempo real.
-- **Bóveda Jerárquica**: `/modulo_compras/archivos_compras/Facturas/[CUIT] - [PROVEEDOR]/[YYYY]/[MM]/`.
-- **Rutas a Prueba de Balas**: Se permiten puntos (`.`) en nombres de proveedores para evitar 404s en la visualización.
+## 📂 Componentes del Módulo
+1.  **[storage_compras.py](storage_compras.py)**: Capa de persistencia. Contiene operaciones SQL para la tabla `compras_facturas` y el buscador elástico (FTS5) en `meta_json`.
+2.  **Parsers / Importadores**:
+    -   `importador_afip.py`: Ingesta planillas CSV del portal AFIP "Mis Comprobantes".
+    -   `importador_calim.py`: Ingesta planillas Excel de la gestoría contable CALIM.
+    -   `generador_libro_iva.py`: Exporta resúmenes para control contable.
+3.  **Vistas Web**:
+    -   `compras.html`: Interfaz de ingesta. Contiene el visor interactivo de PDFs/imágenes con zoom/paneo integrados.
+    -   `tabla_compras.html`: Sub-vista dinámica de facturas cargadas.
 
 ---
 
-## 👁️ Visor de Bóveda (UX)
-- **Cero Zeros**: La tabla muestra números de factura compactos (ej: `3-839` en vez de `00003-00000839`).
-- **No-Wrap**: Las fechas y números nunca se cortan en dos líneas.
-- **Link Inteligente**: El botón "VER" es capaz de recortar rutas absolutas de Windows para abrir el PDF sin importar dónde esté instalado el ERP.
+## 🛰️ Flujo de Match Atómico y Sala de Espera
 
----
-
-## 🛠️ Herramientas de Mantenimiento
-- `storage.smart_search_invoice(q)`: El corazón de la búsqueda elástica (FTS5).
-- `storage.smart_search_invoice(q)`: El corazón de la búsqueda elástica.
-
----
-*Documentación actualizada para v5.0.0 - 05/04/2026*
+El operario procesa las facturas en papel/PDF soltándolas en el visor:
+1.  **Match Atómico Omni-Direccional:** Se ingresa el número de comprobante o el **CAE** en el buscador único. El sistema limpia ceros y guiones y busca en la base de datos (incluso dentro del `meta_json` si es por CAE).
+    -   *Caso Exitoso:* Si existe el comprobante en la base, se fusiona el PDF subido con la factura y se archiva automáticamente en la bóveda permanente.
+    -   *Engrapadora Virtual:* Si el registro ya tenía una imagen o PDF asociado, el sistema **los une en un solo archivo PDF multi-página** en caliente.
+2.  **Sala de Espera (Cuarentena contable):** Si el comprobante subido no existe digitalmente en la base de datos, se utiliza el botón **"Archivar como Pendiente CALIM"**.
+    -   El archivo físico se guarda en una carpeta temporal de pendientes.
+    -   El registro se muestra en **amarillo** con la leyenda `⏳ PENDIENTE` en el visor hasta que se importen las planillas digitales mensuales.
+3.  **Archivado Legal Nominal:** Las facturas procesadas se almacenan bajo la estructura inmutable y normalizada (SASH-SAFE):
+    `/modulo_compras/archivos_compras/Facturas/[CUIT] - [PROVEEDOR]/[YYYY]/[MM]/`

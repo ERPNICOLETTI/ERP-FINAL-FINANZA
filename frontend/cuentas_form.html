@@ -1,0 +1,38 @@
+<div class="glass" style="width: 500px; padding: 2rem; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); background: #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
+    <h3 style="margin-bottom: 1.5rem; color: var(--text-main); font-weight: 600;">{{ 'Editar Cuenta' if cat else 'Nueva Cuenta' }}</h3>
+    <form hx-post="/api/cuentas/save" hx-target="#cuentas-list" onsubmit="document.getElementById('modal-container').style.display='none'">
+        <input type="hidden" name="id" value="{{ cat.id if cat else '' }}">
+        
+        <div style="margin-bottom: 1.2rem; display: flex; gap: 1rem;">
+            <div style="flex: 2;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Nombre:</label>
+                <input type="text" name="nombre" value="{{ cat.nombre if cat else '' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main);" required placeholder="Ej: Joaquín">
+            </div>
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Código:</label>
+                <input type="text" name="codigo" value="{{ cat.codigo if cat else '' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); text-transform: uppercase;" required placeholder="Ej: JOA" {% if cat %}readonly{% endif %}>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 1.2rem; display: flex; gap: 1rem;">
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Emoji:</label>
+                <input type="text" name="emoji" value="{{ cat.emoji if cat else '' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main);" placeholder="Ej: 👤">
+            </div>
+            <div style="flex: 2;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Color CSS (fondo;texto):</label>
+                <input type="text" name="color_css" value="{{ cat.color_css if cat else 'rgba(156, 163, 175, 0.2); color: #9ca3af' }}" style="width: 100%; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); font-family: monospace; font-size: 0.8rem;">
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 2rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Descripción:</label>
+            <textarea name="descripcion" style="width: 100%; height: 80px; padding: 0.8rem; background: #ffffff; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-main); resize: vertical;" placeholder="Ej: Gastos y consumos personales de Joaquín">{{ cat.descripcion if cat else '' }}</textarea>
+        </div>
+        
+        <div style="display:flex; gap:1rem;">
+            <button type="submit" style="flex:1; background: var(--accent-color, #0969da); color: white; border: none; padding: 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Guardar Cuenta</button>
+            <button type="button" style="flex:1; background: #f3f4f6; color: #24292f; border: 1px solid rgba(0,0,0,0.15); padding: 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'" onclick="document.getElementById('modal-container').style.display='none'">Cancelar</button>
+        </div>
+    </form>
+</div>

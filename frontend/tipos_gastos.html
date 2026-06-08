@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Final - Tipos de Gastos</title>
+    <link rel="stylesheet" href="style.css?v=6.0.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
+    <style>
+        .cat-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        
+        /* Premium Table Styles */
+        .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05); border: 1px solid rgba(0,0,0,0.05); }
+        
+        .action-btn {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            color: #24292f;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 0.5rem;
+        }
+        
+        .action-btn:hover {
+            background: #f3f4f6;
+            transform: translateY(-1px);
+            border-color: rgba(0,0,0,0.25);
+        }
+        
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #cf222e;
+        }
+        
+        /* Header Fixes */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--glass-border);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Ajustes</span></h1>
+                <p>Centro de Clasificación de Gastos 🗂️</p>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Inicio</a>
+                <button class="btn-sync" id="btn-nuevo-tipo" hx-get="/api/tipos_gastos/form" hx-target="#modal-container" onclick="document.getElementById('modal-container').style.display='flex'">
+                    ➕ Nuevo Tipo de Gasto
+                </button>
+            </div>
+        </header>
+
+        <main style="padding: 2rem; width: 100%; max-width: 1200px; margin: 0 auto;">
+            <div style="margin-bottom: 2rem;">
+                <h2>Tipos de Gastos / Categorías 🗂️</h2>
+                <p style="color: #888; font-size: 0.9rem;">El cerebro global de clasificación de gastos del ERP, organizados por Cuenta.</p>
+            </div>
+            
+            <!-- Selector de Cuenta / Pestañas -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem;" id="cuenta-tabs">
+                <button class="action-btn" hx-get="/api/tipos_gastos/list" hx-target="#categorias-list" onclick="setActiveTab(this)" style="background: var(--accent-color, #3b82f6); border-color: var(--accent-color, #3b82f6); color: #fff; margin-left: 0;">🌐 Ver Todos</button>
+                <button class="action-btn" hx-get="/api/tipos_gastos/list?cuenta_codigo=LDK" hx-target="#categorias-list" onclick="setActiveTab(this)" style="margin-left: 0;">🏪 Lo de Karlota</button>
+                <button class="action-btn" hx-get="/api/tipos_gastos/list?cuenta_codigo=JOA" hx-target="#categorias-list" onclick="setActiveTab(this)" style="margin-left: 0;">👤 Joaquín</button>
+                <button class="action-btn" hx-get="/api/tipos_gastos/list?cuenta_codigo=JOR" hx-target="#categorias-list" onclick="setActiveTab(this)" style="margin-left: 0;">👩 Jorgelina</button>
+                <button class="action-btn" hx-get="/api/tipos_gastos/list?cuenta_codigo=COMUN" hx-target="#categorias-list" onclick="setActiveTab(this)" style="margin-left: 0;">🏠 En Común</button>
+            </div>
+            
+            <!-- Lista de Tipos de Gastos -->
+            <div id="categorias-list" hx-get="/api/tipos_gastos/list" hx-trigger="load">
+                Cargando tipos de gastos...
+            </div>
+        </main>
+        
+        <div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+            <!-- Modal content will be loaded here -->
+        </div>
+    </div>
+    
+    <script>
+        let activeCuenta = '';
+        function setActiveTab(btn) {
+            // Reset active style for all buttons in cuenta-tabs
+            document.querySelectorAll('#cuenta-tabs button').forEach(b => {
+                b.style.background = '#fff';
+                b.style.borderColor = 'rgba(0,0,0,0.15)';
+                b.style.color = '#24292f';
+            });
+            
+            // Set active style for selected button
+            btn.style.background = 'var(--accent-color, #3b82f6)';
+            btn.style.borderColor = 'var(--accent-color, #3b82f6)';
+            btn.style.color = '#fff';
+            
+            // Extract cuenta_codigo from hx-get attribute
+            const url = btn.getAttribute('hx-get');
+            const match = url.match(/cuenta_codigo=([^&]+)/);
+            activeCuenta = match ? match[1] : '';
+            
+            // Update "Nuevo Tipo de Gasto" button endpoint
+            const nuevoBtn = document.getElementById('btn-nuevo-tipo');
+            if (activeCuenta) {
+                nuevoBtn.setAttribute('hx-get', `/api/tipos_gastos/form?cuenta_codigo=${activeCuenta}`);
+            } else {
+                nuevoBtn.setAttribute('hx-get', '/api/tipos_gastos/form');
+            }
+            // Retrigger HTMX for the new attribute
+            htmx.process(nuevoBtn);
+        }
+    </script>
+</body>
+</html>

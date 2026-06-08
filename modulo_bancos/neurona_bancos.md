@@ -1,59 +1,32 @@
-# 🧬 NEURONA: MÓDULO BANCOS (Tesorería) 🏦🧠
-# Versión 5.0.0 - Motor Dinámico de Categorías y Auditaría Inline
+# 🧬 NEURONA: MÓDULO BANCOS (Tesorería & Conciliación) 🏦🧠
+**Versión 6.0.0 — Optimizado y Consolidado**
 
-Esta neurona es la **"Cámara Acorazada"** del sistema, registrando cada extracto de Chubut, Credicoop e Hipotecario.
-
----
-
-## 🗂️ Motor Dinámico de Categorías
-> [!IMPORTANT]
-> **Fin del Hardcodeo**: Las categorías ya no residen en código Python (`motor_categorias.py`). Todo el ecosistema consulta la tabla universal `categorias_maestras` en tiempo real para hacer matching de palabras clave.
-
-### Características del Motor (CRUD & UI)
-- **Auto-Asignación Heurística**: Al ingerir un archivo de banco, el motor compara la descripción contra una lista de `palabras_clave` configurables en la DB.
-- **Edición Inline HTMX**: El panel web permite hacer clic directo en el badge de categoría de cualquier movimiento para desplegar un `<select>` y reclasificarlo en vivo (sin refrescar).
-- **Acción Múltiple (Bulk Edit)**: Capacidad de reclasificación masiva inyectando una categoría a todos los resultados filtrados de la tabla con un solo clic.
+Este módulo registra y procesa los extractos bancarios de Chubut, Credicoop e Hipotecario (Pesos/USD), y maneja el clasificador automático de transacciones.
 
 ---
 
-## 🏛️ Patrón Repositorio (Regla Inquebrantable)
-> [!CAUTION]
-> **Prohibición de SQL Directo**: Ningún parser bancario puede importar `sqlite3`. 
-> El acceso a datos se realiza exclusivamente mediante `storage_bancos.py`.
-
-### Ejemplo de Uso del Repositorio:
-```python
-from . import storage_bancos as storage
-
-# Inyectar lote de movimientos con hash de archivo
-agregados, last_id = storage.save_movimiento_banco(lista_movs, file_hash)
-
-# Actualizar ruta tras archivado legal (Obligatorio)
-storage.update_record_path(last_id, "/ruta/final/en/archivo/legal.xlsx")
-```
+## 📂 Componentes del Módulo
+1.  **[storage_bancos.py](storage_bancos.py)**: Capa de persistencia. Contiene las operaciones SQL para movimientos bancarios e historiales de archivos.
+2.  **[conciliacion_bancaria.py](conciliacion_bancaria.py)**: Algoritmo de emparejamiento entre movimientos del banco y facturas de compras o pagos de servicios.
+3.  **Parsers Específicos**:
+    -   `parser_chubut.py` / `parser_credicoop_joaquin.py` / `parser_hipotecario.py` (e `hipotecario_usd`): Traducen los formatos de planilla bancaria a diccionarios normalizados.
+    -   `parser_visa_hipotecario.py`: Extrae consumos del PDF de liquidación, detecta cuotas (ej. `05/06`), pesifica dólares e inserta los registros limpios en `gastos_registros` indicando la fuente.
+4.  **Vistas Web**:
+    -   `bancos.html`: Panel de tesorería. Contiene la barra de búsqueda y filtros rápidos.
+    -   `tabla_bancos.html`: Listado dinámico de movimientos.
 
 ---
 
-## 🛰️ Flujo de Datos 4.6.2 (Consolidación)
-1.  **Ingesta de 3 Capas (Inbox -> Crudos -> Archivos)**:
-    - `inbox_bancos/`: Puerta de entrada. El Orquestador escanea aquí.
-    - `crudos_bancos/` (Histórico): Los reportes se mueven aquí tras la ingesta exitosa.
-    - **Política de Hash Único**: Si un archivo es un duplicado exacto, se elimina del Inbox.
-    - **Sin Sufijos**: Los reportes se sobreescriben si el nombre es igual pero el contenido cambió.
-2.  **Archivos de Bóveda**: Reservado para evidencias manuales vinculadas en `/archivos_bancos/`.
- la fila original de Excel en el JSON de `meta_json`.
-3.  **Detección de IVA**: Los parsers informan automáticamente al `modulo_compras` ante la detección de IVA bancario/mora.
-4.  **Archivado Legal**: El archivo original se mueve usando la jerarquía obligatoria aislada: `/modulo_bancos/archivos_bancos/[Nombre_Entidad_Bancaria]/[Año]/[Mes]/` con trazabilidad por micro-hash.
+## 🏛️ Base de Datos (`bancos_movimientos`)
+-   **Esquema:** Registra cada movimiento con fecha, importe, saldo, banco, cuenta y la categoría asociada.
+-   **Idempotencia:** Restricción `UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)` + `INSERT OR IGNORE`.
+-   **Estrategia Anti-Colisión:** En transacciones legítimas idénticas del mismo día, el parser añade un sufijo numérico `(2)`, `(3)` al final de la descripción para evitar que SQLite ignore el registro debido a la clave única.
 
 ---
 
-## 🧱 Tablas Clave
-- `bancos_movimientos`: Tabla unificada.
-- **Idempotencia**: `UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)` + `INSERT OR IGNORE`.
-- **Estrategia Anti-Colisión (Filas Idénticas)**: Para evitar que SQLite ignore transacciones legítimas que el banco emite duplicadas en el mismo día (ej. 2 compras exactas y 2 devoluciones exactas que dejan los mismos saldos), los parsers implementan un tracker temporal que añade un sufijo `(2)`, `(3)` al final de la `descripcion` al detectar firmas `fecha_desc_monto_saldo` exactas dentro del mismo archivo.
-
----
-
-## 🛠️ Comandos de Neurona
-- `get_sueldos [anio]`: Filtro inteligente para detectar pago de haberes.
-- `procesar_archivo(path)`: Firma estándar para el orquestador global.
+## 🗂️ Motor Dinámico de Categorías y Auditoría UI
+La lógica de categorización se autogestiona en caliente desde la base de datos:
+-   **Asignación Automática:** Los parsers leen de la tabla `categorias_maestras` las `palabras_clave` configuradas para clasificar los movimientos al momento de la ingesta.
+-   **Edición Inline (HTMX):** Al hacer clic sobre el badge de categoría de una fila en el navegador, se despliega un `<select>` nativo de forma asíncrona. Al elegir una categoría nueva, se envía una solicitud `PUT` a `/api/bancos/movimientos/{id}/categoria` para persistir el cambio en caliente.
+-   **Filtro por Similitud (Agrupación):** Enviando `agrupar=1`, la base de datos agrupa descripciones idénticas y muestra la cantidad de repeticiones (ej. "15 repeticiones").
+-   **Edición Masiva (Bulk Edit):** Permite reclasificar de un solo golpe todos los movimientos que coincidan con la búsqueda y filtros activos mediante `bulk_edit_categoria`.
