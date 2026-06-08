@@ -336,7 +336,8 @@ async def sincronizar_gastos(
     cuenta_codigo: str = Form(None),
     mes: str = Form(None)
 ):
-    from modulo_bancos import parser_visa_hipotecario
+    from modulo_bancos import parser_visa_hipotecario, parser_visa_galicia
+    from erp_master import detectar_parser_pdf
     
     # Resolver WORKSPACE localmente para asegurar el path
     api_dir = os.path.dirname(os.path.abspath(__file__))
@@ -345,29 +346,35 @@ async def sincronizar_gastos(
     
     files_to_process = []
     
-    # 1. Escanear inbox_bancos
+    # 1. Escanear inbox_bancos para buscar archivos PDF
     if os.path.exists(inbox_dir):
         for root, _, files in os.walk(inbox_dir):
-            for file in files:
-                f_upper = file.upper()
-                if f_upper.endswith(".PDF") and ("HIPOTECARIO" in f_upper or "ULTIMALIQUIDACION" in f_upper or "LIQUIDACION" in f_upper):
-                    files_to_process.append(os.path.join(root, file))
-                    
-    # 2. Escanear crudos_bancos/VISA_HIPOTECARIO
-    visa_dir = os.path.join(crudos_dir, "VISA_HIPOTECARIO")
-    if os.path.exists(visa_dir):
-        for root, _, files in os.walk(visa_dir):
             for file in files:
                 if file.upper().endswith(".PDF"):
                     files_to_process.append(os.path.join(root, file))
                     
-    # 3. Procesar cada archivo con force_reprocess=True
+    # 2. Escanear crudos_bancos/VISA_HIPOTECARIO y crudos_bancos/VISA_GALICIA para reprocesar resúmenes históricos
+    for sub in ["VISA_HIPOTECARIO", "VISA_GALICIA"]:
+        subdir = os.path.join(crudos_dir, sub)
+        if os.path.exists(subdir):
+            for root, _, files in os.walk(subdir):
+                for file in files:
+                    if file.upper().endswith(".PDF"):
+                        files_to_process.append(os.path.join(root, file))
+                        
+    # 3. Procesar cada archivo con force_reprocess=True según su tipo detectado por contenido
     procesados = 0
     for filepath in files_to_process:
         try:
-            success, info = parser_visa_hipotecario.procesar_archivo(filepath, force_reprocess=True)
-            if success:
-                procesados += 1
+            detected_type = detectar_parser_pdf(filepath)
+            if detected_type == "VISA_HIPOTECARIO":
+                success, info = parser_visa_hipotecario.procesar_archivo(filepath, force_reprocess=True)
+                if success:
+                    procesados += 1
+            elif detected_type == "VISA_GALICIA":
+                success, info = parser_visa_galicia.procesar_archivo(filepath, force_reprocess=True)
+                if success:
+                    procesados += 1
         except Exception as e:
             print(f"Error procesando {filepath} durante sincronización: {e}")
             

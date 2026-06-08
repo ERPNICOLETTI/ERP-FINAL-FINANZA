@@ -15,6 +15,55 @@ if sys.stdout.encoding != 'utf-8':
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+def detectar_parser_pdf(filepath):
+    """Detecta el parser correspondiente leyendo el contenido del PDF."""
+    import PyPDF2
+    try:
+        with open(filepath, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            text = ""
+            for page in reader.pages[:2]:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted
+            
+            text_upper = text.upper()
+            
+            if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper:
+                return "PAYWAY"
+            elif "LIBRO IVA" in text_upper or "LIBRO DE IVA" in text_upper or "F2051" in text_upper:
+                return "LIBRO_IVA"
+            elif "HIPOTECARIO" in text_upper and "VISA" in text_upper:
+                return "VISA_HIPOTECARIO"
+            elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "VISA" in text_upper:
+                return "VISA_GALICIA"
+    except Exception as e:
+        print(f"⚠️ Error detectando contenido de PDF {os.path.basename(filepath)}: {e}")
+    return None
+
+def detectar_parser_excel(filepath):
+    """Detecta el parser correspondiente leyendo las primeras celdas del Excel."""
+    import pandas as pd
+    try:
+        df = pd.read_excel(filepath, nrows=15, header=None)
+        content = " ".join(df.astype(str).values.flatten()).upper()
+        
+        if "CREDICOOP" in content or "COOPERATIVO" in content:
+            return "CREDICOOP"
+        elif "CHUBUT" in content or "PROVINCIA DEL CHUBUT" in content:
+            return "CHUBUT"
+        elif "HIPOTECARIO" in content:
+            if "USD" in filepath.upper() or "CA_USD" in content or "DOLARES" in content or "DÓLARES" in content:
+                return "HIPOTECARIO_USD"
+            return "HIPOTECARIO_PESOS"
+        elif "NARANJA" in content:
+            return "NARANJA"
+        elif "CALIM" in content or "FACTURAS DE COMPRA" in content:
+            return "CALIM"
+    except Exception as e:
+        print(f"⚠️ Error detectando contenido de Excel {os.path.basename(filepath)}: {e}")
+    return None
+
 class ERPMaster:
     """
     Maestro de Auditoría y Procesamiento para ERP FINAL (Modo Inteligencia Centralizada)
@@ -101,7 +150,7 @@ class ERPMaster:
                 info = {}
 
                 try:
-                    # --- DESPACHADOR INTELIGENTE v4.0 ---
+                    # --- DESPACHADOR INTELIGENTE v6.0 ---
                     
                     # 0. MODULO PAGOS (Nuevo Procesador Autónomo v5.2)
                     if "INBOX_PAGOS" in inbox_path.upper():
@@ -110,16 +159,23 @@ class ERPMaster:
                         # Este proceso es autónomo, saltamos al siguiente archivo
                         continue
 
+                    # Determinar parser mediante detección inteligente de contenido
+                    detected_type = None
+                    if f_upper.endswith(".PDF"):
+                        detected_type = detectar_parser_pdf(filepath)
+                    elif f_upper.endswith((".XLSX", ".XLS")):
+                        detected_type = detectar_parser_excel(filepath)
+
                     # 1. MODULO TARJETAS
-                    if "PAYWAY" in f_upper and f_upper.endswith(".PDF"):
+                    if detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
                         from modulo_tarjetas import parser_payway_liq
                         success, info = parser_payway_liq.procesar_archivo(filepath)
                     
-                    elif "NARANJA" in f_upper and f_upper.endswith(".XLSX"):
+                    elif detected_type == "NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".XLSX")):
                         from modulo_tarjetas import parser_naranja_xlsx
                         success, info = parser_naranja_xlsx.procesar_archivo(filepath)
                     
-                    elif "LIQMENSAL" in f_upper or "PATAGONIA" in f_upper:
+                    elif detected_type == "PATAGONIA" or ("LIQMENSAL" in f_upper or "PATAGONIA" in f_upper):
                         from modulo_tarjetas import parser_patagonia
                         success, info = parser_patagonia.procesar_archivo(filepath)
 
@@ -128,38 +184,41 @@ class ERPMaster:
                         from modulo_compras import importador_afip
                         success, info = importador_afip.procesar_archivo(filepath)
                     
-                    # MODIFICACIÓN SRE: MATCH EXTENDIDO DE CALIM
-                    elif ("CALIM" in f_upper or "FACTURAS DE COMPRA" in f_upper) and f_upper.endswith(".XLSX"):
+                    elif detected_type == "CALIM" or (("CALIM" in f_upper or "FACTURAS DE COMPRA" in f_upper) and f_upper.endswith(".XLSX")):
                         from modulo_compras import importador_calim
                         success, info = importador_calim.procesar_archivo(filepath)
                     
-                    elif ("LIBRO_IVA" in f_upper or "F2051" in f_upper) and f_upper.endswith(".PDF"):
+                    elif detected_type == "LIBRO_IVA" or (("LIBRO_IVA" in f_upper or "F2051" in f_upper) and f_upper.endswith(".PDF")):
                         from modulo_compras import generador_libro_iva
                         success, info = generador_libro_iva.procesar_archivo(filepath)
 
                     # 3. MODULO BANCOS
-                    elif ("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX"):
+                    elif detected_type == "CHUBUT" or (("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX")):
                         from modulo_bancos import parser_chubut
                         success, info = parser_chubut.procesar_archivo(filepath)
                     
-                    elif "CREDICOOP" in f_upper and f_upper.endswith(".XLSX"):
+                    elif detected_type == "CREDICOOP" or ("CREDICOOP" in f_upper and f_upper.endswith(".XLSX")):
                         from modulo_bancos import parser_credicoop_joaquin
                         success, info = parser_credicoop_joaquin.procesar_archivo(filepath)
 
-                    elif "HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX"):
-                        if "USD" in f_upper:
-                            from modulo_bancos import parser_hipotecario_usd
-                            success, info = parser_hipotecario_usd.procesar_archivo(filepath)
-                        else:
-                            from modulo_bancos import parser_hipotecario
-                            success, info = parser_hipotecario.procesar_archivo(filepath)
+                    elif detected_type == "HIPOTECARIO_USD" or (detected_type == "HIPOTECARIO" and "USD" in f_upper) or ("HIPOTECARIO" in f_upper and "USD" in f_upper and f_upper.endswith(".XLSX")):
+                        from modulo_bancos import parser_hipotecario_usd
+                        success, info = parser_hipotecario_usd.procesar_archivo(filepath)
+
+                    elif detected_type == "HIPOTECARIO_PESOS" or ("HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX")):
+                        from modulo_bancos import parser_hipotecario
+                        success, info = parser_hipotecario.procesar_archivo(filepath)
                             
-                    elif ("HIPOTECARIO" in f_upper or "HIPOTECARIO" in filepath.replace('\\', '/').upper() or "ULTIMALIQUIDACION" in f_upper or "LIQUIDACION" in f_upper) and f_upper.endswith(".PDF"):
+                    elif detected_type == "VISA_HIPOTECARIO" or (("HIPOTECARIO" in f_upper or "HIPOTECARIO" in filepath.replace('\\', '/').upper() or "ULTIMALIQUIDACION" in f_upper or "LIQUIDACION" in f_upper) and f_upper.endswith(".PDF") and "GALICIA" not in f_upper and detected_type != "VISA_GALICIA"):
                         from modulo_bancos import parser_visa_hipotecario
                         success, info = parser_visa_hipotecario.procesar_archivo(filepath)
+
+                    elif detected_type == "VISA_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF")):
+                        from modulo_bancos import parser_visa_galicia
+                        success, info = parser_visa_galicia.procesar_archivo(filepath)
                     
                     else:
-                        print(f"❓ [MASTER] Sin parser para: {f}")
+                        print(f"❓ [MASTER] Sin parser compatible para: {f}")
                         continue
 
                     # --- POST-PROCESAMIENTO: ARCHIVADO Y TRAZABILIDAD ---
