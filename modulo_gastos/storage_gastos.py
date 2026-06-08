@@ -339,5 +339,54 @@ def get_gastos_resumen(anio, mes):
     finally:
         conn.close()
 
+def normalize_desc(desc):
+    import re
+    if not desc:
+        return ""
+    # Convert to lowercase
+    d = desc.lower()
+    # Strip leading * and k prefixes
+    d = re.sub(r'^[\*k\s]+', '', d)
+    # Remove cuotas like 01/06 or 1/3
+    d = re.sub(r'\b\d{1,2}/\d{1,2}\b', '', d)
+    # Remove long numbers (references, cards, etc.)
+    d = re.sub(r'\b\d{4,}\b', '', d)
+    # Remove special prefix/suffix characters
+    d = re.sub(r'[\*\#\-]', '', d)
+    # Strip whitespace
+    return d.strip()
+
+def buscar_clasificacion_previa(conn, descripcion_nueva, monto_nuevo=None):
+    """
+    Busca en el historial de gastos de la base de datos la última categoría 
+    que el usuario asignó para una descripción similar.
+    Retorna (gasto_tipo_id, nombre_categoria, cuenta_codigo) o None.
+    """
+    norm_nueva = normalize_desc(descripcion_nueva)
+    if not norm_nueva:
+        return None
+        
+    # Buscar registros ordenados por fecha descendente
+    cursor = conn.execute("""
+        SELECT r.gasto_tipo_id, r.descripcion, r.monto, t.nombre, t.cuenta_codigo
+        FROM gastos_registros r
+        JOIN gastos_tipos t ON r.gasto_tipo_id = t.id
+        ORDER BY r.fecha DESC, r.id DESC
+    """)
+    rows = cursor.fetchall()
+    
+    for row in rows:
+        if normalize_desc(row['descripcion']) == norm_nueva:
+            # Caso especial para ESCO: el monto debe ser similar
+            if "esco" in norm_nueva and monto_nuevo is not None:
+                if abs(row['monto'] - monto_nuevo) > 10.0:
+                    continue
+            return {
+                "id": row['gasto_tipo_id'],
+                "nombre": row['nombre'],
+                "cuenta": row['cuenta_codigo']
+            }
+    return None
+
 if __name__ == "__main__":
     init_db_gastos()

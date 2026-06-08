@@ -37,3 +37,38 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
 -   **Auto-Arranque de Filtros:** Al abrir el formulario desde el dashboard, se pre-selecciona automáticamente la cuenta del filtro activo (gracias a `hx-include`).
 -   **Filtrado Dinámico de Conceptos:** Al cambiar el selector de "Cuenta / Área" en el formulario modal, se dispara una petición `/api/gastos/form/tipos` vía HTMX que reemplaza el selector de "Concepto Gasto" mostrando **únicamente** las categorías de la cuenta seleccionada.
 -   **Creación On-the-fly:** Permite crear conceptos nuevos en el momento eligiendo la opción `➕ [Crear Concepto Nuevo...]`. El backend autogenera los colores CSS según el titular.
+
+---
+
+## 🧠 Memoria de Clasificación & Aprendizaje del Usuario
+-   **Aprendizaje del Historial:** Para evitar que las sincronizaciones periódicas sobrescriban o ignoren la categorización que el usuario definió para un comercio, el sistema implementa una **lógica de memoria de clasificación** (mediante `buscar_clasificacion_previa` en `storage_gastos.py`).
+-   **Prioridad Absoluta de Personalizaciones:** Antes de aplicar cualquier regla de palabras clave por defecto de la taxonomía, el clasificador busca el último registro en la base de datos `gastos_registros` con la misma descripción normalizada (ignorando asteriscos, números de cuotas y espacios). Si el usuario ya asignó una categoría anteriormente (ej. para `LA SEGUNDA` o `EMSRL`), esa categoría se reutiliza automáticamente para el nuevo movimiento importado.
+-   **Inmutabilidad y Preservación:**
+    1.  **Registros existentes:** Una vez que un registro está insertado en la base de datos, el proceso de sincronización **nunca** modificará ni sobrescribirá su categoría (`gasto_tipo_id`), garantizando que las personalizaciones manuales hechas en el frontend se mantengan inalteradas.
+    2.  **Advertencia de Reprocesamiento:** El script de prueba `test_reprocess.py` ejecuta un borrado masivo (`DELETE FROM gastos_registros`) para reimportar desde cero. **No debe ejecutarse en producción** ya que esto eliminaría el historial de gastos del cual se alimenta el sistema de aprendizaje del usuario, perdiendo la memoria de las personalizaciones manuales.
+
+---
+
+## 🛑 Directivas Críticas para IAs (Reglas de Desarrollo Obligatorias)
+
+> [!IMPORTANT]
+> Si eres una nueva IA que ingresa al proyecto, debes cumplir estrictamente con las siguientes reglas sin excepción alguna:
+
+1. **PROHIBIDO hacer Backups sin Permiso:**
+   * **Bajo ninguna circunstancia** debes ejecutar el script `backup.py`, hacer commits automáticos en Git, o generar archivos `.zip` de respaldo de la base de datos o código del proyecto sin solicitar y recibir **autorización previa y explícita por escrito del usuario** en el chat.
+
+2. **Inmutabilidad de Clasificaciones del Usuario:**
+   * Jamás debes sobrescribir ni modificar la categoría (`gasto_tipo_id`) o el titular (`cuenta_codigo`) de las transacciones guardadas en la base de datos al realizar sincronizaciones o importaciones.
+   * Prioriza siempre la memoria del usuario a través de `buscar_clasificacion_previa()`.
+
+3. **Conversión Obligatoria de Consumos en Dólares (USD):**
+   * Todos los consumos de tarjetas de crédito en moneda extranjera (USD) **deben ser pesificados** multiplicando el monto original por **`1400.0`** y redondeando a 2 decimales (`round(val * 1400.0, 2)`).
+   * Ningún parser o script de sincronización/histórico debe guardar consumos en USD con su valor bruto original.
+
+4. **Limpieza Rigurosa de Prefijos de Tarjeta:**
+   * Las descripciones leídas de extractos bancarios (ej. Visa Galicia) que contengan prefijos de tarjetas/titulares como `*` o `K` al principio de la descripción deben ser limpiadas de inmediato utilizando la expresión regular:
+     ```python
+     description = re.sub(r'^[\*K\s]+', '', description).strip()
+     ```
+   * Esto previene que se almacenen descripciones como `KMERPAGO*ESCO2605` en lugar de `MERPAGO*ESCO2605`, asegurando un correcto funcionamiento de la deduplicación por comparación de descripciones normalizadas.
+

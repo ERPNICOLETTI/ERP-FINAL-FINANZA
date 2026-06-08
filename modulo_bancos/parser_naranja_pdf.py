@@ -203,55 +203,82 @@ def procesar_archivo(file_path, force_reprocess=False):
         )
 
         for tx in txs:
-            matched_concept = None
-            desc_lower = tx['descripcion'].lower()
-            
-            # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
-            if "esco" in desc_lower:
-                target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
-                target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
-                for r in prioritized_rules:
-                    if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
-                        matched_concept = r
-                        break
-
+            # 1. Intentar clasificar usando el historial de aprendizaje del usuario
+            conn_learning = storage_bancos.get_db_connection()
+            try:
+                matched_concept = storage_gastos.buscar_clasificacion_previa(conn_learning, tx['descripcion'], tx['monto'])
+            finally:
+                conn_learning.close()
+                
             if not matched_concept:
-                # Clasificar según palabras clave
-                for r in prioritized_rules:
-                    for kw in r['keywords']:
-                        if kw in desc_lower:
+                desc_lower = tx['descripcion'].lower()
+                # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+                if "esco" in desc_lower:
+                    target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
+                    target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                    for r in prioritized_rules:
+                        if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
                             matched_concept = r
                             break
-                    if matched_concept:
-                        break
-                    
-            # Fallback general a Gastos de Vida (JOR)
-            if not matched_concept:
-                for r in valid_rules:
-                    if r['nombre'] == "Gastos de Vida" and r['cuenta'] == "JOR":
-                        matched_concept = r
-                        break
+
+                if not matched_concept:
+                    # Clasificar según palabras clave
+                    for r in prioritized_rules:
+                        for kw in r['keywords']:
+                            if kw in desc_lower:
+                                matched_concept = r
+                                break
+                        if matched_concept:
+                            break
                         
-            # Fallback definitivo
-            if not matched_concept and valid_rules:
-                for r in valid_rules:
-                    if r['cuenta'] == "JOR":
-                        matched_concept = r
-                        break
+                # Fallback general a Gastos de Vida (JOR)
+                if not matched_concept:
+                    for r in valid_rules:
+                        if r['nombre'] == "Gastos de Vida" and r['cuenta'] == "JOR":
+                            matched_concept = r
+                            break
+                            
+                # Fallback definitivo
+                if not matched_concept and valid_rules:
+                    for r in valid_rules:
+                        if r['cuenta'] == "JOR":
+                            matched_concept = r
+                            break
 
             if matched_concept:
+                tx_fecha_compra = tx.get('fecha_compra') or tx['fecha']
                 # Comprobar si ya existe el mismo registro para evitar duplicados
                 conn_tx = storage_bancos.get_db_connection()
                 try:
-                    exists_tx = conn_tx.execute(
-                        "SELECT 1 FROM gastos_registros WHERE monto = ? AND fecha = ? AND descripcion = ? AND fuente = ? AND fecha_compra = ?",
-                        (tx['monto'], tx['fecha'], tx['descripcion'], "Tarjeta Naranja", tx.get('fecha_compra') or tx['fecha'])
-                    ).fetchone()
+                    matches = conn_tx.execute(
+                        "SELECT id, descripcion, fecha_compra, gasto_tipo_id FROM gastos_registros WHERE monto = ? AND fecha = ? AND fuente = ?",
+                        (tx['monto'], tx['fecha'], "Tarjeta Naranja")
+                    ).fetchall()
                 finally:
                     conn_tx.close()
 
+                exists_tx = False
+                for m in matches:
+                    if storage_gastos.normalize_desc(m['descripcion']) == storage_gastos.normalize_desc(tx['descripcion']):
+                        if m['fecha_compra'] == tx_fecha_compra or m['fecha_compra'] == tx['fecha']:
+                            # Si es un registro migrado/antiguo, lo actualizamos con la fecha_compra real y la descripcion limpia
+                            conn_tx = storage_bancos.get_db_connection()
+                            try:
+                                conn_tx.execute(
+                                    "UPDATE gastos_registros SET fecha_compra = ?, descripcion = ? WHERE id = ?",
+                                    (tx_fecha_compra, tx['descripcion'], m['id'])
+                                )
+                                conn_tx.commit()
+                            finally:
+                                conn_tx.close()
+                            exists_tx = True
+                            break
+                        elif m['fecha_compra'] == tx_fecha_compra:
+                            exists_tx = True
+                            break
+
                 if exists_tx:
-                    logger.info(f"⏭️ Registro de gasto omitido (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx.get('fecha_compra') or tx['fecha']})")
+                    logger.info(f"⏭️ Registro de gasto omitido/actualizado (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx_fecha_compra})")
                     continue
 
                 storage_gastos.save_gasto_registro({

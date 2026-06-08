@@ -141,6 +141,7 @@ def procesar_archivo(file_path, force_reprocess=False):
                 description = re.sub(r'\([A-Z]{3},[^)]+\)', '', description).strip()
                 description = re.sub(r'\b\d{5,}\b', '', description).strip() # Quitar nro comprobante
                 description = re.sub(r'\s+\$\s*$', '', description).strip() # Quitar signo pesos sobrante
+                description = re.sub(r'^[\*K\s]+', '', description).strip() # Limpiar prefijo de tarjeta
                 
                 # Formatear fecha usando el período de facturación del resumen
                 date_iso = f"{billing_year}-{billing_month}-{day}"
@@ -195,53 +196,81 @@ def procesar_archivo(file_path, force_reprocess=False):
                 matched_concept = None
                 desc_lower = tx['descripcion'].lower()
                 
-                # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
-                if "esco" in desc_lower:
-                    target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
-                    target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
-                    for r in prioritized_rules:
-                        if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
-                            matched_concept = r
-                            break
-
+                # 1. Intentar clasificar usando el historial de aprendizaje del usuario
+                conn_learning = storage_bancos.get_db_connection()
+                try:
+                    matched_concept = storage_gastos.buscar_clasificacion_previa(conn_learning, tx['descripcion'], tx['monto'])
+                finally:
+                    conn_learning.close()
+                    
                 if not matched_concept:
-                    # Clasificar según palabras clave
-                    for r in prioritized_rules:
-                        for kw in r['keywords']:
-                            if kw in desc_lower:
+                    # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+                    if "esco" in desc_lower:
+                        target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
+                        target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                        for r in prioritized_rules:
+                            if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
                                 matched_concept = r
                                 break
-                        if matched_concept:
-                            break
-                        
-                # Fallback general
-                if not matched_concept:
-                    fallback_name = "Gastos de Vida" if owner == "JOR" else "Gastos Personales"
-                    for r in valid_rules:
-                        if r['nombre'] == fallback_name and r['cuenta'] == owner:
-                            matched_concept = r
-                            break
+
+                    if not matched_concept:
+                        # Clasificar según palabras clave
+                        for r in prioritized_rules:
+                            for kw in r['keywords']:
+                                if kw in desc_lower:
+                                    matched_concept = r
+                                    break
+                            if matched_concept:
+                                break
                             
-                # Fallback definitivo en caso de que no encuentre la categoría por nombre
-                if not matched_concept and valid_rules:
-                    for r in valid_rules:
-                        if r['cuenta'] == owner:
-                            matched_concept = r
-                            break
-                            
+                    # Fallback general
+                    if not matched_concept:
+                        fallback_name = "Gastos de Vida" if owner == "JOR" else "Gastos Personales"
+                        for r in valid_rules:
+                            if r['nombre'] == fallback_name and r['cuenta'] == owner:
+                                matched_concept = r
+                                break
+                                
+                    # Fallback definitivo en caso de que no encuentre la categoría por nombre
+                    if not matched_concept and valid_rules:
+                        for r in valid_rules:
+                            if r['cuenta'] == owner:
+                                matched_concept = r
+                                break
+                                
                 if matched_concept:
                     # Comprobar si ya existe el mismo registro para evitar duplicados
                     conn_tx = storage_bancos.get_db_connection()
                     try:
-                        exists_tx = conn_tx.execute(
-                            "SELECT 1 FROM gastos_registros WHERE monto = ? AND fecha = ? AND descripcion = ? AND fuente = ? AND fecha_compra = ?",
-                            (tx['monto'], tx['fecha'], tx['descripcion'], "Mastercard Galicia", tx['fecha_compra'])
-                        ).fetchone()
+                        matches = conn_tx.execute(
+                            "SELECT id, descripcion, fecha_compra, gasto_tipo_id FROM gastos_registros WHERE monto = ? AND fecha = ? AND fuente = ?",
+                            (tx['monto'], tx['fecha'], "Mastercard Galicia")
+                        ).fetchall()
                     finally:
                         conn_tx.close()
 
+                    exists_tx = False
+                    for m in matches:
+                        if storage_gastos.normalize_desc(m['descripcion']) == storage_gastos.normalize_desc(tx['descripcion']):
+                            if m['fecha_compra'] == tx['fecha_compra'] or m['fecha_compra'] == tx['fecha']:
+                                # Si es un registro migrado/antiguo, lo actualizamos con la fecha_compra real y la descripcion limpia
+                                conn_tx = storage_bancos.get_db_connection()
+                                try:
+                                    conn_tx.execute(
+                                        "UPDATE gastos_registros SET fecha_compra = ?, descripcion = ? WHERE id = ?",
+                                        (tx['fecha_compra'], tx['descripcion'], m['id'])
+                                    )
+                                    conn_tx.commit()
+                                finally:
+                                    conn_tx.close()
+                                exists_tx = True
+                                break
+                            elif m['fecha_compra'] == tx['fecha_compra']:
+                                exists_tx = True
+                                break
+
                     if exists_tx:
-                        logger.info(f"⏭️ Registro de gasto omitido (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx['fecha_compra']})")
+                        logger.info(f"⏭️ Registro de gasto omitido/actualizado (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx['fecha_compra']})")
                         continue
 
                     storage_gastos.save_gasto_registro({

@@ -2,6 +2,7 @@ import sqlite3
 import os
 import re
 import PyPDF2
+from modulo_gastos import storage_gastos
 
 DB_PATH = 'erp_nicoletti.db'
 
@@ -47,7 +48,13 @@ def parse_visa_hipotecario(path):
             cuota_match = re.search(r'\b(\d{1,2}/\d{1,2})\b', middle)
             cuota_str = f" {cuota_match.group(1)}" if cuota_match else ""
             description = re.sub(r'\b\d{1,2}/\d{1,2}\b', '', middle).strip()
-            description = re.sub(r'\b\d{5,}\b', '', description).strip()
+            
+            # Limpiar importes intermedios o base de impuestos y referencias
+            description = re.sub(r'\b\d+(?:\.\d{3})*,\d{2}\s*$', '', description).strip()
+            description = re.sub(r'\(\s*\d+(?:\.\d{3})*,\d{2}\s*\)\s*$', '', description).strip()
+            description = re.sub(r'\s+\$\s*$', '', description).strip()
+            description = re.sub(r'\s+P\s*\$?\s*$', '', description).strip()
+            description = re.sub(r'^[\*K\s]+', '', description).strip()
             
             desc_upper = description.upper()
             if "PAGOS" in desc_upper or "SU PAGO" in desc_upper or "SALDO ANTERIOR" in desc_upper:
@@ -104,10 +111,19 @@ def parse_visa_galicia(path):
             amount_pos = rest.rfind(am.group(0))
             middle = rest[:amount_pos].strip()
             
-            cuota_match = re.search(r'\b(\d{1,2}/\d{1,2})\b', middle)
+            # Limpiar importes intermedios de impuestos
+            middle = re.sub(r'-\s*$', '', middle).strip()
+            middle = re.sub(r'\d+(?:\.\d{3})*,\d{2}\s*$', '', middle).strip()
+
+            # Buscar cuota en la descripción
+            cuota_match = re.search(r'\b(\d{2}/\d{2})\b', middle)
             cuota_str = f" {cuota_match.group(1)}" if cuota_match else ""
-            description = re.sub(r'\b\d{1,2}/\d{1,2}\b', '', middle).strip()
-            description = re.sub(r'\b\d{5,}\b', '', description).strip()
+
+            # Extraer y limpiar descripción
+            description = re.sub(r'\b\d{2}/\d{2}\b', '', middle).strip()
+            description = re.sub(r'\b\d{6,}\b\s*$', '', description).strip() # Quitar números de referencia largos
+            description = re.sub(r'^[\*K\s]+', '', description).strip() # Limpiar prefijo de tarjeta JOR/JOA
+            description = re.sub(r'\s+\$\s*$', '', description).strip() # Quitar signo pesos sobrante
             
             desc_upper = description.upper()
             if "PAGOS" in desc_upper or "SU PAGO" in desc_upper or "SALDO ANTERIOR" in desc_upper:
@@ -163,13 +179,19 @@ def parse_mastercard_galicia(path):
             cuota_match = re.search(r'\b(\d{1,2}/\d{1,2})\b', middle)
             cuota_str = f" {cuota_match.group(1)}" if cuota_match else ""
             description = re.sub(r'\b\d{1,2}/\d{1,2}\b', '', middle).strip()
+            is_usd = bool(re.search(r'\([A-Z]{3},', line_clean)) or not line_clean.endswith('  ')
+            description = re.sub(r'\([A-Z]{3},[^)]+\)', '', description).strip()
             description = re.sub(r'\b\d{5,}\b', '', description).strip()
+            description = re.sub(r'\s+\$\s*$', '', description).strip()
+            description = re.sub(r'^[\*K\s]+', '', description).strip()
             
             desc_upper = description.upper()
             if "PAGOS" in desc_upper or "SU PAGO" in desc_upper or "SALDO ANTERIOR" in desc_upper:
                 continue
                 
             val = float(amount_str.replace('.', '').replace(',', '.'))
+            if is_usd:
+                val = round(val * 1400.0, 2)
             date_iso = f"{billing_year}-{billing_month}-{day}"
             month_num = MONTHS_MAP.get(month.upper(), "05")
             fecha_compra = f"20{year}-{month_num}-{day}"
@@ -482,47 +504,51 @@ for tx in all_parsed_txs:
         matched_concept = None
         desc_lower = parsed_desc.lower()
         
-        # Special case for Gemini
-        if fuente == "Visa Hipotecario" and "google" in desc_lower and abs(monto - 27986.0) < 10.0:
-            for r in prioritized_rules:
-                if r['nombre'] == "GEMINI":
-                    matched_concept = r
-                    break
-                    
-        # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
-        if not matched_concept and "esco" in desc_lower:
-            target_name = "ESCO Jorge" if abs(monto - 102450.0) < 10.0 else "ESCO"
-            target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
-            for r in prioritized_rules:
-                if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
-                    matched_concept = r
-                    break
-
+        # 1. Intentar clasificar usando el historial de aprendizaje del usuario
+        matched_concept = storage_gastos.buscar_clasificacion_previa(conn, parsed_desc, monto)
+        
         if not matched_concept:
-            for r in prioritized_rules:
-                for kw in r['keywords']:
-                    if kw in desc_lower:
+            # Special case for Gemini
+            if fuente == "Visa Hipotecario" and "google" in desc_lower and abs(monto - 27986.0) < 10.0:
+                for r in prioritized_rules:
+                    if r['nombre'] == "GEMINI":
                         matched_concept = r
                         break
-                if matched_concept:
-                    break
+                        
+            # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
+            if not matched_concept and "esco" in desc_lower:
+                target_name = "ESCO Jorge" if abs(monto - 102450.0) < 10.0 else "ESCO"
+                target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
+                for r in prioritized_rules:
+                    if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
+                        matched_concept = r
+                        break
+
+            if not matched_concept:
+                for r in prioritized_rules:
+                    for kw in r['keywords']:
+                        if kw in desc_lower:
+                            matched_concept = r
+                            break
+                    if matched_concept:
+                        break
+                        
+            # Fallbacks
+            if not matched_concept:
+                if fuente == "Visa Hipotecario":
+                    fallback_name = "Gastos Personales"
+                    fallback_acc = "JOA"
+                elif fuente == "Mastercard Galicia" and "owner" in tx:
+                    fallback_name = "Gastos de Vida" if tx['owner'] == 'JOR' else "Gastos Personales"
+                    fallback_acc = tx['owner']
+                else:
+                    fallback_name = "Gastos de Vida"
+                    fallback_acc = "JOR"
                     
-        # Fallbacks
-        if not matched_concept:
-            if fuente == "Visa Hipotecario":
-                fallback_name = "Gastos Personales"
-                fallback_acc = "JOA"
-            elif fuente == "Mastercard Galicia" and "owner" in tx:
-                fallback_name = "Gastos de Vida" if tx['owner'] == 'JOR' else "Gastos Personales"
-                fallback_acc = tx['owner']
-            else:
-                fallback_name = "Gastos de Vida"
-                fallback_acc = "JOR"
-                
-            for r in prioritized_rules:
-                if r['nombre'] == fallback_name and r['cuenta'] == fallback_acc:
-                    matched_concept = r
-                    break
+                for r in prioritized_rules:
+                    if r['nombre'] == fallback_name and r['cuenta'] == fallback_acc:
+                        matched_concept = r
+                        break
                     
         if matched_concept:
             cursor.execute("""
