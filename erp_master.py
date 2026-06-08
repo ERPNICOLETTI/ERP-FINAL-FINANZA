@@ -17,28 +17,48 @@ if sys.stdout.encoding != 'utf-8':
 
 def detectar_parser_pdf(filepath):
     """Detecta el parser correspondiente leyendo el contenido del PDF."""
-    import PyPDF2
+    text = ""
     try:
+        import PyPDF2
         with open(filepath, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
-            text = ""
             for page in reader.pages[:2]:
                 extracted = page.extract_text()
                 if extracted:
                     text += extracted
-            
-            text_upper = text.upper()
-            
-            if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper:
-                return "PAYWAY"
-            elif "LIBRO IVA" in text_upper or "LIBRO DE IVA" in text_upper or "F2051" in text_upper:
-                return "LIBRO_IVA"
-            elif "HIPOTECARIO" in text_upper and "VISA" in text_upper:
-                return "VISA_HIPOTECARIO"
-            elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "VISA" in text_upper:
-                return "VISA_GALICIA"
     except Exception as e:
-        print(f"⚠️ Error detectando contenido de PDF {os.path.basename(filepath)}: {e}")
+        print(f"⚠️ PyPDF2 falló para {os.path.basename(filepath)}, intentando pdfplumber: {e}")
+        try:
+            import pdfplumber
+            with pdfplumber.open(filepath) as pdf:
+                for page in pdf.pages[:2]:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted
+        except Exception as ex:
+            print(f"⚠️ pdfplumber también falló para {os.path.basename(filepath)}: {ex}")
+            return None
+
+    if not text:
+        return None
+
+    text_upper = text.upper()
+    
+    if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper:
+        return "PAYWAY"
+    elif "LIBRO IVA" in text_upper or "LIBRO DE IVA" in text_upper or "F2051" in text_upper:
+        return "LIBRO_IVA"
+    elif "HIPOTECARIO" in text_upper and "VISA" in text_upper:
+        return "VISA_HIPOTECARIO"
+    elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "VISA" in text_upper:
+        return "VISA_GALICIA"
+    elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "MASTERCARD" in text_upper:
+        return "MASTERCARD_GALICIA"
+    elif "NARANJA" in text_upper:
+        return "TARJETA_NARANJA"
+    elif "PATAGONIA 365" in text_upper or "PATAGONIA365" in text_upper:
+        return "PATAGONIA365_PDF"
+        
     return None
 
 def detectar_parser_excel(filepath):
@@ -213,9 +233,21 @@ class ERPMaster:
                         from modulo_bancos import parser_visa_hipotecario
                         success, info = parser_visa_hipotecario.procesar_archivo(filepath)
 
-                    elif detected_type == "VISA_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF")):
+                    elif detected_type == "VISA_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF") and "MASTERCARD" not in f_upper):
                         from modulo_bancos import parser_visa_galicia
                         success, info = parser_visa_galicia.procesar_archivo(filepath)
+
+                    elif detected_type == "MASTERCARD_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF") and "MASTERCARD" in f_upper):
+                        from modulo_bancos import parser_mastercard_galicia
+                        success, info = parser_mastercard_galicia.procesar_archivo(filepath)
+
+                    elif detected_type == "TARJETA_NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".PDF")):
+                        from modulo_bancos import parser_naranja_pdf
+                        success, info = parser_naranja_pdf.procesar_archivo(filepath)
+
+                    elif detected_type == "PATAGONIA365_PDF" or ("P365" in f_upper and f_upper.endswith(".PDF")):
+                        from modulo_bancos import parser_patagonia_pdf
+                        success, info = parser_patagonia_pdf.procesar_archivo(filepath)
                     
                     else:
                         print(f"❓ [MASTER] Sin parser compatible para: {f}")
