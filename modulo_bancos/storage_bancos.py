@@ -72,7 +72,34 @@ def save_movimiento_banco(lista_movimientos: list, hash_archivo: str, metadatos_
     agregados = 0
     last_id = None
     try:
+        # --- AUTO-CATEGORIZACIÓN BASADA EN APRENDIZAJE PREVIO ---
+        cursor_cat = conn.execute("SELECT nombre, palabras_clave FROM categorias_maestras")
+        cat_rules = []
+        for row in cursor_cat.fetchall():
+            kws = [k.strip().lower() for k in (row['palabras_clave'] or '').split(',') if k.strip()]
+            cat_rules.append({
+                "nombre": row['nombre'],
+                "keywords": kws
+            })
+
         for b in lista_movimientos:
+            # Si no tiene categoría o es la de por defecto, clasificamos
+            current_cat = b.get('categoria', 'SIN_CATEGORIZAR')
+            if current_cat in (None, '', 'SIN_CATEGORIZAR'):
+                desc_lower = (b.get('descripcion') or '').strip().lower()
+                matched_cat = None
+                for rule in cat_rules:
+                    for kw in rule['keywords']:
+                        if kw in desc_lower:
+                            matched_cat = rule['nombre']
+                            break
+                    if matched_cat:
+                        break
+                if matched_cat:
+                    b['categoria'] = matched_cat
+                else:
+                    b['categoria'] = 'SIN_CATEGORIZAR'
+
             columnas_duras = {
                 'banco', 'cuenta', 'fecha', 'descripcion',
                 'tipo_movimiento', 'importe', 'saldo', 'categoria', 'hash_archivo', 'path_archivo'

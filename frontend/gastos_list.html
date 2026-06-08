@@ -22,7 +22,12 @@
                         </span>
                     </td>
                     <td style="padding: 1rem 1.2rem; font-weight: 600; color: var(--text-main);">
-                        {{ reg.gasto_tipo_nombre }} {{ reg.gasto_tipo_emoji if reg.gasto_tipo_emoji else '' }}
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span>{{ reg.gasto_tipo_nombre }} {{ reg.gasto_tipo_emoji if reg.gasto_tipo_emoji else '' }}</span>
+                            {% if reg.gasto_tipo_nombre in ['Gastos de Vida', 'Gastos Personales'] and reg.fuente and reg.fuente != 'Manual' %}
+                            <span style="font-size: 0.7rem; color: #d97706; background: rgba(217, 119, 6, 0.1); border: 1px solid rgba(217, 119, 6, 0.2); padding: 2px 6px; border-radius: 4px; font-weight: 500;" title="Imputación automática general. Podés editarlo para corregir y enseñar la regla al sistema.">⚠️ Revisar</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td style="padding: 1rem 1.2rem; color: var(--text-muted); font-style: italic; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                         {{ reg.descripcion if reg.descripcion else '-' }}

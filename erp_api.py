@@ -12,6 +12,82 @@ from PIL import Image
 from PyPDF2 import PdfMerger
 from erp_master import ERPMaster
 from datetime import datetime
+import re
+
+def extraer_palabra_clave(descripcion):
+    if not descripcion:
+        return None
+    # Limpiar prefijos y códigos comunes en descripciones de tarjetas/bancos
+    kw_raw = descripcion.strip().upper()
+    kw_raw = re.sub(r'^(MERPAGO\*|EBN\*|WWW\.|DLOCAL\*|K|K\*|\*)', '', kw_raw)
+    
+    # Separar en palabras usando espacios, números, barras, etc.
+    words = [w.strip() for w in re.split(r'[\s\d/*-]', kw_raw) if w.strip()]
+    
+    GENERIC_EXCLUDE = {
+        "PAGO", "DEBITO", "CREDITO", "TRANSF", "TRANSFERENCIA", "COMPRA", 
+        "CTA", "C", "SUCURSAL", "SUC", "IVA", "IMPUESTO", "INTERES", 
+        "COMISION", "MANTENIMIENTO", "RETENCION", "PERCEPCION", "REVERSION", 
+        "REVERSO", "AJUSTE", "LIQ", "LIQUIDACION", "CONCEPTO", "DETALLE", 
+        "MOV", "MOVIMIENTO", "EXTRACCION", "DEPOSIT", "DEPOSITO", "COBROS", 
+        "COBRO", "SALDO", "PESOS", "DOLARES", "USD", "ARS", "EFE", "EFECTIVO", 
+        "CHEQUE", "CH", "INTERESES", "COMISIONES", "SA", "SRL", "LTDA", "LIMITADA",
+        "AUTOMATICO", "AUTOMAT", "AUTOM", "DEB", "CRE", "TRF", "TRANS", "PAG",
+        "RECIBIDA", "RECIBIDO", "ENVIADA", "ENVIADO", "EMITIDA", "EMITIDO", "AUTOMATICA"
+    }
+    
+    # Buscar la primera palabra que no esté en la lista de excluidas
+    for word in words:
+        if len(word) >= 3 and word not in GENERIC_EXCLUDE:
+            return word
+            
+    # Fallback a la primera de al menos 3 letras
+    for word in words:
+        if len(word) >= 3:
+            return word
+            
+    return None
+
+def aprender_palabra_clave(gasto_tipo_id, descripcion):
+    kw = extraer_palabra_clave(descripcion)
+    if kw:
+        conn = storage_gastos.get_db_connection()
+        try:
+            row = conn.execute("SELECT palabras_clave FROM gastos_tipos WHERE id = ?", (gasto_tipo_id,)).fetchone()
+            if row:
+                palabras = [p.strip().upper() for p in (row['palabras_clave'] or '').split(',') if p.strip()]
+                if kw not in palabras:
+                    palabras.append(kw)
+                    new_keywords = ", ".join(palabras)
+                    conn.execute("UPDATE gastos_tipos SET palabras_clave = ? WHERE id = ?", (new_keywords, gasto_tipo_id))
+                    conn.commit()
+                    print(f"🧠 [APRENDIZAJE GASTO] Agregada palabra clave '{kw}' al concepto ID {gasto_tipo_id}")
+        except Exception as e:
+            print(f"Error en aprendizaje de gasto: {e}")
+        finally:
+            conn.close()
+
+def aprender_categoria_maestra(categoria_nombre, descripcion):
+    if not categoria_nombre:
+        return
+    kw = extraer_palabra_clave(descripcion)
+    if kw:
+        from modulo_bancos import storage_bancos
+        conn = storage_bancos.get_db_connection()
+        try:
+            row = conn.execute("SELECT palabras_clave FROM categorias_maestras WHERE nombre = ?", (categoria_nombre,)).fetchone()
+            if row:
+                palabras = [p.strip().upper() for p in (row['palabras_clave'] or '').split(',') if p.strip()]
+                if kw not in palabras:
+                    palabras.append(kw)
+                    new_keywords = ", ".join(palabras)
+                    conn.execute("UPDATE categorias_maestras SET palabras_clave = ? WHERE nombre = ?", (new_keywords, categoria_nombre))
+                    conn.commit()
+                    print(f"🧠 [APRENDIZAJE BANCO] Agregada palabra clave '{kw}' a categoria maestra '{categoria_nombre}'")
+        except Exception as e:
+            print(f"Error en aprendizaje de categoria maestra: {e}")
+        finally:
+            conn.close()
 
 # IMPORTACIÓN ESTRUCTURADA POR DOMINIOS (DDD) 🏗️🧱🧠⚖️
 from modulo_tarjetas import logica_tarjetas as tarjetas
@@ -293,6 +369,13 @@ async def save_gasto_record(
     }
     if id:
         data["id"] = int(id)
+        # Aprendizaje de palabras clave v6.1: Aprender de correcciones manuales
+        try:
+            original = storage_gastos.get_gasto_registro_by_id(int(id))
+            if original and original['gasto_tipo_id'] != gasto_tipo_id:
+                aprender_palabra_clave(gasto_tipo_id, original['descripcion'])
+        except Exception as e:
+            print(f"Error en aprendizaje automático de gastos: {e}")
     storage_gastos.save_gasto_registro(data)
     
     anio = None
@@ -663,7 +746,7 @@ async def edit_mov_categoria(request: Request, id: int):
     from modulo_bancos import storage_bancos
     conn = storage_bancos.get_db_connection()
     conn.row_factory = storage_bancos.sqlite3.Row
-    categorias = conn.execute("SELECT nombre, emoji FROM gastos_tipos ORDER BY tipo, nombre").fetchall()
+    categorias = conn.execute("SELECT nombre, emoji FROM categorias_maestras ORDER BY tipo, nombre").fetchall()
     conn.close()
     return templates.TemplateResponse(request=request, name="bancos_inline_edit.html", context={"request": request, "id": id, "categorias": categorias})
 
@@ -676,6 +759,11 @@ async def save_mov_categoria(request: Request, id: int, categoria: str = Form(..
     conn.row_factory = storage_bancos.sqlite3.Row
     mov = conn.execute("SELECT * FROM bancos_movimientos WHERE id=?", (id,)).fetchone()
     conn.close()
+    
+    # Aprendizaje automático v6.1: Aprender de la corrección manual en Tesorería
+    if mov:
+        aprender_categoria_maestra(categoria, mov['descripcion'])
+        
     return templates.TemplateResponse(request=request, name="bancos_badge_cell.html", context={"request": request, "mov": mov})
 
 @app.post("/api/bancos/movimientos/bulk_categoria")
@@ -716,6 +804,13 @@ async def bulk_edit_categoria(request: Request, new_categoria: str = Form(...), 
     conn.commit()
     conn.close()
     
+    # Aprendizaje automático en Bulk Bancario
+    if q and len(q.strip()) >= 3:
+        try:
+            aprender_categoria_maestra(new_categoria, q)
+        except Exception as e:
+            print(f"Error en aprendizaje masivo bancario: {e}")
+            
     # Return the updated list using the existing list function
     # Because we don't know the agrupar state, we default to non-grouped after bulk edit
     return await list_bancos_movimientos(request, cuenta, categoria, mes, q, agrupar, area)
@@ -1020,7 +1115,11 @@ async def vista_compras(request: Request):
 @app.get("/bancos", response_class=HTMLResponse)
 async def vista_bancos(request: Request):
     cuentas = storage_gastos.get_cuentas()
-    categorias = storage_gastos.get_gastos_tipos()
+    from modulo_bancos import storage_bancos
+    conn = storage_bancos.get_db_connection()
+    conn.row_factory = storage_bancos.sqlite3.Row
+    categorias = [dict(r) for r in conn.execute("SELECT * FROM categorias_maestras ORDER BY tipo, nombre").fetchall()]
+    conn.close()
     return templates.TemplateResponse(request=request, name="bancos.html", context={"request": request, "cuentas": cuentas, "categorias": categorias})
 
 @app.get("/pagos", response_class=HTMLResponse)
