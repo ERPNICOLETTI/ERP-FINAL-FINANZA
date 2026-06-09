@@ -86,21 +86,29 @@ def procesar_archivo(file_path, force_reprocess=False):
         
         # 1. Detectar período de facturación buscando la fecha de emisión en la cabecera
         billing_period = None
+        cierre_date = None
         for line in lines:
-            m_cierre = re.search(r'\b(20\d{2})(\d{2})\d{2}', line)
+            m_cierre = re.search(r'\b(20\d{2})(\d{2})(\d{2})', line)
             if m_cierre:
-                year, month = m_cierre.groups()
+                year, month, day = m_cierre.groups()
                 billing_period = f"{year}-{month}"
+                cierre_date = f"{year}-{month}-{day}"
                 break
                 
         if not billing_period:
             billing_period = "2026-05" # Fallback
             
         billing_year, billing_month = billing_period.split('-')
+        if not cierre_date:
+            cierre_date = f"{billing_year}-{billing_month}-28"
 
         # 2. Procesar líneas y separar por bloques de tarjeta JOR/JOA
         line_re = re.compile(r'^(\d{2})-([A-Za-z]{3})-(\d{2})\s+(.*)$')
         amount_re = re.compile(r'(-?)(\d+(?:\.\d{3})*,?\d{2})\s*$')
+        summary_re = re.compile(
+            r'^(INTERESES?(?:\s+(?:DE\s+)?(?:FINANCIACION|PUNITORIOS|COMPENSATORIOS|FINANCIAR))?|IMPUESTO\s+(?:DE\s+)?SELLOS|IMP\.?\s*SELLOS|I\.V\.A\.\s+\d+,\d+%|PERCEPCION IVA DTO \d+/\d+|PERCEP\.AFIP RG \d+ \d*%)\s+(-?\d+(?:\.\d{3})*,?\d{2})(?:\s+(-?\d+(?:\.\d{3})*,?\d{2}))?\s*$',
+            re.IGNORECASE
+        )
         
         blocks = []
         current_txs = []
@@ -170,6 +178,33 @@ def procesar_archivo(file_path, force_reprocess=False):
                 # El subtotal del adicional de Joaquín
                 blocks.append(("JOA", current_txs))
                 current_txs = []
+                
+            else:
+                m_summary = summary_re.match(line_clean.strip())
+                if m_summary:
+                    name = m_summary.group(1).upper()
+                    pesos_str = m_summary.group(2)
+                    usd_str = m_summary.group(3)
+                    
+                    if pesos_str.startswith('-'):
+                        # Omitir abonos/créditos
+                        continue
+                        
+                    val = float(pesos_str.replace('.', '').replace(',', '.'))
+                    if usd_str:
+                        val_usd = float(usd_str.replace('.', '').replace(',', '.'))
+                        val = round(val + (val_usd * 1400.0), 2)
+                        
+                    current_txs.append({
+                        "fecha": cierre_date,
+                        "descripcion": name.strip(),
+                        "monto": val,
+                        "is_usd": bool(usd_str),
+                        "fecha_compra": cierre_date
+                    })
+
+        if current_txs:
+            blocks.append(("JOR", current_txs))
 
         registros_agregados = 0
 
@@ -203,6 +238,10 @@ def procesar_archivo(file_path, force_reprocess=False):
                 finally:
                     conn_learning.close()
                     
+                # Evitar contaminación de cuentas personales (ej: de JOA a JOR o viceversa)
+                if matched_concept and matched_concept['cuenta'] not in pref_accounts:
+                    matched_concept = None
+                    
                 if not matched_concept:
                     # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
                     if "esco" in desc_lower:
@@ -214,15 +253,31 @@ def procesar_archivo(file_path, force_reprocess=False):
                                 break
 
                     if not matched_concept:
-                        # Clasificar según palabras clave
+                        # Clasificar según palabras clave (limpiando puntos de abreviaciones)
+                        desc_clean = desc_lower.replace('.', '')
                         for r in prioritized_rules:
                             for kw in r['keywords']:
-                                if kw in desc_lower:
+                                kw_clean = kw.replace('.', '')
+                                if kw_clean in desc_clean:
                                     matched_concept = r
                                     break
                             if matched_concept:
                                 break
                             
+                    # Fallback especial para impuestos, percepciones e intereses de tarjeta
+                    if not matched_concept:
+                        desc_clean = desc_lower.replace('.', '')
+                        if any(k in desc_clean for k in ["iva", "sello", "percep", "afip", "rg", "sellado", "tasas"]):
+                            for r in prioritized_rules:
+                                if r['nombre'] in ('Gastos Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                    matched_concept = r
+                                    break
+                        elif any(k in desc_clean for k in ["interes", "financia"]):
+                            for r in prioritized_rules:
+                                if r['nombre'] in ('Intereses Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                    matched_concept = r
+                                    break
+
                     # Fallback general
                     if not matched_concept:
                         fallback_name = "Gastos de Vida" if owner == "JOR" else "Gastos Personales"

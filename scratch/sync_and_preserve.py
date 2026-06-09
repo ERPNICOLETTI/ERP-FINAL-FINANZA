@@ -150,16 +150,30 @@ def parse_mastercard_galicia(path):
             text += page.extract_text() + "\n"
             
     billing_period = None
-    m_period = re.search(r'Cierre actual:\s*(\d{2})/(\d{2})/(\d{2})', text, re.IGNORECASE)
-    if m_period:
-        day_p, month_p, year_p = m_period.groups()
-        billing_period = f"20{year_p}-{month_p}"
+    cierre_date = None
+    m_cierre = re.search(r'\b(20\d{2})(\d{2})(\d{2})', text)
+    if m_cierre:
+        year, month, day = m_cierre.groups()
+        billing_period = f"{year}-{month}"
+        cierre_date = f"{year}-{month}-{day}"
+    else:
+        m_period = re.search(r'Cierre actual:\s*(\d{2})/(\d{2})/(\d{2})', text, re.IGNORECASE)
+        if m_period:
+            day_p, month_p, year_p = m_period.groups()
+            billing_period = f"20{year_p}-{month_p}"
+            cierre_date = f"20{year_p}-{month_p}-{day_p}"
+            
     if not billing_period:
         billing_period = "2026-05"
     billing_year, billing_month = billing_period.split('-')
+    if not cierre_date:
+        cierre_date = f"{billing_year}-{billing_month}-28"
     
     line_re = re.compile(r'^(\d{2})-([A-Za-z]{3})-(\d{2})\s+(.*)$')
     amount_re = re.compile(r'(-?)(\d+(?:\.\d{3})*,?\d{2})\s*(-?)$')
+    summary_re = re.compile(
+        r'^(INTERESES DE FINANCIACION|IMPUESTO DE SELLOS|I\.V\.A\.\s+\d+,\d+%|PERCEPCION IVA DTO \d+/\d+|PERCEP\.AFIP RG \d+ \d*%)\s+(-?\d+(?:\.\d{3})*,?\d{2})(?:\s+(-?\d+(?:\.\d{3})*,?\d{2}))?\s*$'
+    )
     
     txs = []
     current_txs = []
@@ -213,6 +227,29 @@ def parse_mastercard_galicia(path):
                 t["owner"] = "JOA"
                 txs.append(t)
             current_txs = []
+        else:
+            m_summary = summary_re.match(line_clean.strip())
+            if m_summary:
+                name = m_summary.group(1)
+                pesos_str = m_summary.group(2)
+                usd_str = m_summary.group(3)
+                
+                if pesos_str.startswith('-'):
+                    # Omitir abonos/créditos
+                    continue
+                    
+                val = float(pesos_str.replace('.', '').replace(',', '.'))
+                if usd_str:
+                    val_usd = float(usd_str.replace('.', '').replace(',', '.'))
+                    val = round(val + (val_usd * 1400.0), 2)
+                    
+                current_txs.append({
+                    "fecha": cierre_date,
+                    "fecha_compra": cierre_date,
+                    "descripcion": name.strip(),
+                    "monto": val,
+                    "fuente": "Mastercard Galicia"
+                })
             
     for t in current_txs:
         t["owner"] = "JOR"

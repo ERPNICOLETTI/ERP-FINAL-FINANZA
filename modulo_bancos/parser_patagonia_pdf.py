@@ -178,6 +178,10 @@ def procesar_archivo(file_path, force_reprocess=False):
             finally:
                 conn_learning.close()
                 
+            # Evitar contaminación de cuentas personales (ej: de JOA a JOR o viceversa)
+            if matched_concept and matched_concept['cuenta'] not in pref_accounts:
+                matched_concept = None
+                
             if not matched_concept:
                 desc_lower = tx['descripcion'].lower()
                 # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
@@ -190,15 +194,31 @@ def procesar_archivo(file_path, force_reprocess=False):
                             break
 
                 if not matched_concept:
-                    # Clasificar según palabras clave
+                    # Clasificar según palabras clave (limpiando puntos de abreviaciones)
+                    desc_clean = desc_lower.replace('.', '')
                     for r in prioritized_rules:
                         for kw in r['keywords']:
-                            if kw in desc_lower:
+                            kw_clean = kw.replace('.', '')
+                            if kw_clean in desc_clean:
                                 matched_concept = r
                                 break
                         if matched_concept:
                             break
                         
+                # Fallback especial para impuestos, percepciones e intereses de tarjeta
+                if not matched_concept:
+                    desc_clean = desc_lower.replace('.', '')
+                    if any(k in desc_clean for k in ["iva", "sello", "percep", "afip", "rg", "sellado", "tasas"]):
+                        for r in prioritized_rules:
+                            if r['nombre'] in ('Gastos Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                matched_concept = r
+                                break
+                    elif any(k in desc_clean for k in ["interes", "financia"]):
+                        for r in prioritized_rules:
+                            if r['nombre'] in ('Intereses Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                matched_concept = r
+                                break
+
                 # Fallback general a Gastos de Vida (JOR)
                 if not matched_concept:
                     for r in valid_rules:

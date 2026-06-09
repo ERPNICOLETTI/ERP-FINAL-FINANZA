@@ -180,6 +180,7 @@ def procesar_archivo(file_path, force_reprocess=False):
             # Clasificar transacción
             matched_concept = None
             desc_lower = description.lower()
+            pref_accounts = ["JOA", "COMUN"]
             
             # 1. Intentar clasificar usando el historial de aprendizaje del usuario
             conn_learning = storage_bancos.get_db_connection()
@@ -188,10 +189,13 @@ def procesar_archivo(file_path, force_reprocess=False):
             finally:
                 conn_learning.close()
                 
+            # Evitar contaminación de cuentas personales (ej: de JOR a JOA o viceversa)
+            if matched_concept and matched_concept['cuenta'] not in pref_accounts:
+                matched_concept = None
+                
             if not matched_concept:
                 # Filtrar reglas: categorias de tarjeta y personales restringidas al titular y comunas
                 # Para reglas específicas (como compras), permitimos de cualquier cuenta para soportar compras cruzadas/aprendizaje
-                pref_accounts = ["JOA", "COMUN"]
                 valid_rules = []
                 for r in rules:
                     if r['nombre'] in ('Gasto Tarjeta', 'Intereses Tarjeta', 'Tarjeta', 'Gastos Personales', 'Gastos de Vida', 'Aportes de Capital', 'Impuestos Comerciales'):
@@ -223,14 +227,31 @@ def procesar_archivo(file_path, force_reprocess=False):
                             break
                 
                 if not matched_concept:
+                    # Clasificar según palabras clave (limpiando puntos de abreviaciones)
+                    desc_clean = desc_lower.replace('.', '')
                     for r in prioritized_rules:
                         for kw in r['keywords']:
-                            if kw in desc_lower:
+                            kw_clean = kw.replace('.', '')
+                            if kw_clean in desc_clean:
                                 matched_concept = r
                                 break
                         if matched_concept:
                             break
                 
+                # Fallback especial para impuestos, percepciones e intereses de tarjeta
+                if not matched_concept:
+                    desc_clean = desc_lower.replace('.', '')
+                    if any(k in desc_clean for k in ["iva", "sello", "percep", "afip", "rg", "sellado", "tasas"]):
+                        for r in prioritized_rules:
+                            if r['nombre'] in ('Gastos Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                matched_concept = r
+                                break
+                    elif any(k in desc_clean for k in ["interes", "financia"]):
+                        for r in prioritized_rules:
+                            if r['nombre'] in ('Intereses Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
+                                matched_concept = r
+                                break
+
                 # Fallback para Google / Instagram USD no clasificados
                 if not matched_concept and ("google" in desc_lower or "instagra" in desc_lower):
                     for r in valid_rules:
