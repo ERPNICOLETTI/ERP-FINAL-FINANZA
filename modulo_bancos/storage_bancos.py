@@ -28,7 +28,7 @@ def init_db_bancos():
 
     # [CAUTION] Si ya existe, se intentará migrar o recrear. 
     # El usuario ha solicitado una limpieza pre-test.
-    conn.execute('DROP TABLE IF EXISTS bancos_movimientos')
+    # conn.execute('DROP TABLE IF EXISTS bancos_movimientos')
     
     conn.execute('''
         CREATE TABLE IF NOT EXISTS bancos_movimientos (

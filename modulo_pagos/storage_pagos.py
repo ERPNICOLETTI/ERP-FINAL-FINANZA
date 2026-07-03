@@ -48,6 +48,7 @@ def init_db_pagos_vencimientos():
             path_boleta         TEXT,
             path_comprobante    TEXT,
             hash_boleta         TEXT,
+            codigo_barras       TEXT,
             meta_json           TEXT DEFAULT '{}',
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
