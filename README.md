@@ -87,7 +87,22 @@ graph TD
 
 ---
 
-## 🧬 6. Directorio de Manuales (Neuronas de Dominio)
+## 🎯 6. Directivas de Desarrollo y Objetivos de Ingesta (Crisis)
+Para mantener el foco estratégico en la salud financiera del negocio, el desarrollo del ERP sigue estas directivas:
+
+### 🛠️ Regla de Desarrollo de Software
+*   **0% Frontend:** La interfaz de usuario queda congelada en su estado actual. No se tocan archivos HTML, CSS ni JS para reducir la complejidad cognitiva.
+*   **100% Lógica y Datos:** Toda la prioridad y esfuerzo de programación se centra en motores de parseo, ingesta de datos, integridad de base de datos SQLite y analítica de cuentas.
+
+### 📈 Objetivos Activos de Control Financiero
+Dado el contexto de deudas bancarias bajo financiación y altos costos financieros, los objetivos inmediatos de ingesta del sistema son:
+1.  **Control de Intereses Bancarios:** Identificar y categorizar correctamente el dinero perdido mensualmente en intereses financieros dentro de la esfera **LDK**.
+2.  **Auditoría de Pagos Omitidos:** Cruzar las deudas recurrentes pendientes contra los movimientos bancarios reales de los últimos meses para detectar boletas impagas (Servicoop, Sindicatos SEC/FAECYS).
+3.  **Estado de Tarjetas:** Conciliar cierres y vencimientos de tarjetas (Patagonia 365, Naranja, Mastercard) para prever fechas de débito y evitar refinanciaciones usurarias.
+
+---
+
+## 🧬 7. Directorio de Manuales (Neuronas de Dominio)
 Cada carpeta de módulo cuenta con **un único** archivo `.md` específico para su contexto interno:
 
 -   🏦 [**Módulo Bancos**](modulo_bancos/neurona_bancos.md): Extractos de cuenta, pasarela de categorización interactiva y bulk updates.
@@ -95,3 +110,4 @@ Cada carpeta de módulo cuenta con **un único** archivo `.md` específico para 
 -   🧾 [**Módulo Compras**](modulo_compras/neurona_compras.md): Libro de IVA, importador CALIM/AFIP y Sala de Espera.
 -   💰 [**Módulo Pagos**](modulo_pagos/neurona_pagos.md): Vencimientos de impuestos, sindicatos (SEC, FAECYS) y servicios recurrentes.
 -   🎨 [**Frontend UI**](frontend/frontend_vision.md): Diseño estético, layouts, paleta de colores y componentes HTMX.
+
