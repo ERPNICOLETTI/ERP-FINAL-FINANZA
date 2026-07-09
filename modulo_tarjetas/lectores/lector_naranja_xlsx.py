@@ -3,7 +3,7 @@ import os
 import logging
 import hashlib
 import json
-from . import storage_tarjetas as storage
+from modulo_tarjetas import storage_tarjetas as storage
 
 # Parser Naranja XLSX (Digitalización Bit a Bit) 🏗️🧱🧠⚖️🚀
 # Esta versión implementa el Diseño Híbrido y el archivado legal.

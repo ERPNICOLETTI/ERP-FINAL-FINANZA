@@ -4,7 +4,7 @@ import logging
 import hashlib
 import json
 import pdfplumber
-from . import storage_tarjetas as storage
+from modulo_tarjetas import storage_tarjetas as storage
 from modulo_compras import storage_compras
 
 # PARSER PAYWAY PDF - PoC Arquitectura Híbrida 💳🏗️🧠

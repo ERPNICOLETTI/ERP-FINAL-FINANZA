@@ -1,6 +1,6 @@
 import os
 from . import storage_bancos as storage
-from . import parser_chubut, parser_hipotecario_usd
+from .lectores import lector_chubut, lector_hipotecario_usd
 
 # NEURONA BANCOS - v4.0 GOLDEN MASTER 🏦🧠🔍⚖️
 # Especialista en Tesorería. La ingesta es ahora centralizada en erp_master.py.
@@ -22,11 +22,11 @@ def detectar_y_procesar(file_path):
         
     if "chubut" in content_str or "tipo y nº de cuenta" in content_str:
         print(f"🔍 [DETECTIVE] Identificado: BANCO CHUBUT")
-        return parser_chubut.procesar_archivo(file_path)
+        return lector_chubut.procesar_archivo(file_path)
     
     if "hipotecario" in content_str or "ca_usd" in content_str or "ca dolares" in content_str:
         print(f"🔍 [DETECTIVE] Identificado: BANCO HIPOTECARIO")
-        return parser_hipotecario_usd.procesar_archivo(file_path)
+        return lector_hipotecario_usd.procesar_archivo(file_path)
             
     return False, {"error": "No se reconoció el formato bancario"}
 

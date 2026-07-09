@@ -4,7 +4,7 @@ import re
 import logging
 import hashlib
 import json
-from . import storage_tarjetas as storage
+from modulo_tarjetas import storage_tarjetas as storage
 
 # Motor de Digitalización de Alta Precisión - Patagonia 365 💎🏗️🧱🧠
 # Esta versión implementa el Diseño Híbrido y el archivado legal.

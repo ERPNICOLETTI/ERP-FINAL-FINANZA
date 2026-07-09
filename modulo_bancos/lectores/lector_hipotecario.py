@@ -3,7 +3,7 @@ import os
 import logging
 import hashlib
 import json
-from . import storage_bancos as storage
+from modulo_bancos import storage_bancos as storage
 
 # Parser Banco Hipotecario (Joaquín) - Phase 3 🏦🏗️🧱🧠⚖️
 # Esta versión implementa el Diseño Híbrido y el archivado legal.

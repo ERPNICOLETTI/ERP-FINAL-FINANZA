@@ -10,7 +10,7 @@ async def importar_bancos(req: ImportRequest):
     try:
         fuente = req.fuente.upper()
         if fuente == 'CHUBUT':
-            from modulo_bancos.parser_chubut import parse_chubut_excel
+            from modulo_bancos.lectores.lector_chubut import parse_chubut_excel
             parse_chubut_excel(req.path)
             return {"status": "success", "fuente": "CHUBUT"}
         return {"status": "error", "message": f"Banco '{fuente}' no soportado"}

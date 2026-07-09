@@ -393,7 +393,7 @@ def smart_search_invoice(query):
         if not raw_q: return []
         
         search_pattern = f"%{clean_q}%" if clean_q else f"%{raw_q}%"
-        meta_pattern = f"%{raw_q}%"
+        text_pattern = f"%{raw_q}%"
         
         rows = conn.execute("""
             SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
@@ -403,10 +403,12 @@ def smart_search_invoice(query):
                   numero_comprobante LIKE ? OR 
                   (punto_venta || numero_comprobante) LIKE ? OR
                   (CAST(CAST(numero_comprobante AS INTEGER) AS TEXT)) LIKE ? OR
+                  proveedor LIKE ? OR
+                  cuit_proveedor LIKE ? OR
                   meta_json LIKE ?
               )
             ORDER BY fecha DESC LIMIT 5
-        """, (search_pattern, search_pattern, search_pattern, meta_pattern)).fetchall()
+        """, (search_pattern, search_pattern, search_pattern, text_pattern, text_pattern, text_pattern)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

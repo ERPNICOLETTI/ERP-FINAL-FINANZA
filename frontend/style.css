@@ -91,7 +91,8 @@ body {
 
 /* --- PANEL IZQUIERDO: INGESTA --- */
 .ingesta-panel {
-    width: 480px; /* Más ancho para ver mejor los comprobantes */
+    width: 480px;
+    /* Más ancho para ver mejor los comprobantes */
     background: var(--panel-bg);
     border-right: 1px solid var(--glass-border);
     display: flex;
@@ -116,17 +117,19 @@ body {
 
 .dropzone-preview {
     width: 100%;
-    flex: 1; 
+    flex: 1;
     min-height: 400px;
-    background: #f8fafc; /* Light blue-grey */
+    background: #f8fafc;
+    /* Light blue-grey */
     margin-bottom: 20px;
     border-radius: 12px;
     border: 1px solid rgba(9, 105, 218, 0.2);
     position: relative;
-    overflow: hidden; /* Oculta barras para usar transformación fluida */
+    overflow: hidden;
+    /* Oculta barras para usar transformación fluida */
     cursor: grab;
     transition: border 0.3s;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
 .dropzone-preview:hover {
@@ -146,10 +149,12 @@ body {
 }
 
 .preview-content img {
-    max-width: 100%; /* Ajuste inicial */
+    max-width: 100%;
+    /* Ajuste inicial */
     max-height: 100%;
     object-fit: contain;
-    transition: none; /* Mejor para el paneo sin delay */
+    transition: none;
+    /* Mejor para el paneo sin delay */
     transform-origin: center center;
 }
 
@@ -282,13 +287,16 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     padding: 10px 15px;
     border-radius: 8px;
     margin-bottom: 15px;
     border: 1px solid var(--glass-border);
 }
-.inbox-controller.hidden { display: none !important; }
+
+.inbox-controller.hidden {
+    display: none !important;
+}
 
 .btn-icon {
     background: none;
@@ -299,8 +307,16 @@ body {
     transition: 0.2s;
     outline: none;
 }
-.btn-icon:hover { transform: scale(1.1); }
-#inbox-status { font-size: 0.9rem; font-weight: 600; color: var(--accent-color); }
+
+.btn-icon:hover {
+    transform: scale(1.1);
+}
+
+#inbox-status {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent-color);
+}
 
 /* --- EXCEPCION: CALIM CARD --- */
 .calim-card {
@@ -311,45 +327,52 @@ body {
     margin-bottom: 20px;
     animation: fadeIn 0.3s ease;
 }
-.calim-card.hidden { display: none !important; }
 
-.calim-header { 
-    color: var(--warning); 
-    font-weight: bold; 
-    margin-bottom: 5px; 
+.calim-card.hidden {
+    display: none !important;
+}
+
+.calim-header {
+    color: var(--warning);
+    font-weight: bold;
+    margin-bottom: 5px;
     font-size: 0.9rem;
 }
-.calim-card p { 
-    font-size: 0.8rem; 
-    color: #9a6700; 
-    margin-bottom: 12px; 
+
+.calim-card p {
+    font-size: 0.8rem;
+    color: #9a6700;
+    margin-bottom: 12px;
 }
-.calim-input { 
-    width: 100%; 
-    padding: 12px; 
-    border-radius: 8px; 
-    border: 1px solid rgba(255, 193, 7, 0.5); 
+
+.calim-input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 193, 7, 0.5);
     background: #ffffff;
     color: var(--text-main);
-    margin-bottom: 12px; 
+    margin-bottom: 12px;
     outline: none;
 }
+
 .calim-input:focus {
     border-color: var(--warning);
 }
 
-.btn-warning { 
-    width: 100%; 
-    padding: 12px; 
-    border-radius: 8px; 
-    border: none; 
-    background: var(--warning); 
-    color: #111; 
-    font-weight: 800; 
-    cursor: pointer; 
+.btn-warning {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--warning);
+    color: #111;
+    font-weight: 800;
+    cursor: pointer;
     transition: 0.3s;
     box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
 }
+
 .btn-warning:hover {
     filter: brightness(1.1);
     transform: translateY(-2px);
@@ -362,7 +385,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 25px;
-    min-height: 0; /* Fundamental para habilitar scroll interno en flex */
+    min-height: 0;
+    /* Fundamental para habilitar scroll interno en flex */
 }
 
 .boveda-header {
@@ -452,7 +476,8 @@ td {
     padding: 15px 20px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     font-size: 0.9rem;
-    white-space: nowrap; /* Evita saltos de línea en fecha y número v4.9.8 */
+    white-space: nowrap;
+    /* Evita saltos de línea en fecha y número v4.9.8 */
 }
 
 tbody tr:hover {
@@ -468,8 +493,15 @@ tbody tr:hover {
     margin-right: 10px;
 }
 
-.status-dot.red { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
-.status-dot.green { background: var(--success); box-shadow: 0 0 10px var(--success); }
+.status-dot.red {
+    background: var(--danger);
+    box-shadow: 0 0 10px var(--danger);
+}
+
+.status-dot.green {
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success);
+}
 
 /* --- MATCH FEEDBACK --- */
 .match-feedback {
@@ -477,8 +509,18 @@ tbody tr:hover {
     border-radius: 10px;
     font-size: 0.85rem;
 }
-.match-feedback.success { background: rgba(63, 185, 80, 0.15); border: 1px solid var(--success); color: #aff5b4; }
-.match-feedback.warning { background: rgba(210, 153, 34, 0.15); border: 1px solid var(--warning); color: #ffdfa5; }
+
+.match-feedback.success {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid var(--success);
+    color: #aff5b4;
+}
+
+.match-feedback.warning {
+    background: rgba(210, 153, 34, 0.15);
+    border: 1px solid var(--warning);
+    color: #ffdfa5;
+}
 
 /* --- DASHBOARD MAESTRO v5.5 (Launchpad) --- */
 .dashboard-layout {
@@ -536,7 +578,7 @@ tbody tr:hover {
 
 .card-icon {
     font-size: 2.5rem;
-    filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
 }
 
 .card-header h3 {
@@ -580,16 +622,145 @@ tbody tr:hover {
     text-transform: uppercase;
 }
 
-.status-vencido { background: rgba(248, 81, 73, 0.15); color: #ff7b72; border: 1px solid var(--danger); }
-.status-vence-hoy { background: rgba(210, 153, 34, 0.15); color: #ffa657; border: 1px solid var(--warning); box-shadow: 0 0 10px rgba(210, 153, 34, 0.3); }
-.status-vence-proximo { background: rgba(210, 153, 34, 0.1); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.4); }
-.status-pagado { background: rgba(63, 185, 80, 0.15); color: #7ee787; border: 1px solid var(--success); }
-.status-pendiente { background: rgba(255, 255, 255, 0.05); color: #8b949e; border: 1px solid var(--glass-border); }
+.status-vencido {
+    background: rgba(248, 81, 73, 0.15);
+    color: #ff7b72;
+    border: 1px solid var(--danger);
+}
+
+.status-vence-hoy {
+    background: rgba(210, 153, 34, 0.15);
+    color: #ffa657;
+    border: 1px solid var(--warning);
+    box-shadow: 0 0 10px rgba(210, 153, 34, 0.3);
+}
+
+.status-vence-proximo {
+    background: rgba(210, 153, 34, 0.1);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.status-pagado {
+    background: rgba(63, 185, 80, 0.15);
+    color: #7ee787;
+    border: 1px solid var(--success);
+}
+
+.status-pendiente {
+    background: rgba(255, 255, 255, 0.05);
+    color: #8b949e;
+    border: 1px solid var(--glass-border);
+}
 
 /* --- GLOW TEXT v5.5 --- */
 .glow-text span {
     text-shadow: 0 0 15px var(--accent-color);
 }
 
-.hidden { display: none !important; }
+.hidden {
+    display: none !important;
+}
 
+/* --- RESPONSIVIDAD PARA TABLETS Y PANTALLAS BAJAS (AnyDesk/Resolution) --- */
+@media (max-width: 1024px) {
+    .app-wrapper {
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .ecosystem-layout {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .ingesta-panel {
+        width: 100% !important;
+        border-right: none;
+        border-bottom: 1px solid var(--glass-border);
+        max-height: none;
+        overflow: visible;
+    }
+
+    .dropzone-preview {
+        min-height: 350px;
+    }
+
+    .boveda-panel {
+        width: 100% !important;
+        padding: 15px;
+        overflow: visible;
+    }
+
+    .boveda-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+
+    .cron-filters {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .cron-filters>div {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .app-header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+        padding: 10px 15px;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .table-container-final {
+        overflow-x: auto;
+        /* Permite scroll horizontal en la tabla para que no rompa la pantalla */
+    }
+}
+
+/* --- 50/50 SPLIT SCREEN LAYOUT --- */
+.ecosystem-layout {
+    display: flex !important;
+    flex-direction: row !important;
+    height: calc(100vh - 80px) !important;
+    overflow: hidden !important;
+    width: 100% !important;
+}
+
+.ingesta-panel {
+    width: 50% !important;
+    max-width: 50% !important;
+    min-width: 320px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 20px !important;
+    border-right: 1px solid var(--glass-border) !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+}
+
+.dropzone-preview {
+    width: 100% !important;
+    height: 480px !important;
+    min-height: 400px !important;
+    margin-bottom: 20px !important;
+}
+
+.boveda-panel {
+    width: 50% !important;
+    max-width: 50% !important;
+    flex: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 20px !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+}

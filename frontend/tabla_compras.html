@@ -1,5 +1,5 @@
 {% for f in facturas %}
-<tr class="fade-in">
+<tr class="fade-in" onclick="app.loadToIngesta({{ f.id }})" style="cursor: pointer;">
     <td>
         {% if f.tiene_foto or f.path_archivo %}
             <span class="badge" style="background: rgba(34,197,94,0.1); color: #22c55e;">🟢 Archivada</span>

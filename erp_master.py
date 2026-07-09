@@ -188,16 +188,16 @@ class ERPMaster:
 
                     # 1. MODULO TARJETAS
                     if detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
-                        from modulo_tarjetas import parser_payway_liq
-                        success, info = parser_payway_liq.procesar_archivo(filepath)
+                        from modulo_tarjetas.lectores import lector_payway_liq
+                        success, info = lector_payway_liq.procesar_archivo(filepath)
                     
                     elif detected_type == "NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".XLSX")):
-                        from modulo_tarjetas import parser_naranja_xlsx
-                        success, info = parser_naranja_xlsx.procesar_archivo(filepath)
+                        from modulo_tarjetas.lectores import lector_naranja_xlsx
+                        success, info = lector_naranja_xlsx.procesar_archivo(filepath)
                     
                     elif detected_type == "PATAGONIA" or ("LIQMENSAL" in f_upper or "PATAGONIA" in f_upper):
-                        from modulo_tarjetas import parser_patagonia
-                        success, info = parser_patagonia.procesar_archivo(filepath)
+                        from modulo_tarjetas.lectores import lector_patagonia
+                        success, info = lector_patagonia.procesar_archivo(filepath)
 
                     # 2. MODULO COMPRAS (AFIP / CALIM / LIBRO IVA)
                     elif ("AFIP" in f_upper or "VENTAS" in f_upper or "COMPRAS" in f_upper or "COMPROBANTES_CONSULTA_CSV" in f_upper) and f_upper.endswith(".CSV"):
@@ -214,40 +214,40 @@ class ERPMaster:
 
                     # 3. MODULO BANCOS
                     elif detected_type == "CHUBUT" or (("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX")):
-                        from modulo_bancos import parser_chubut
-                        success, info = parser_chubut.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_chubut
+                        success, info = lector_chubut.procesar_archivo(filepath)
                     
                     elif detected_type == "CREDICOOP" or ("CREDICOOP" in f_upper and f_upper.endswith(".XLSX")):
-                        from modulo_bancos import parser_credicoop_joaquin
-                        success, info = parser_credicoop_joaquin.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_credicoop_joaquin
+                        success, info = lector_credicoop_joaquin.procesar_archivo(filepath)
 
                     elif detected_type == "HIPOTECARIO_USD" or (detected_type == "HIPOTECARIO" and "USD" in f_upper) or ("HIPOTECARIO" in f_upper and "USD" in f_upper and f_upper.endswith(".XLSX")):
-                        from modulo_bancos import parser_hipotecario_usd
-                        success, info = parser_hipotecario_usd.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_hipotecario_usd
+                        success, info = lector_hipotecario_usd.procesar_archivo(filepath)
 
                     elif detected_type == "HIPOTECARIO_PESOS" or ("HIPOTECARIO" in f_upper and f_upper.endswith(".XLSX")):
-                        from modulo_bancos import parser_hipotecario
-                        success, info = parser_hipotecario.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_hipotecario
+                        success, info = lector_hipotecario.procesar_archivo(filepath)
                             
                     elif detected_type == "VISA_HIPOTECARIO" or (("HIPOTECARIO" in f_upper or "HIPOTECARIO" in filepath.replace('\\', '/').upper() or "ULTIMALIQUIDACION" in f_upper or "LIQUIDACION" in f_upper) and f_upper.endswith(".PDF") and "GALICIA" not in f_upper and detected_type != "VISA_GALICIA"):
-                        from modulo_bancos import parser_visa_hipotecario
-                        success, info = parser_visa_hipotecario.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_visa_hipotecario
+                        success, info = lector_visa_hipotecario.procesar_archivo(filepath)
 
                     elif detected_type == "VISA_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF") and "MASTERCARD" not in f_upper):
-                        from modulo_bancos import parser_visa_galicia
-                        success, info = parser_visa_galicia.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_visa_galicia
+                        success, info = lector_visa_galicia.procesar_archivo(filepath)
 
                     elif detected_type == "MASTERCARD_GALICIA" or (("GALICIA" in f_upper or "GALICIA" in filepath.replace('\\', '/').upper()) and f_upper.endswith(".PDF") and "MASTERCARD" in f_upper):
-                        from modulo_bancos import parser_mastercard_galicia
-                        success, info = parser_mastercard_galicia.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_mastercard_galicia
+                        success, info = lector_mastercard_galicia.procesar_archivo(filepath)
 
                     elif detected_type == "TARJETA_NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".PDF")):
-                        from modulo_bancos import parser_naranja_pdf
-                        success, info = parser_naranja_pdf.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_naranja_pdf
+                        success, info = lector_naranja_pdf.procesar_archivo(filepath)
 
                     elif detected_type == "PATAGONIA365_PDF" or ("P365" in f_upper and f_upper.endswith(".PDF")):
-                        from modulo_bancos import parser_patagonia_pdf
-                        success, info = parser_patagonia_pdf.procesar_archivo(filepath)
+                        from modulo_bancos.lectores import lector_patagonia_pdf
+                        success, info = lector_patagonia_pdf.procesar_archivo(filepath)
                     
                     else:
                         print(f"❓ [MASTER] Sin parser compatible para: {f}")

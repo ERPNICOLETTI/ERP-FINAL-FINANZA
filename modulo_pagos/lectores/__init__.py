@@ -1,0 +1,1 @@
+# Lectores del dominio Pagos

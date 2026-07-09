@@ -3,7 +3,7 @@ import os
 
 from erp_api.helpers import ImportRequest
 from modulo_tarjetas import logica_tarjetas as tarjetas
-from modulo_tarjetas import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
+from modulo_tarjetas.lectores import lector_payway_liq, lector_patagonia, lector_naranja_xlsx
 
 router = APIRouter()
 
@@ -23,11 +23,11 @@ async def importar_tarjetas(req: ImportRequest):
     try:
         fuente = req.fuente.upper()
         if fuente == 'PAYWAY':
-            parser_payway_liq.parse_payway_liq(req.path)
+            lector_payway_liq.parse_payway_liq(req.path)
             return {"status": "success", "fuente": "PAYWAY"}
         
         elif fuente == 'PATAGONIA365':
-            parser_patagonia.parse_patagonia_365(req.path)
+            lector_patagonia.parse_patagonia_365(req.path)
             return {"status": "success", "fuente": "PATAGONIA365"}
             
         elif fuente == 'NARANJA':
@@ -35,9 +35,9 @@ async def importar_tarjetas(req: ImportRequest):
                 import glob
                 archivos = glob.glob(os.path.join(req.path, "*.xlsx"))
                 for a in archivos:
-                    parser_naranja_xlsx.parse_naranja_xlsx(a)
+                    lector_naranja_xlsx.parse_naranja_xlsx(a)
             else:
-                parser_naranja_xlsx.parse_naranja_xlsx(req.path)
+                lector_naranja_xlsx.parse_naranja_xlsx(req.path)
             return {"status": "success", "fuente": "NARANJA"}
             
         return {"status": "error", "message": f"Fuente '{fuente}' no soportada"}

@@ -58,7 +58,7 @@ def procesar_inbox_pagos(inbox_path):
         info = None
         if f.upper().endswith('.PDF'):
             try:
-                from modulo_pagos.parser_pagos import procesar_pago
+                from modulo_pagos.lectores.lector_pagos import procesar_pago
                 ok, data_pdf = procesar_pago(path_origen)
                 if ok and data_pdf.get('concepto') not in ['DESCONOCIDO', 'SINDICAL_GENERICO', None]:
                     info = data_pdf

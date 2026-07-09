@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from . import storage_tarjetas as storage
-from . import parser_payway_liq, parser_patagonia, parser_naranja_xlsx
+from .lectores import lector_payway_liq, lector_patagonia, lector_naranja_xlsx
 
 # NEURONA TARJETAS - v4.0 GOLDEN MASTER 💳🧠🔍⚖️
 # Detective de Liquidaciones. Ingesta centralizada en erp_master.py.
@@ -23,11 +23,11 @@ def detectar_y_procesar(file_path):
                 
                 if "prisma" in first_page_text or "establec" in first_page_text:
                     print(f"🔍 [DETECTIVE] Identificado: PAYWAY PDF")
-                    return parser_payway_liq.procesar_archivo(file_path)
+                    return lector_payway_liq.procesar_archivo(file_path)
                 
                 if "banco patagonia" in first_page_text or "patagonia 365" in first_page_text:
                     print(f"🔍 [DETECTIVE] Identificado: PATAGONIA 365 PDF")
-                    return parser_patagonia.procesar_archivo(file_path)
+                    return lector_patagonia.procesar_archivo(file_path)
         except Exception as e:
             return False, {"error": f"Error en Detective PDF: {e}"}
 
@@ -38,7 +38,7 @@ def detectar_y_procesar(file_path):
             content_str = df_peek.to_string().lower()
             if "naranja" in content_str or "monto bruto" in content_str:
                 print(f"🔍 [DETECTIVE] Identificado: NARANJA XLSX")
-                return parser_naranja_xlsx.procesar_archivo(file_path)
+                return lector_naranja_xlsx.procesar_archivo(file_path)
         except:
             pass
 

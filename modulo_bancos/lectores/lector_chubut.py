@@ -3,7 +3,7 @@ import os
 import logging
 import hashlib
 import json
-from . import storage_bancos as storage
+from modulo_bancos import storage_bancos as storage
 from modulo_compras import storage_compras
 
 # Parser Banco Chubut Movimientos Históricos 🏦🏗️🧱🧠⚖️

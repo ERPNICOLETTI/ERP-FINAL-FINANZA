@@ -10,5 +10,5 @@ from erp_api.main import app
 
 if __name__ == "__main__":
     import uvicorn
-    # Mantener el host y puerto originales (v4.0.0)
-    uvicorn.run("erp_api.main:app", host="0.0.0.0", port=5005, reload=True)
+    # Iniciar en localhost (127.0.0.1)
+    uvicorn.run("erp_api.main:app", host="127.0.0.1", port=5005, reload=True)

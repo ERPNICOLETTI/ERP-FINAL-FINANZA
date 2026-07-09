@@ -52,6 +52,33 @@ async def search_compras_match(q: str):
     results = storage.smart_search_invoice(q)
     return {"results": results}
 
+@router.post("/api/compras/importar-multiples")
+async def importar_multiples(files: list[UploadFile] = File(...)):
+    """Sube múltiples archivos directamente al Inbox y los ingesta en la DB."""
+    try:
+        from erp_master import ERPMaster
+        inbox_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
+        os.makedirs(inbox_dir, exist_ok=True)
+        
+        saved_files = 0
+        for f in files:
+            if not f.filename: continue
+            temp_path = os.path.join(inbox_dir, f.filename)
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(f.file, buffer)
+            saved_files += 1
+            
+        # Instanciar master y procesar de forma automatizada
+        master = ERPMaster(WORKSPACE)
+        master.ingest_inbox()
+        
+        return {
+            "status": "success", 
+            "message": f"Se procesaron {saved_files} archivos exitosamente."
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/api/compras/inbox/list")
 async def list_inbox_files():
     """Devuelve la lista de archivos pendientes en el Inbox (v4.9)."""
@@ -123,6 +150,13 @@ async def vincular_archivo_factura(
                     "tiene_foto": 1,
                     "path_archivo": final_path
                 })
+            
+            # Limpiar archivo origen del inbox / temporal
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
             
             return {"status": "success", "message": "Enviado a Sala de Espera CALIM"}
 
@@ -197,6 +231,13 @@ async def vincular_archivo_factura(
                 "tiene_foto": 1,
                 "status": "ARCHIVADO"
             })
+            
+            # Limpiar archivo origen del inbox / temporal
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
             
             return {
                 "status": "success", 

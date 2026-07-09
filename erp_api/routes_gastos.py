@@ -281,12 +281,12 @@ async def sincronizar_gastos(
     cuenta_codigo: str = Form(None),
     mes: str = Form(None)
 ):
-    from modulo_bancos import (
-        parser_visa_hipotecario, 
-        parser_visa_galicia,
-        parser_mastercard_galicia,
-        parser_naranja_pdf,
-        parser_patagonia_pdf
+    from modulo_bancos.lectores import (
+        lector_visa_hipotecario, 
+        lector_visa_galicia,
+        lector_mastercard_galicia,
+        lector_naranja_pdf,
+        lector_patagonia_pdf
     )
     from erp_master import detectar_parser_pdf
     
@@ -315,23 +315,23 @@ async def sincronizar_gastos(
         try:
             detected_type = detectar_parser_pdf(filepath)
             if detected_type == "VISA_HIPOTECARIO":
-                success, info = parser_visa_hipotecario.procesar_archivo(filepath, force_reprocess=True)
+                success, info = lector_visa_hipotecario.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
             elif detected_type == "VISA_GALICIA":
-                success, info = parser_visa_galicia.procesar_archivo(filepath, force_reprocess=True)
+                success, info = lector_visa_galicia.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
             elif detected_type == "MASTERCARD_GALICIA":
-                success, info = parser_mastercard_galicia.procesar_archivo(filepath, force_reprocess=True)
+                success, info = lector_mastercard_galicia.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
             elif detected_type == "TARJETA_NARANJA":
-                success, info = parser_naranja_pdf.procesar_archivo(filepath, force_reprocess=True)
+                success, info = lector_naranja_pdf.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
             elif detected_type == "PATAGONIA365_PDF":
-                success, info = parser_patagonia_pdf.procesar_archivo(filepath, force_reprocess=True)
+                success, info = lector_patagonia_pdf.procesar_archivo(filepath, force_reprocess=True)
                 if success:
                     procesados += 1
         except Exception as e:
