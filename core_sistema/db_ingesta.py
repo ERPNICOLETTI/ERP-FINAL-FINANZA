@@ -45,6 +45,39 @@ def initialize_all():
             fecha_proceso   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # 4. Tabla de Staging Raw Unificada
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS core_staging_raw (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_archivo  TEXT NOT NULL,
+            hash_sha256     TEXT UNIQUE NOT NULL,
+            modulo          TEXT NOT NULL,
+            tipo_fuente     TEXT NOT NULL,
+            formato_raw     TEXT NOT NULL,
+            parser_version  TEXT NOT NULL,
+            contenido_raw   TEXT NOT NULL,
+            filas_leidas    INTEGER DEFAULT 0,
+            fecha_ingesta   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_procesado TIMESTAMP,
+            estado          TEXT DEFAULT 'PENDIENTE',
+            mensaje_error   TEXT
+        )
+    ''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_staging_modulo_estado ON core_staging_raw(modulo, estado)')
+    
+    # 5. Tabla de Auditoría Histórica de Intentos de Procesamiento
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS core_staging_logs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            staging_id      INTEGER DEFAULT NULL,
+            fecha_intento   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resultado       TEXT NOT NULL,
+            detalles        TEXT,
+            FOREIGN KEY(staging_id) REFERENCES core_staging_raw(id) ON DELETE SET NULL
+        )
+    ''');
+    
     conn.commit()
     conn.close()
 

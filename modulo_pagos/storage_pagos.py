@@ -50,9 +50,25 @@ def init_db_pagos_vencimientos():
             hash_boleta         TEXT,
             codigo_barras       TEXT,
             meta_json           TEXT DEFAULT '{}',
+            raw_ingesta_id      INTEGER DEFAULT NULL,
+            numero_linea        INTEGER DEFAULT NULL,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Migración dinámica para bases de datos existentes
+    try:
+        conn.execute("ALTER TABLE pagos_vencimientos ADD COLUMN raw_ingesta_id INTEGER DEFAULT NULL;")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE pagos_vencimientos ADD COLUMN numero_linea INTEGER DEFAULT NULL;")
+    except sqlite3.OperationalError:
+        pass
+        
+    # Crear índice para optimizar reprocesamiento
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pagos_raw_id ON pagos_vencimientos(raw_ingesta_id);")
+    
     conn.commit()
     conn.close()
 
@@ -71,11 +87,15 @@ def save_pago(data: dict):
         
         codigo_barras = data.get('codigo_barras')
         
+        # Escalar montos a centavos enteros
+        monto_cents = int(round(float(data.get('monto') or 0) * 100))
+        monto_2_cents = int(round(float(data.get('monto_2') or 0) * 100))
+        
         # 1. PRIORIDAD: Buscar por Código de Barras Único (Cruce Atómico v5.7)
         res = None
         if codigo_barras:
             cursor = conn.execute('''
-                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2 FROM pagos_vencimientos 
+                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2, fecha_vencimiento, fecha_vencimiento_2 FROM pagos_vencimientos 
                 WHERE codigo_barras = ?
             ''', (codigo_barras,))
             res = cursor.fetchone()
@@ -83,7 +103,7 @@ def save_pago(data: dict):
         # 2. SEGUNDA OPCIÓN: Buscar por Periodo (Fallback)
         if not res:
             cursor = conn.execute('''
-                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2 FROM pagos_vencimientos 
+                SELECT id, estado, path_boleta, path_comprobante, monto, monto_2, fecha_vencimiento, fecha_vencimiento_2 FROM pagos_vencimientos 
                 WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?
             ''', (concepto, periodo_mes, periodo_anio))
             res = cursor.fetchone()
@@ -98,14 +118,21 @@ def save_pago(data: dict):
                 return pago_id
             
             # SI EL REGISTRO EXISTE Y ESTÁ 'IMPAGO/VENCIDO' o 'PENDIENTE'
-            # 1. Reemplazar el archivo físico (esto se maneja pre-guardado borrando el viejo si es necesario, 
-            #    pero aquí actualizamos la ruta)
             final_boleta = p_boleta if p_boleta else res['path_boleta']
             final_compro = p_comprobante if p_comprobante else res['path_comprobante']
-            
-            # 3. Resetear el estado a 'PENDIENTE' 🔴 (Si se está subiendo una boleta nueva)
-            # Acotación: si final_compro existe, pasa a PAGADO.
             final_estado = 'PAGADO' if final_compro else 'PENDIENTE'
+            
+            # Si es un comprobante, no sobreescribir montos ni vencimientos
+            if p_comprobante:
+                final_monto = res['monto'] if res['monto'] else monto_cents
+                final_monto_2 = res['monto_2'] if res['monto_2'] else monto_2_cents
+                final_vto = res['fecha_vencimiento'] if res['fecha_vencimiento'] else data.get('fecha_vencimiento')
+                final_vto_2 = res['fecha_vencimiento_2'] if res['fecha_vencimiento_2'] else data.get('fecha_vencimiento_2')
+            else:
+                final_monto = monto_cents
+                final_monto_2 = monto_2_cents
+                final_vto = data.get('fecha_vencimiento')
+                final_vto_2 = data.get('fecha_vencimiento_2')
             
             conn.execute('''
                 UPDATE pagos_vencimientos SET 
@@ -119,13 +146,16 @@ def save_pago(data: dict):
                     hash_boleta = COALESCE(?, hash_boleta),
                     estado = ?,
                     codigo_barras = COALESCE(?, codigo_barras),
-                    meta_json = ?
+                    meta_json = ?,
+                    raw_ingesta_id = COALESCE(?, raw_ingesta_id),
+                    numero_linea = COALESCE(?, numero_linea)
                 WHERE id = ?
             ''', (
-                data.get('categoria'), data.get('monto'), data.get('fecha_vencimiento'),
-                data.get('monto_2'), data.get('fecha_vencimiento_2'),
+                data.get('categoria'), final_monto, final_vto,
+                final_monto_2, final_vto_2,
                 final_boleta, final_compro, data.get('hash_boleta'), final_estado,
-                codigo_barras, json.dumps(data.get('meta_json', {})), pago_id
+                codigo_barras, json.dumps(data.get('meta_json', {})),
+                data.get('raw_ingesta_id'), data.get('numero_linea'), pago_id
             ))
             conn.commit()
             logger.info(f"🔄 [PAGOS] Registro actualizado: {concepto} {periodo_mes}/{periodo_anio} -> {final_estado}")
@@ -137,14 +167,16 @@ def save_pago(data: dict):
                 INSERT INTO pagos_vencimientos (
                     categoria, concepto, periodo_mes, periodo_anio, monto, fecha_vencimiento,
                     monto_2, fecha_vencimiento_2,
-                    estado, path_boleta, path_comprobante, hash_boleta, codigo_barras, meta_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    estado, path_boleta, path_comprobante, hash_boleta, codigo_barras, meta_json,
+                    raw_ingesta_id, numero_linea
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 data.get('categoria', 'OTROS'), concepto, periodo_mes, periodo_anio,
-                data.get('monto', 0), data.get('fecha_vencimiento'),
-                data.get('monto_2', 0), data.get('fecha_vencimiento_2'),
+                monto_cents, data.get('fecha_vencimiento'),
+                monto_2_cents, data.get('fecha_vencimiento_2'),
                 estado_inicial, p_boleta, p_comprobante, data.get('hash_boleta'),
                 codigo_barras, json.dumps(data.get('meta_json', {})),
+                data.get('raw_ingesta_id'), data.get('numero_linea')
             ))
             conn.commit()
             logger.info(f"✅ [PAGOS] Nuevo registro creado: {concepto} {periodo_mes}/{periodo_anio} -> {estado_inicial}")
@@ -155,6 +187,14 @@ def save_pago(data: dict):
     finally:
         conn.close()
 
+def _convert_row_to_floats(row_dict):
+    """Convierte importes en centavos a flotantes decimales."""
+    if not row_dict: return None
+    res = dict(row_dict)
+    res['monto'] = float(res.get('monto') or 0) / 100.0
+    res['monto_2'] = float(res.get('monto_2') or 0) / 100.0
+    return res
+
 def find_pago_record(codigo_barras=None, concepto=None, mes=None, anio=None):
     """Busca un registro existente por barras o periodo."""
     conn = get_db_connection()
@@ -164,7 +204,7 @@ def find_pago_record(codigo_barras=None, concepto=None, mes=None, anio=None):
     if not res and concepto and mes and anio:
         res = conn.execute("SELECT * FROM pagos_vencimientos WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?", (concepto, mes, anio)).fetchone()
     conn.close()
-    return dict(res) if res else None
+    return _convert_row_to_floats(res)
 
 def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None):
     conn = get_db_connection()
@@ -188,7 +228,7 @@ def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, perio
     
     rows = conn.execute(query, params).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_convert_row_to_floats(r) for r in rows]
 
 if __name__ == "__main__":
     init_db_pagos_vencimientos()

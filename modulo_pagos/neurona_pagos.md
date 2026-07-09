@@ -6,16 +6,20 @@ Este módulo gestiona la digitalización de boletas de servicios, sindicatos e i
 ---
 
 ## 📂 Componentes del Módulo y Lectura de Código
-1.  **[storage_pagos.py](storage_pagos.py)**: Capa repositorio. Único archivo que realiza consultas SQL directas sobre la tabla `pagos`. Prohíbe el uso de `sqlite3` externo.
-2.  **[parser_pagos.py](parser_pagos.py)**: Motor de extracción de textos y patrones en PDFs. Identifica conceptos, periodos, montos y fechas de vencimiento.
-3.  **[logic_pagos.py](logic_pagos.py)**: Orquestador de flujo de entrada. Ingesta las boletas desde el `inbox_pagos`, las procesa y las archiva.
+1.  **[storage_pagos.py](storage_pagos.py)**: Capa repositorio. Único archivo que realiza consultas SQL directas sobre la tabla `pagos_vencimientos`. Prohíbe el uso de `sqlite3` externo. Realiza conversiones transparentes de centavos enteros a flotantes en lectura.
+2.  **[lectores/lector_pagos.py](lectores/lector_pagos.py)**: Orquestador y enrutador central de parseo. Identifica la firma del documento y deriva a los lectores específicos:
+    *   `lector_sec.py`: Parser para boletas y tickets del Sindicato Empleados de Comercio.
+    *   `lector_faecys.py`: Parser para la Federación Argentina de Empleados de Comercio.
+    *   `lector_inacap.py`: Parser de aportes obligatorios INACAP.
+    *   `lector_policia.py`: Parser de tasas de la Secretaría de Trabajo.
+3.  **[logic_pagos.py](logic_pagos.py)**: Implementa el pipeline de datos ELT en dos fases (Fase 1: Ingesta Raw a Staging y Archivado en Bóveda; Fase 2: Transformación Atómica a tablas de Producción).
 4.  **Vistas Web**:
     -   `pagos.html`: Panel principal con la tabla general y terminal de arrastre (Dropzone).
     -   `tabla_pagos.html`: Renderiza dinámicamente las filas de la tabla de vencimientos con un semáforo de prioridades (Rojo/Amarillo/Naranja/Verde).
 
 ---
 
-## 🏛️ Estructura de Datos (Tabla `pagos`)
+## 🏛️ Estructura de Datos (Tabla `pagos_vencimientos`)
 
 | Campo | Tipo | Descripción |
 |---|---|---|
@@ -24,15 +28,18 @@ Este módulo gestiona la digitalización de boletas de servicios, sindicatos e i
 | `concepto` | TEXT | Identificador único del servicio/sindicato (ej: SEC, FAECYS, SERVICOOP) |
 | `periodo_mes` | TEXT | Mes de la obligación (MM, ej: "01") |
 | `periodo_anio` | TEXT | Año de la obligación (YYYY, ej: "2026") |
-| `monto` | REAL | Importe primer vencimiento |
+| `monto` | INTEGER | Importe primer vencimiento (almacenado en **Centavos Enteros**) |
 | `fecha_vencimiento` | TEXT | Vencimiento 1 (ISO YYYY-MM-DD) |
-| `monto_2` | REAL | Importe segundo vencimiento (0.0 si no aplica) |
+| `monto_2` | INTEGER | Importe segundo vencimiento (almacenado en **Centavos Enteros**, 0 si no aplica) |
 | `fecha_vencimiento_2` | TEXT | Vencimiento 2 (ISO YYYY-MM-DD, NULL si no aplica) |
 | `estado` | TEXT | `PENDIENTE` (al ingestar boleta) | `PAGADO` (al vincular comprobante) |
 | `path_boleta` | TEXT | Ruta del PDF de la boleta (relativa, SASH-SAFE con `/`) |
 | `path_comprobante` | TEXT | Ruta del PDF de pago (relativa, SASH-SAFE con `/`, NULL si pendiente) |
 | `hash_boleta` | TEXT | Hash SHA-256 para evitar duplicaciones |
+| `codigo_barras` | TEXT | Código de barras para conciliación por barras |
 | `meta_json` | TEXT | JSON con textos planos y campos intermedios |
+| `raw_ingesta_id` | INTEGER | Linaje: Referencia al ID original en `core_staging_raw` |
+| `numero_linea` | INTEGER | Número de línea/transacción (1-indexed) dentro de la ingesta |
 
 ---
 

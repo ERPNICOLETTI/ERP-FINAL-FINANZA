@@ -1,129 +1,255 @@
 import os
 import re
+import json
+import shutil
+import hashlib
+import traceback
 import logging
-from modulo_pagos.storage_pagos import save_pago
+from datetime import datetime
+from core_sistema import conversores
 from core_sistema.archiver_service import archivar_documento
+from modulo_pagos.storage_pagos import get_db_connection, save_pago, find_pago_record
+from modulo_pagos.lectores.lector_pagos import procesar_pago
 
-# LOGIC PAGOS - v5.3.3 (Firmas Correctas + Multi-monto) 🚀🧠⚖️
+# LOGIC PAGOS - v6.0.0 (ELT Pipeline Unificado) 🚀🧠⚖️
 
 logger = logging.getLogger(__name__)
 
-# Taxonomía inline (fuente: pagos_recurrentes.md)
 TAXONOMIA = {
     'SINDICALES': ['SEC', 'FAECYS', 'INACAP', 'POLICIA', 'SINDICAL'],
     'IMPUESTOS':  ['IIBB', 'IVA', 'GANANCIAS', 'AFIP', 'ARBA', 'AUTONOMO', '931'],
     'SERVICIOS':  ['SERVICOOP', 'REDUNO', 'LUZ', 'GAS', 'AGUA', 'TELEFON', 'ALQUILER', 'TIENDANUBE'],
 }
 
-def _clasificar_por_nombre(filename):
-    """Clasificación de fallback por nombre de archivo."""
-    fname = filename.upper()
-    for categoria, conceptos in TAXONOMIA.items():
-        for concepto in conceptos:
-            if concepto in fname:
-                match = re.search(r'_(\d{2})-(\d{4})_', fname)
-                anio = match.group(2) if match else None
-                mes  = match.group(1) if match else None
-                return {
-                    'categoria': categoria, 'concepto': concepto,
-                    'anio': anio, 'mes': mes,
-                    'monto': 0, 'monto_2': 0,
-                    'fecha_vencimiento': None, 'fecha_vencimiento_2': None,
-                    'es_comprobante': False, 'meta_json': {}
-                }
-    return {
-        'categoria': 'OTROS', 'concepto': 'DESCONOCIDO',
-        'anio': None, 'mes': None,
-        'monto': 0, 'monto_2': 0,
-        'fecha_vencimiento': None, 'fecha_vencimiento_2': None,
-        'es_comprobante': False, 'meta_json': {}
-    }
+def calcular_hash_archivo(filepath):
+    """Calcula el hash SHA-256 de un archivo para control de duplicados."""
+    sha256 = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            sha256.update(data)
+    return sha256.hexdigest()
 
-
-def procesar_inbox_pagos(inbox_path):
+def ingestar_inbox_a_raw(inbox_path):
     """
-    Recibe el path del inbox directamente (desde erp_master o llamada directa).
-    Parsea PDFs, archiva en Bóveda y persiste en DB.
+    Fase 1: Ingesta Centralizada a Staging.
+    Verifica firma, tamaño, duplicados, convierte a Markdown e inserta en core_staging_raw.
+    Mueve el archivo original a la Bóveda de Crudos.
     """
     if not os.path.exists(inbox_path):
         os.makedirs(inbox_path, exist_ok=True)
-        return
+        return 0
 
-    archivos = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
+    no_reconocidos_dir = os.path.join(inbox_path, 'no_reconocidos')
+    os.makedirs(no_reconocidos_dir, exist_ok=True)
 
-    for f in archivos:
-        path_origen = os.path.join(inbox_path, f)
-
-        # 1. Parser Inteligente de PDF
-        info = None
-        if f.upper().endswith('.PDF'):
-            try:
-                from modulo_pagos.lectores.lector_pagos import procesar_pago
-                ok, data_pdf = procesar_pago(path_origen)
-                if ok and data_pdf.get('concepto') not in ['DESCONOCIDO', 'SINDICAL_GENERICO', None]:
-                    info = data_pdf
-                    # Mapeo de claves para compatibilidad interna
-                    info['anio'] = info.get('periodo_anio')
-                    info['mes']  = info.get('periodo_mes')
-                    # Detectar comprobante por nombre de archivo
-                    for kw in ['PAGO', 'COMPROBANTE', 'TICKET', 'RECIBO', 'TRANSFERENCIA']:
-                        if kw in f.upper():
-                            info['es_comprobante'] = True
-                            break
-            except Exception as e:
-                logger.warning(f"Parser PDF falló para {f}: {e}")
-
-        # 2. Fallback: clasificar por nombre
-        if not info:
-            info = _clasificar_por_nombre(f)
-
-        print(f"🔍 [PAGOS] {f} -> {info['categoria']} | {info['concepto']}")
-
-        anio = info.get('anio')
-        mes  = info.get('mes')
-        barras = info.get('codigo_barras')
-
-        # 2.5 RECOBRO DE PERIODO (v5.7) 🧬
-        # Si no hay periodo pero hay barras, intentamos buscar la boleta para saber el periodo
-        if (not anio or not mes) and barras:
-            from modulo_pagos.storage_pagos import find_pago_record
-            reco = find_pago_record(codigo_barras=barras)
-            if reco:
-                mes = reco['periodo_mes']
-                anio = reco['periodo_anio']
-                print(f"🧬 [PAGOS] Periodo {mes}/{anio} recuperado vía Código de Barras.")
-
-        if not anio or not mes:
-            print(f"⚠️ [PAGOS] Sin periodo para {f}, saltando.")
+    archivos_procesados = 0
+    # Escaneo recursivo del inbox
+    for root, dirs, files in os.walk(inbox_path):
+        # Evitar procesar recursivamente dentro de no_reconocidos
+        if 'no_reconocidos' in root:
             continue
-
-        # 3. Nombre canónico (Ley de Localía)
-        prefijo = "Comprobante" if info.get('es_comprobante') else "Boleta"
-        nombre_canonico = f"{prefijo}_{info['concepto']}_{mes}_{anio}.pdf"
-
-        # 4. Archivar en Bóveda
-        # archiver_service: archivar_documento(filepath_origen, modulo, anio, mes, entidad, subcategoria, forced_filename)
-        # Para PAGOS: entidad=concepto, subcategoria=categoria
-        try:
-            path_final = archivar_documento(
-                filepath_origen=path_origen,
-                modulo='pagos',
-                anio=anio,
-                mes=mes,
-                entidad=info['concepto'],
-                subcategoria=info['categoria'],
-                forced_filename=nombre_canonico
-            )
-
-            if not path_final:
-                print(f"⚠️ [PAGOS] Archivado retornó None para {f}")
+            
+        for f in files:
+            filepath_origen = os.path.join(root, f)
+            if not os.path.isfile(filepath_origen):
                 continue
 
-            # Relativizar path para DB (sin prefijo de disco)
-            base_dir = os.path.abspath('.')
-            path_relativo = os.path.relpath(path_final, base_dir).replace('\\', '/')
+            f_upper = f.upper()
+            print(f"\n📥 [PAGOS-ELT] Ingestando archivo físico: {f}")
 
-            # 5. Persistir en DB via storage_pagos
+            # 1. Validación de tamaño (0 bytes)
+            try:
+                size = os.path.getsize(filepath_origen)
+                if size == 0:
+                    print(f"⚠️ [PAGOS-ELT] Archivo vacío (0 bytes): {f}. Desviando a no_reconocidos.")
+                    shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
+                    continue
+            except Exception as e:
+                logger.error(f"Error al verificar tamaño del archivo {f}: {e}")
+                continue
+
+            # 2. Validación de tipo (Solo PDFs para pagos)
+            if not f_upper.endswith('.PDF'):
+                print(f"⚠️ [PAGOS-ELT] Formato no soportado: {f}. Desviando a no_reconocidos.")
+                import shutil
+                shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
+                continue
+
+            # 3. Control de Duplicados Temprano por Hash
+            file_hash = calcular_hash_archivo(filepath_origen)
+            conn = get_db_connection()
+            dup = conn.execute("SELECT id FROM core_staging_raw WHERE hash_sha256 = ?", (file_hash,)).fetchone()
+            if dup:
+                print(f"🚫 [PAGOS-ELT] Archivo duplicado detectado (Hash {file_hash[:10]}...). Eliminando del inbox.")
+                conn.close()
+                os.remove(filepath_origen)
+                continue
+
+            # 4. Conversión Temprana a Markdown
+            try:
+                markdown_text = conversores.convertir_pdf_a_markdown(filepath_origen)
+            except Exception as e:
+                print(f"❌ [PAGOS-ELT] Error convirtiendo PDF a Markdown: {e}. Desviando.")
+                conn.close()
+                import shutil
+                shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
+                continue
+
+            # 5. Validación Temprana de Firma (Filtro anti-basura)
+            text_upper = markdown_text.upper()
+            concepto_detectado = 'PAGOS_GENERICO'
+            categoria_detectada = 'OTROS'
+            
+            # Buscar coincidencia taxonómica
+            for cat, conceptos in TAXONOMIA.items():
+                for conc in conceptos:
+                    # Para siglas cortas (<= 4 letras), forzar límites de palabra para evitar sub-coincidencias
+                    if len(conc) <= 4:
+                        pattern = r'\b' + re.escape(conc) + r'\b'
+                        if re.search(pattern, text_upper) or re.search(pattern, f_upper):
+                            concepto_detectado = conc
+                            categoria_detectada = cat
+                            break
+                    else:
+                        if conc in text_upper or conc in f_upper:
+                            concepto_detectado = conc
+                            categoria_detectada = cat
+                            break
+                if concepto_detectado != 'PAGOS_GENERICO':
+                    break
+
+            if concepto_detectado == 'PAGOS_GENERICO':
+                print(f"⚠️ [PAGOS-ELT] Firma no reconocida en el contenido para: {f}. Desviando a no_reconocidos.")
+                conn.close()
+                import shutil
+                shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
+                continue
+
+            # 6. Extraer periodo tentativo para la Bóveda de Crudos
+            anio_tentativo = datetime.now().strftime("%Y")
+            mes_tentativo = datetime.now().strftime("%m")
+            # Buscar patrón MM-YYYY o YYYY-MM
+            patron_fecha = re.search(r'(\d{2})-(\d{4})|(\d{4})-(\d{2})', f)
+            if patron_fecha:
+                if patron_fecha.group(1):
+                    mes_tentativo, anio_tentativo = patron_fecha.group(1), patron_fecha.group(2)
+                else:
+                    anio_tentativo, mes_tentativo = patron_fecha.group(3), patron_fecha.group(4)
+            else:
+                # Buscar en texto
+                m = re.search(r'PER[IÍI]ODO[:\s]+(\d{2})/(\d{4})', text_upper)
+                if m:
+                    mes_tentativo, anio_tentativo = m.group(1), m.group(2)
+
+            # 7. Insertar en Staging (Estado PENDIENTE)
+            cursor = conn.execute('''
+                INSERT INTO core_staging_raw (
+                    nombre_archivo, hash_sha256, modulo, tipo_fuente, formato_raw, parser_version, contenido_raw, estado
+                ) VALUES (?, ?, 'pagos', ?, 'MD', '6.0.0', ?, 'PENDIENTE')
+            ''', (f, file_hash, concepto_detectado, markdown_text))
+            staging_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+
+            # 8. Nombre Canónico e Inyección en Bóveda de Crudos
+            prefijo = "Comprobante" if any(kw in f_upper for kw in ['PAGO', 'COMPROBANTE', 'TICKET', 'RECIBO', 'TRANSFERENCIA']) else "Boleta"
+            nombre_canonico = f"{prefijo}_{concepto_detectado}_{mes_tentativo}_{anio_tentativo}.pdf"
+
+            try:
+                path_final = archivar_documento(
+                    filepath_origen=filepath_origen,
+                    modulo='pagos',
+                    anio=anio_tentativo,
+                    mes=mes_tentativo,
+                    entidad=concepto_detectado,
+                    subcategoria=categoria_detectada,
+                    forced_filename=nombre_canonico
+                )
+                if path_final:
+                    print(f"✅ [PAGOS-ELT] Archivado en Bóveda: {os.path.basename(path_final)}")
+                    # Eliminar el archivo del inbox
+                    if os.path.exists(filepath_origen):
+                        os.remove(filepath_origen)
+                    archivos_procesados += 1
+            except Exception as e:
+                logger.error(f"Error al archivar archivo en Bóveda: {e}")
+
+    return archivos_procesados
+
+def transformar_raw_a_produccion():
+    """
+    Fase 2: Transformación Atómica.
+    Lee de core_staging_raw, parsea el texto, mapea importes a centavos y actualiza las tablas definitivas.
+    """
+    conn = get_db_connection()
+    registros_pendientes = conn.execute('''
+        SELECT id, nombre_archivo, tipo_fuente, contenido_raw 
+        FROM core_staging_raw 
+        WHERE modulo = 'pagos' AND estado = 'PENDIENTE'
+    ''').fetchall()
+    
+    if not registros_pendientes:
+        conn.close()
+        return 0
+
+    print(f"\n🔄 [PAGOS-ELT] Iniciando Fase 2 de Transformación para {len(registros_pendientes)} registros...")
+    procesados = 0
+
+    for reg in registros_pendientes:
+        staging_id = reg['id']
+        nombre_orig = reg['nombre_archivo']
+        concepto_detectado = reg['tipo_fuente']
+        contenido = reg['contenido_raw']
+
+        # Transacción atómica por archivo
+        db_transaction = get_db_connection()
+        try:
+            # 1. Ejecutar el parser sobre el texto Markdown/Raw de la DB
+            ok, info = procesar_pago(text_content=contenido)
+            if not ok or not info:
+                raise ValueError("El parser de pagos no pudo extraer información válida del contenido raw.")
+
+            # Detectar si es comprobante por nombre original de archivo
+            es_comprobante = False
+            for kw in ['PAGO', 'COMPROBANTE', 'TICKET', 'RECIBO', 'TRANSFERENCIA']:
+                if kw in nombre_orig.upper():
+                    es_comprobante = True
+                    break
+            info['es_comprobante'] = es_comprobante
+
+            # Validar periodo
+            mes = info.get('periodo_mes')
+            anio = info.get('periodo_anio')
+            barras = info.get('codigo_barras')
+
+            # Si no hay periodo pero hay barras, intentar recobrar periodo
+            if (not anio or not mes) and barras:
+                reco = db_transaction.execute('''
+                    SELECT periodo_mes, periodo_anio FROM pagos_vencimientos 
+                    WHERE codigo_barras = ? LIMIT 1
+                ''', (barras,)).fetchone()
+                if reco:
+                    mes = reco['periodo_mes']
+                    anio = reco['periodo_anio']
+
+            # Fallback de periodo por nombre del archivo
+            if not anio or not mes:
+                mf = re.search(r'_(\d{2})-(\d{4})_', nombre_orig.upper())
+                if mf:
+                    mes, anio = mf.group(1), mf.group(2)
+
+            if not anio or not mes:
+                raise ValueError(f"No se pudo determinar el período MM/YYYY para el archivo {nombre_orig}")
+
+            # Construir la ruta canónica relativa a la Bóveda para guardar en DB
+            prefijo = "Comprobante" if es_comprobante else "Boleta"
+            nombre_canonico = f"{prefijo}_{info['concepto']}_{mes}_{anio}.pdf"
+            path_relativo = f"modulo_pagos/archivos_pagos/{info['categoria']}/{info['concepto']}/{anio}/{mes}/{nombre_canonico}"
+
+            # Estructurar datos para persistencia
             data_sql = {
                 'concepto':           info['concepto'],
                 'categoria':          info['categoria'],
@@ -134,38 +260,177 @@ def procesar_inbox_pagos(inbox_path):
                 'monto_2':            info.get('monto_2') or 0,
                 'fecha_vencimiento_2':info.get('fecha_vencimiento_2'),
                 'meta_json':          info.get('meta_json', {}),
+                'codigo_barras':      barras,
+                'raw_ingesta_id':     staging_id,
+                'numero_linea':       1
             }
 
-            if info.get('es_comprobante'):
-                # --- CONCILIACIÓN DE DOBLE FACTOR (v5.7) 🧬 ---
-                from modulo_pagos.storage_pagos import find_pago_record
+            if es_comprobante:
+                monto_pagado = info.get('monto') or 0
                 
-                monto_pagado = info.get('monto') # El monto extraído del ticket
-                barras = info.get('codigo_barras')
-                
-                # Intentar encontrar la boleta correspondiente
-                boleta = find_pago_record(codigo_barras=barras, concepto=info['concepto'], mes=mes, anio=anio)
+                # Intentar buscar la boleta existente para conciliación
+                boleta = None
+                if barras:
+                    boleta = db_transaction.execute("SELECT id, monto, monto_2 FROM pagos_vencimientos WHERE codigo_barras = ?", (barras,)).fetchone()
+                if not boleta:
+                    boleta = db_transaction.execute("SELECT id, monto, monto_2 FROM pagos_vencimientos WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?", (info['concepto'], mes, anio)).fetchone()
                 
                 if boleta:
-                    # Validar Monto Exacto
-                    m1 = boleta.get('monto', 0)
-                    m2 = boleta.get('monto_2', 0)
+                    # NOTA: Los montos de la boleta ya están guardados en centavos (enteros) en la base de datos
+                    # Por lo tanto, multiplicamos el monto_pagado del comprobante por 100 para comparar manzanas con manzanas.
+                    monto_pagado_cents = int(round(monto_pagado * 100))
+                    m1 = boleta['monto']
+                    m2 = boleta['monto_2']
                     
-                    if abs(monto_pagado - m1) < 0.01 or (m2 and abs(monto_pagado - m2) < 0.01):
-                        print(f"✅ [PAGOS] Match Atómico Confirmado: Barras + Monto (${monto_pagado})")
+                    if abs(monto_pagado_cents - m1) < 100 or (m2 and abs(monto_pagado_cents - m2) < 100):
                         data_sql['path_comprobante'] = path_relativo
                     else:
-                        print(f"🚨 ALARMA [PAGOS] El código de barras coincide pero el monto NO. Boleta expects ${m1}/${m2}, Ticket says ${monto_pagado}. No se procesó.")
-                        continue # Salta este archivo (no se guarda el pago)
+                        raise ValueError(f"Discrepancia de monto en conciliación de pago. Boleta espera {m1/100.0}/{m2/100.0}, Comprobante dice {monto_pagado}")
                 else:
-                    # Si no hay boleta, lo guardamos como un pago huérfano (para reconstrucción 2025)
+                    # Pago huérfano
                     data_sql['path_comprobante'] = path_relativo
             else:
                 data_sql['path_boleta'] = path_relativo
 
-            save_pago(data_sql)
-            print(f"✅ [PAGOS] Legajo actualizado para {info['concepto']} {mes}/{anio}")
+            # Persistir en la tabla pagos_vencimientos (las columnas monto/monto_2 se guardan como centavos enteros)
+            # Pasamos la conexión activa para asegurar atomicidad
+            pago_id = save_pago_con_conexion(db_transaction, data_sql)
+            
+            if not pago_id:
+                raise RuntimeError("No se pudo insertar/actualizar el registro definitivo de pagos_vencimientos.")
+
+            # Actualizar Staging a PROCESADO
+            db_transaction.execute('''
+                UPDATE core_staging_raw 
+                SET estado = 'PROCESADO', fecha_procesado = CURRENT_TIMESTAMP, mensaje_error = NULL, filas_leidas = 1
+                WHERE id = ?
+            ''', (staging_id,))
+
+            # Escribir log de éxito
+            db_transaction.execute('''
+                INSERT INTO core_staging_logs (staging_id, resultado, detalles)
+                VALUES (?, 'SUCCESS', ?)
+            ''', (staging_id, f"Procesado exitosamente. Registro pagos_vencimientos ID: {pago_id}"))
+
+            db_transaction.commit()
+            print(f"✅ [PAGOS-ELT] Transformado: {info['concepto']} ({mes}/{anio})")
+            procesados += 1
 
         except Exception as e:
-            print(f"❌ ERROR [{f}]: {e}")
-            logger.error(f"Error procesando {f}: {e}", exc_info=True)
+            db_transaction.rollback()
+            err_msg = str(e)
+            trace = traceback.format_exc()
+            logger.warning(f"❌ [PAGOS-ELT] Error en transformación del staging ID {staging_id}: {err_msg}")
+            
+            # Escribir log de error en Staging (afuera de la transacción del registro pero actualizando el staging)
+            db_err = get_db_connection()
+            db_err.execute('''
+                UPDATE core_staging_raw 
+                SET estado = 'ERROR', mensaje_error = ?
+                WHERE id = ?
+            ''', (err_msg, staging_id))
+            db_err.execute('''
+                INSERT INTO core_staging_logs (staging_id, resultado, detalles)
+                VALUES (?, 'ERROR', ?)
+            ''', (staging_id, f"Error: {err_msg}\n{trace}"))
+            db_err.commit()
+            db_err.close()
+        finally:
+            db_transaction.close()
+
+    conn.close()
+    return procesados
+
+def save_pago_con_conexion(conn, data: dict):
+    """Auxiliar para guardar pagos usando una conexión transaccional activa."""
+    p_boleta = data.get('path_boleta')
+    p_comprobante = data.get('path_comprobante')
+    concepto = data.get('concepto')
+    periodo_mes = data.get('periodo_mes')
+    periodo_anio = data.get('periodo_anio')
+    codigo_barras = data.get('codigo_barras')
+    
+    # Escalar montos a centavos enteros
+    monto_cents = int(round(float(data.get('monto') or 0) * 100))
+    monto_2_cents = int(round(float(data.get('monto_2') or 0) * 100))
+    
+    res = None
+    if codigo_barras:
+        res = conn.execute('SELECT id, estado, path_boleta, path_comprobante, monto, monto_2, fecha_vencimiento, fecha_vencimiento_2 FROM pagos_vencimientos WHERE codigo_barras = ?', (codigo_barras,)).fetchone()
+    if not res:
+        res = conn.execute('SELECT id, estado, path_boleta, path_comprobante, monto, monto_2, fecha_vencimiento, fecha_vencimiento_2 FROM pagos_vencimientos WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?', (concepto, periodo_mes, periodo_anio)).fetchone()
+        
+    if res:
+        pago_id = res['id']
+        estado_actual = res['estado']
+        if estado_actual == 'PAGADO':
+            return pago_id
+            
+        final_boleta = p_boleta if p_boleta else res['path_boleta']
+        final_compro = p_comprobante if p_comprobante else res['path_comprobante']
+        final_estado = 'PAGADO' if final_compro else 'PENDIENTE'
+        
+        # Si es un comprobante, no sobreescribir montos ni vencimientos
+        if p_comprobante:
+            final_monto = res['monto'] if res['monto'] else monto_cents
+            final_monto_2 = res['monto_2'] if res['monto_2'] else monto_2_cents
+            final_vto = res['fecha_vencimiento'] if res['fecha_vencimiento'] else data.get('fecha_vencimiento')
+            final_vto_2 = res['fecha_vencimiento_2'] if res['fecha_vencimiento_2'] else data.get('fecha_vencimiento_2')
+        else:
+            final_monto = monto_cents
+            final_monto_2 = monto_2_cents
+            final_vto = data.get('fecha_vencimiento')
+            final_vto_2 = data.get('fecha_vencimiento_2')
+        
+        conn.execute('''
+            UPDATE pagos_vencimientos SET 
+                categoria = COALESCE(?, categoria),
+                monto = COALESCE(?, monto),
+                fecha_vencimiento = COALESCE(?, fecha_vencimiento),
+                monto_2 = COALESCE(?, monto_2),
+                fecha_vencimiento_2 = COALESCE(?, fecha_vencimiento_2),
+                path_boleta = ?,
+                path_comprobante = ?,
+                hash_boleta = COALESCE(?, hash_boleta),
+                estado = ?,
+                codigo_barras = COALESCE(?, codigo_barras),
+                meta_json = ?,
+                raw_ingesta_id = COALESCE(?, raw_ingesta_id),
+                numero_linea = COALESCE(?, numero_linea)
+            WHERE id = ?
+        ''', (
+            data.get('categoria'), final_monto, final_vto,
+            final_monto_2, final_vto_2,
+            final_boleta, final_compro, data.get('hash_boleta'), final_estado,
+            codigo_barras, json.dumps(data.get('meta_json', {})),
+            data.get('raw_ingesta_id'), data.get('numero_linea'), pago_id
+        ))
+        return pago_id
+    else:
+        estado_inicial = 'PAGADO' if p_comprobante else 'PENDIENTE'
+        cursor = conn.execute('''
+            INSERT INTO pagos_vencimientos (
+                categoria, concepto, periodo_mes, periodo_anio, monto, fecha_vencimiento,
+                monto_2, fecha_vencimiento_2,
+                estado, path_boleta, path_comprobante, hash_boleta, codigo_barras, meta_json,
+                raw_ingesta_id, numero_linea
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('categoria', 'OTROS'), concepto, periodo_mes, periodo_anio,
+            monto_cents, data.get('fecha_vencimiento'),
+            monto_2_cents, data.get('fecha_vencimiento_2'),
+            estado_inicial, p_boleta, p_comprobante, data.get('hash_boleta'),
+            codigo_barras, json.dumps(data.get('meta_json', {})),
+            data.get('raw_ingesta_id'), data.get('numero_linea')
+        ))
+        return cursor.lastrowid
+
+def procesar_inbox_pagos(inbox_path):
+    """Interface de compatibilidad con erp_master.py. Ejecuta Ingesta + Transformación."""
+    print("🚀 [PAGOS-ELT] Ejecutando Fase 1: Ingesta Raw a Staging...")
+    ingestados = ingestar_inbox_a_raw(inbox_path)
+    print(f"✅ [PAGOS-ELT] Ingesta finalizada. {ingestados} archivos procesados.")
+    
+    print("\n🚀 [PAGOS-ELT] Ejecutando Fase 2: Transformación Modular...")
+    transformados = transformar_raw_a_produccion()
+    print(f"✅ [PAGOS-ELT] Transformación finalizada. {transformados} registros actualizados.")
