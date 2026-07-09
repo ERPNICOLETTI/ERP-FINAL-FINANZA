@@ -38,6 +38,9 @@ Cualquier ingesta de datos del ERP debe contar con protección contra duplicaci�
 1.  **Capa Archivo:** El orquestador calcula el hash SHA-256 de los archivos procesados y los registra en `bancos_archivos_metadata` o `core_registro_ingestas` para rechazar duplicados exactos.
 2.  **Capa Fila:** Las tablas cuentan con restricciones `UNIQUE` multi-columna combinadas con cláusulas `INSERT OR IGNORE` en el repositorio para evitar filas duplicadas al re-procesar.
 
+### 🛡️ Modularidad y Refactorización Continua (Peak AI Performance)
+Para garantizar la precisión y evitar errores de contexto en los asistentes de IA, ningún archivo de código Python del ERP debe superar idealmente las **300-400 líneas**. En lugar de extender archivos existentes agregando más lógica o funciones, se debe priorizar la refactorización y la división del código en submódulos o clases utilitarias enfocadas.
+
 ---
 
 ## 🗄️ 3. Arquitectura de Base de Datos y Datos Híbridos
