@@ -23,20 +23,25 @@
     <td style="font-family:monospace; font-weight:bold; font-size:1.1rem">
         $ {{ "{:,.2f}".format(p.suggestedAmount|float) }}
     </td>
+
     <td>
-       <span class="badge" {{ ('style="' ~ badge_style ~ '"')|safe }}>{{ p.estado }}</span>
-    </td>
-    <td>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center; width:100%;">
             {% if p.path_boleta %}
-            <button class="pill" title="Ver Boleta" onclick="window.open('/archivos/pagos/' + '{{ p.path_boleta }}'.split('/').pop(), '_blank')">📄</button>
+            <button class="pill" title="Ver Boleta" onclick="window.open('/archivos/pagos/' + '{{ p.path_boleta }}'.replace('modulo_pagos/archivos_pagos/', ''), '_blank')">📄</button>
             {% endif %}
             {% if p.path_comprobante %}
-            <button class="pill completed" title="Ver Comprobante" onclick="window.open('/archivos/pagos/' + '{{ p.path_comprobante }}'.split('/').pop(), '_blank')">💵</button>
+            <button class="pill completed" title="Ver Comprobante" onclick="window.open('/archivos/pagos/' + '{{ p.path_comprobante }}'.replace('modulo_pagos/archivos_pagos/', ''), '_blank')">💵</button>
             {% endif %}
             {% if p.estado == 'PENDIENTE' %}
-            <button class="pill" title="Cargar Pago" onclick="alert('Función de vinculación rápida HTMX próximamente')">📤</button>
+            <button class="pill" title="Cargar Comprobante" onclick="document.getElementById('receipt-upload-{{ p.id }}').click()">📤</button>
+            <input type="file" id="receipt-upload-{{ p.id }}" style="display:none" onchange="pagosApp.uploadReceipt('{{ p.id }}', this.files)">
             {% endif %}
+            <button class="pill" title="Eliminar Pago" 
+                    hx-delete="/api/pagos/{{ p.id }}" 
+                    hx-target="closest tr" 
+                    hx-swap="outerHTML swap:0.5s" 
+                    onclick="let confirmation = prompt('Para confirmar la eliminación, escriba BORRAR en mayúsculas:'); if (confirmation !== 'BORRAR') { if (confirmation !== null) { alert('Confirmación incorrecta. Debe escribir BORRAR en mayúsculas para eliminar.'); } event.preventDefault(); event.stopImmediatePropagation(); return false; }"
+                    style="margin-left: auto; color: var(--danger); border-color: rgba(207, 34, 46, 0.15); background: transparent;">❌</button>
         </div>
     </td>
 </tr>

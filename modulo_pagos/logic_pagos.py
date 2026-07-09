@@ -98,28 +98,32 @@ def ingestar_inbox_a_raw(inbox_path):
                 shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
                 continue
 
-            # 5. Validación Temprana de Firma (Filtro anti-basura)
+            # 5. Validación Temprana de Firma (Uso de procesar_pago para alineación de carpetas)
             text_upper = markdown_text.upper()
             concepto_detectado = 'PAGOS_GENERICO'
             categoria_detectada = 'OTROS'
             
-            # Buscar coincidencia taxonómica
-            for cat, conceptos in TAXONOMIA.items():
-                for conc in conceptos:
-                    # Para siglas cortas (<= 4 letras), forzar límites de palabra para evitar sub-coincidencias
-                    if len(conc) <= 4:
-                        pattern = r'\b' + re.escape(conc) + r'\b'
-                        if re.search(pattern, text_upper) or re.search(pattern, f_upper):
-                            concepto_detectado = conc
-                            categoria_detectada = cat
-                            break
-                    else:
-                        if conc in text_upper or conc in f_upper:
-                            concepto_detectado = conc
-                            categoria_detectada = cat
-                            break
-                if concepto_detectado != 'PAGOS_GENERICO':
-                    break
+            ok_parse, parsed_info = procesar_pago(text_content=markdown_text)
+            if ok_parse and parsed_info and parsed_info.get('concepto') not in ['DESCONOCIDO', 'SINDICAL_GENERICO']:
+                concepto_detectado = parsed_info['concepto']
+                categoria_detectada = parsed_info['categoria']
+            else:
+                # Fallback taxonomía si el parser no da coincidencia exacta
+                for cat, conceptos in TAXONOMIA.items():
+                    for conc in conceptos:
+                        if len(conc) <= 4:
+                            pattern = r'\b' + re.escape(conc) + r'\b'
+                            if re.search(pattern, text_upper) or re.search(pattern, f_upper):
+                                concepto_detectado = conc
+                                categoria_detectada = cat
+                                break
+                        else:
+                            if conc in text_upper or conc in f_upper:
+                                concepto_detectado = conc
+                                categoria_detectada = cat
+                                break
+                    if concepto_detectado != 'PAGOS_GENERICO':
+                        break
 
             if concepto_detectado == 'PAGOS_GENERICO':
                 print(f"⚠️ [PAGOS-ELT] Firma no reconocida en el contenido para: {f}. Desviando a no_reconocidos.")
@@ -129,20 +133,21 @@ def ingestar_inbox_a_raw(inbox_path):
                 continue
 
             # 6. Extraer periodo tentativo para la Bóveda de Crudos
-            anio_tentativo = datetime.now().strftime("%Y")
-            mes_tentativo = datetime.now().strftime("%m")
-            # Buscar patrón MM-YYYY o YYYY-MM
-            patron_fecha = re.search(r'(\d{2})-(\d{4})|(\d{4})-(\d{2})', f)
-            if patron_fecha:
-                if patron_fecha.group(1):
-                    mes_tentativo, anio_tentativo = patron_fecha.group(1), patron_fecha.group(2)
+            anio_tentativo = parsed_info.get('periodo_anio') if (ok_parse and parsed_info and parsed_info.get('periodo_anio')) else datetime.now().strftime("%Y")
+            mes_tentativo = parsed_info.get('periodo_mes') if (ok_parse and parsed_info and parsed_info.get('periodo_mes')) else datetime.now().strftime("%m")
+            
+            if not parsed_info.get('periodo_mes') or not parsed_info.get('periodo_anio'):
+                # Fallback por nombre de archivo si el parser no encontró periodo
+                patron_fecha = re.search(r'(\d{2})-(\d{4})|(\d{4})-(\d{2})', f)
+                if patron_fecha:
+                    if patron_fecha.group(1):
+                        mes_tentativo, anio_tentativo = patron_fecha.group(1), patron_fecha.group(2)
+                    else:
+                        anio_tentativo, mes_tentativo = patron_fecha.group(3), patron_fecha.group(4)
                 else:
-                    anio_tentativo, mes_tentativo = patron_fecha.group(3), patron_fecha.group(4)
-            else:
-                # Buscar en texto
-                m = re.search(r'PER[IÍI]ODO[:\s]+(\d{2})/(\d{4})', text_upper)
-                if m:
-                    mes_tentativo, anio_tentativo = m.group(1), m.group(2)
+                    m = re.search(r'PER[IÍI]ODO[:\s]+(\d{2})/(\d{4})', text_upper)
+                    if m:
+                        mes_tentativo, anio_tentativo = m.group(1), m.group(2)
 
             # 7. Insertar en Staging (Estado PENDIENTE)
             cursor = conn.execute('''

@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Nicoletti - Pagos y Vencimientos v5.5</title>
-    <link rel="stylesheet" href="style.css?v=6.0.0">
+    <link rel="stylesheet" href="style_core.css?v=6.0.0">
+    <link rel="stylesheet" href="style_pagos.css?v=6.0.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -21,55 +22,64 @@
                 <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
                 <button class="btn-sync" onclick="document.getElementById('file-upload').click()">📁 Cargar Pagos</button>
                 <input type="file" id="file-upload" multiple style="display:none" onchange="pagosApp.uploadFiles(this.files)">
-                <button class="btn-sync" onclick="pagosApp.fetchPagos()">🔄 Sincronizar</button>
             </div>
         </header>
 
         <main class="ecosystem-layout">
-            <section class="boveda-panel" style="width:100%; max-width: 1400px; margin:0 auto;">
+            <section class="boveda-panel-full">
                 
-                <div class="boveda-header">
-                    <div class="search-pro">
-                        <input type="text" id="pro-search" name="q" placeholder="🔍 Buscar concepto o sindicato (ej: SEC)...">
-                    </div>
-                    
-                    <input type="hidden" id="filter-estado" name="estado" class="filter-input" value="">
-                    
-                    <input type="hidden" id="filter-anio" class="filter-input" name="periodo_anio" value="2026">
-                    <input type="hidden" id="filter-mes" class="filter-input" name="periodo_mes" value="">
-                    
-                    <div class="cron-filters">
-                        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15); margin-right: 1rem;">
-                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Año:</span>
-                            <button type="button" id="btn-anio-2026" onclick="setPagosYear('2026')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">2026</button>
-                            <button type="button" id="btn-anio-2025" onclick="setPagosYear('2025')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">2025</button>
+                <input type="hidden" id="filter-estado" name="estado" class="filter-input" value="">
+                <input type="hidden" id="filter-anio" class="filter-input" name="periodo_anio" value="2026">
+                <input type="hidden" id="filter-mes" class="filter-input" name="periodo_mes" value="">
+
+                <!-- Panel de Control y Filtros Consolidado (Modern UI) -->
+                <div class="filter-dashboard glass" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); backdrop-filter: blur(8px);">
+                    <!-- Fila Superior: Búsqueda y Categorías -->
+                    <div style="display: flex; gap: 15px; align-items: center; width: 100%; flex-wrap: wrap;">
+                        <div class="search-pro" style="flex: 2; min-width: 280px; margin: 0;">
+                            <input type="text" id="pro-search" name="q" placeholder="🔍 Buscar concepto o sindicato (ej: SEC)..." style="width: 100%; padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 1rem; outline: none; box-shadow: none;">
                         </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <select id="filter-categoria" class="filter-input" name="categoria" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 0.95rem; background: #fff; cursor: pointer; outline: none; height: 46px;">
+                                <option value="">Todas las Categorías</option>
+                                <option value="SINDICALES">SINDICALES</option>
+                                <option value="SERVICIOS">SERVICIOS</option>
+                                <option value="IMPUESTOS">IMPUESTOS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Fila Inferior: Año, Meses y Estados agrupados en bloques limpios -->
+                    <div style="display: flex; gap: 15px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 15px; width: 100%;">
                         
-                        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15); margin-right: 1rem;">
-                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Mes:</span>
-                            <button type="button" id="btn-mes-all" onclick="setPagosMonth('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Todos</button>
-                            <button type="button" id="btn-mes-01" onclick="setPagosMonth('01')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Ene</button>
-                            <button type="button" id="btn-mes-02" onclick="setPagosMonth('02')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Feb</button>
-                            <button type="button" id="btn-mes-03" onclick="setPagosMonth('03')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Mar</button>
-                            <button type="button" id="btn-mes-04" onclick="setPagosMonth('04')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Abr</button>
-                            <button type="button" id="btn-mes-05" onclick="setPagosMonth('05')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">May</button>
-                            <button type="button" id="btn-mes-06" onclick="setPagosMonth('06')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Jun</button>
+                        <!-- Bloque Período (Año y Mes) -->
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <!-- Selector Año -->
+                            <div style="display: inline-flex; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); gap: 2px;">
+                                <button type="button" id="btn-anio-2026" onclick="setPagosYear('2026')" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: var(--accent-color); color: #fff; cursor: pointer; transition: 0.2s;">2026</button>
+                                <button type="button" id="btn-anio-2025" onclick="setPagosYear('2025')" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s;">2025</button>
+                            </div>
+
+                            <!-- Selector Mes -->
+                            <div style="display: inline-flex; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); gap: 2px;">
+                                <button type="button" id="btn-mes-all" onclick="setPagosMonth('')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: var(--accent-color); color: #fff; cursor: pointer;">Todos</button>
+                                <button type="button" id="btn-mes-01" onclick="setPagosMonth('01')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Ene</button>
+                                <button type="button" id="btn-mes-02" onclick="setPagosMonth('02')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Feb</button>
+                                <button type="button" id="btn-mes-03" onclick="setPagosMonth('03')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Mar</button>
+                                <button type="button" id="btn-mes-04" onclick="setPagosMonth('04')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Abr</button>
+                                <button type="button" id="btn-mes-05" onclick="setPagosMonth('05')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">May</button>
+                                <button type="button" id="btn-mes-06" onclick="setPagosMonth('06')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Jun</button>
+                            </div>
                         </div>
 
-                        <select id="filter-categoria" class="filter-input" name="categoria">
-                            <option value="">Todas las Categorías</option>
-                            <option value="SINDICALES">SINDICALES</option>
-                            <option value="SERVICIOS">SERVICIOS</option>
-                            <option value="IMPUESTOS">IMPUESTOS</option>
-                        </select>
-                    </div>
-                </div>
+                        <!-- Bloque Estados (Pills) -->
+                        <div class="status-pills" style="display: flex; gap: 4px; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08);">
+                            <button type="button" class="pill active" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todos</button>
+                            <button type="button" class="pill pending" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--danger); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PENDIENTE'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pendientes 🔴</button>
+                            <button type="button" class="pill completed" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--success); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PAGADO'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pagados 🟢</button>
+                        </div>
 
-                <div class="status-pills">
-                    <!-- Script simple inline para manejar las pastillas activas y establecer el estado -->
-                    <button class="pill active" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todos</button>
-                    <button class="pill pending" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PENDIENTE'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pendientes 🔴</button>
-                    <button class="pill completed" onclick="document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PAGADO'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pagados 🟢</button>
+                    </div>
                 </div>
 
                 <div class="table-container-final glass">
@@ -81,7 +91,6 @@
                                 <th>Periodo</th>
                                 <th>Vencimiento(s)</th>
                                 <th>Monto sugerido</th>
-                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -139,6 +148,85 @@
                 // Trigger change event to fire HTMX
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             }
+
+            const pagosApp = {
+                async uploadFiles(files) {
+                    if (files.length === 0) return;
+                    
+                    const syncBtn = document.querySelector('.btn-sync[onclick*="file-upload"]');
+                    const originalText = syncBtn.innerHTML;
+                    syncBtn.innerHTML = "⏳ Subiendo...";
+                    syncBtn.disabled = true;
+
+                    try {
+                        for (let file of files) {
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            
+                            const response = await fetch("/api/upload/pagos", {
+                                method: "POST",
+                                body: formData
+                            });
+                            
+                            const resData = await response.json();
+                            if (resData.status !== "success") {
+                                throw new Error(resData.message || "Error al subir archivo");
+                            }
+                        }
+                        
+                        // Sincronización automática inmediata tras subir
+                        syncBtn.innerHTML = "⚡ Procesando...";
+                        await this.fetchPagos();
+                        
+                    } catch (e) {
+                        alert("❌ Error: " + e.message);
+                    } finally {
+                        syncBtn.innerHTML = originalText;
+                        syncBtn.disabled = false;
+                        document.getElementById('file-upload').value = '';
+                    }
+                },
+
+                async fetchPagos() {
+                    try {
+                        const response = await fetch("/api/process", {
+                            method: "POST"
+                        });
+                        const resData = await response.json();
+                        if (resData.status === "success") {
+                            document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'));
+                        } else {
+                            alert("❌ Error en sincronización: " + resData.message);
+                        }
+                    } catch(e) {
+                        alert("❌ Error de red: " + e.message);
+                    }
+                },
+
+                async uploadReceipt(pagoId, files) {
+                    if (files.length === 0) return;
+                    
+                    const formData = new FormData();
+                    formData.append("file", files[0]);
+                    
+                    try {
+                        const response = await fetch(`/api/pagos/${pagoId}/comprobante`, {
+                            method: "POST",
+                            body: formData
+                        });
+                        
+                        const resData = await response.json();
+                        if (resData.status === "success") {
+                            document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'));
+                        } else {
+                            alert("❌ Error al subir comprobante: " + resData.message);
+                        }
+                    } catch (e) {
+                        alert("❌ Error: " + e.message);
+                    }
+                }
+            };
         </script>
+    </div>
 </body>
 </html>
