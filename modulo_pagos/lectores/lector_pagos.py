@@ -28,6 +28,17 @@ def procesar_pago(filepath=None, text_content=None):
     try:
         if text_content:
             full_text = text_content
+        elif filepath and any(filepath.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png']):
+            import pytesseract
+            from PIL import Image
+            
+            # Configuración de Tesseract local de seguridad
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+            tessdata_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'core_sistema', 'tessdata'))
+            os.environ['TESSDATA_PREFIX'] = tessdata_dir
+            
+            img = Image.open(filepath)
+            full_text = pytesseract.image_to_string(img, lang='spa+eng')
         else:
             import pdfplumber
             with pdfplumber.open(filepath) as pdf:
@@ -65,6 +76,11 @@ def procesar_pago(filepath=None, text_content=None):
             info['concepto'] = 'POLICIA'
             from modulo_pagos.lectores.lector_policia import procesar as run_policia
             run_policia(TU, info)
+        elif "FORMULARIO F.931" in TU or "F931" in TU or "OBLIGACION MENSUAL/ANUAL" in TU:
+            info['concepto'] = '931'
+            info['categoria'] = 'IMPUESTOS'
+            from modulo_pagos.lectores.lector_afip_931 import procesar as run_afip_931
+            run_afip_931(TU, info)
         elif "SERVICOOP" in TU:
             info['concepto']  = 'SERVICOOP'
             info['categoria'] = 'SERVICIOS'

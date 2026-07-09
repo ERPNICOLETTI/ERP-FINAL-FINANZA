@@ -206,7 +206,7 @@ def find_pago_record(codigo_barras=None, concepto=None, mes=None, anio=None):
     conn.close()
     return _convert_row_to_floats(res)
 
-def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None):
+def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, periodo_mes=None, entidad=None):
     conn = get_db_connection()
     query = "SELECT * FROM pagos_vencimientos WHERE 1=1"
     params = []
@@ -223,6 +223,9 @@ def get_pagos_vencimientos(estado=None, categoria=None, periodo_anio=None, perio
     if periodo_mes:
         query += " AND periodo_mes = ?"
         params.append(periodo_mes)
+    if entidad:
+        query += " AND entidad = ?"
+        params.append(entidad)
         
     query += " ORDER BY fecha_vencimiento ASC"
     

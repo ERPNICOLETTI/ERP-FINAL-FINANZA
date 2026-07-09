@@ -40,6 +40,31 @@ def procesar(TU, info):
         info['fecha_vencimiento_2'] = _iso(patron_b2.group(1))
         info['monto_2']             = _parse_monto(patron_b2.group(2))
 
+    # Fallback si las fechas y montos están en líneas separadas (ej: extracción de pypdf)
+    if not info.get('monto'):
+        m_f1 = re.search(r'FECHA\s+PRIMER\s+VTO\.?\s*:?\s*(\d{2}/\d{2}/\d{4})', TU)
+        if m_f1:
+            info['fecha_vencimiento'] = _iso(m_f1.group(1))
+            
+        m_f2 = re.search(r'FECHA\s+SEGUNDO\s+VTO\.?\s*:?\s*(\d{2}/\d{2}/\d{4})', TU)
+        if m_f2:
+            info['fecha_vencimiento_2'] = _iso(m_f2.group(1))
+
+        # Intentar extraer monto 1 desde 'TOTAL APORTE DEL 0.5%'
+        m_m1 = re.search(r'TOTAL\s+APORTE\s+DEL\s+0\.5%\s*\n*\s*\$?\s*([\d\.]+,\d{2})', TU)
+        if m_m1:
+            info['monto'] = _parse_monto(m_m1.group(1))
+
+        # Intentar extraer el par de montos de vencimiento (Monto 1 y Monto 2)
+        pares = re.findall(r'\$?\s*([\d\.]+,\d{2})\s*\n+\s*\$?\s*([\d\.]+,\d{2})', TU)
+        if pares:
+            for p in pares:
+                val1 = _parse_monto(p[0])
+                val2 = _parse_monto(p[1])
+                if val1 and val2 and val2 > val1:
+                    info['monto'] = val1
+                    info['monto_2'] = val2
+
     # 3. Formato Comprobante
     if not info['monto']:
         pat_ticket = re.search(r'(?:TOTAL PAGADO|TOTAL DEPOSITADO|VALOR DE LA FACTURA)\s*\$?\s*([\d\.]+,\d{2})', TU)

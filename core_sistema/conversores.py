@@ -45,6 +45,21 @@ def convertir_pdf_a_markdown(filepath):
             if text:
                 markdown_content.append(text)
                 
+    # Extraer texto limpio usando pypdf como resguardo para PDFs con capas superpuestas (evita scrambling)
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(filepath)
+        pypdf_text = []
+        for page_idx, page in enumerate(reader.pages):
+            t = page.extract_text()
+            if t:
+                pypdf_text.append(f"\n## Texto Limpio (Página {page_idx + 1})\n")
+                pypdf_text.append(t)
+        if pypdf_text:
+            markdown_content.append("\n" + "\n".join(pypdf_text))
+    except Exception as e:
+        pass
+                
     return "\n".join(markdown_content)
 
 

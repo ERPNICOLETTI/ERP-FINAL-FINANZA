@@ -15,9 +15,9 @@ WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 master = ERPMaster(WORKSPACE)
 
 @router.get("/api/pagos")
-async def list_pagos(request: Request, estado: str = None, categoria: str = None, periodo_anio: str = None, periodo_mes: str = None, q: str = None):
+async def list_pagos(request: Request, estado: str = None, categoria: str = None, periodo_anio: str = None, periodo_mes: str = None, q: str = None, entidad: str = None):
     """Listar todos los vencimientos y pagos devolviendo fragmentos HTML para HTMX."""
-    pagos_db = pagos_storage.get_pagos_vencimientos(estado=estado, categoria=categoria, periodo_anio=periodo_anio, periodo_mes=periodo_mes)
+    pagos_db = pagos_storage.get_pagos_vencimientos(estado=estado, categoria=categoria, periodo_anio=periodo_anio, periodo_mes=periodo_mes, entidad=entidad)
     
     hoy = datetime.now().strftime("%Y-%m-%d")
     procesados = []
@@ -129,6 +129,12 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
     """Asociar un comprobante físico a un vencimiento y marcarlo como PAGADO, validando coincidencia de datos."""
     temp_path = None
     try:
+        # Validar extensión de archivo (PDF e Imágenes)
+        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in allowed_extensions:
+            return {"status": "error", "message": "Solo se admiten comprobantes en formato PDF, JPG o PNG para la validación de seguridad."}
+
         conn = pagos_storage.get_db_connection()
         pago = conn.execute("SELECT * FROM pagos_vencimientos WHERE id = ?", (pago_id,)).fetchone()
         if not pago:
@@ -212,17 +218,29 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
                     clean_text = text_content.replace('.', '').replace(' ', '')
                     monto_clean_1 = f"{monto_esperado_1 / 100:.2f}".replace('.', '').replace(',','') # Ej: 2583080
                     
+                    # Fallback de parte entera para tolerar errores de OCR en centavos (ej: ",35" leído como "%")
+                    int_1 = str(int(monto_esperado_1 / 100)) # Ej: 16094
+                    int_1_dots = f"{int(monto_esperado_1 / 100):,}".replace(',', '.') # Ej: 16.094
+                    
                     has_amount = (monto_str_1a in text_content or 
                                   monto_str_1b in text_content or 
-                                  monto_clean_1 in clean_text)
+                                  monto_clean_1 in clean_text or
+                                  int_1 in clean_text or
+                                  int_1_dots in text_content)
                     
                     if monto_esperado_2:
                         monto_str_2a = f"{monto_esperado_2 / 100:.2f}".replace('.', ',')
                         monto_str_2b = f"{monto_esperado_2 / 100:.2f}"
                         monto_clean_2 = f"{monto_esperado_2 / 100:.2f}".replace('.', '').replace(',','')
+                        
+                        int_2 = str(int(monto_esperado_2 / 100)) # Ej: 16241
+                        int_2_dots = f"{int(monto_esperado_2 / 100):,}".replace(',', '.') # Ej: 16.241
+                        
                         has_amount = has_amount or (monto_str_2a in text_content or 
                                                      monto_str_2b in text_content or 
-                                                     monto_clean_2 in clean_text)
+                                                     monto_clean_2 in clean_text or
+                                                     int_2 in clean_text or
+                                                     int_2_dots in text_content)
                     
                     if not has_amount:
                         if os.path.exists(temp_path): os.remove(temp_path)

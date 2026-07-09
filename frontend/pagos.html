@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Nicoletti - Pagos y Vencimientos v5.5</title>
     <link rel="stylesheet" href="style_core.css?v=6.0.0">
-    <link rel="stylesheet" href="style_pagos.css?v=6.0.0">
+    <link rel="stylesheet" href="style_pagos.css?v=6.0.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -31,6 +31,7 @@
                 <input type="hidden" id="filter-estado" name="estado" class="filter-input" value="">
                 <input type="hidden" id="filter-anio" class="filter-input" name="periodo_anio" value="2026">
                 <input type="hidden" id="filter-mes" class="filter-input" name="periodo_mes" value="">
+                <input type="hidden" id="filter-entidad" class="filter-input" name="entidad" value="">
 
                 <!-- Panel de Control y Filtros Consolidado (Modern UI) -->
                 <div class="filter-dashboard glass" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); backdrop-filter: blur(8px);">
@@ -49,7 +50,7 @@
                         </div>
                     </div>
 
-                    <!-- Fila Inferior: Año, Meses y Estados agrupados en bloques limpios -->
+                    <!-- Fila Inferior: Año, Meses, Estados y Entidades agrupados en bloques limpios -->
                     <div style="display: flex; gap: 15px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 15px; width: 100%;">
                         
                         <!-- Bloque Período (Año y Mes) -->
@@ -72,11 +73,23 @@
                             </div>
                         </div>
 
-                        <!-- Bloque Estados (Pills) -->
-                        <div class="status-pills" style="display: flex; gap: 4px; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08);">
-                            <button type="button" class="pill active" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todos</button>
-                            <button type="button" class="pill pending" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--danger); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PENDIENTE'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pendientes 🔴</button>
-                            <button type="button" class="pill completed" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--success); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PAGADO'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pagados 🟢</button>
+                        <!-- Bloque Estados y Entidades (Pills) -->
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <!-- Selector Estados -->
+                            <div class="status-pills" style="display: flex; gap: 4px; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08);">
+                                <button type="button" class="pill active" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todos</button>
+                                <button type="button" class="pill pending" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--danger); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PENDIENTE'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pendientes 🔴</button>
+                                <button type="button" class="pill completed" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: var(--success); background: transparent;" onclick="document.querySelectorAll('.status-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-estado').value='PAGADO'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Pagados 🟢</button>
+                            </div>
+                            
+                            <!-- Selector Entidades -->
+                            <div class="entity-pills" style="display: flex; gap: 4px; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); flex-wrap: wrap;">
+                                <button type="button" class="pill active" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s;" onclick="document.querySelectorAll('.entity-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-entidad').value=''; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">Todas</button>
+                                <button type="button" class="pill" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: #0d6efd; background: transparent;" onclick="document.querySelectorAll('.entity-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-entidad').value='LDK'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">LDK</button>
+                                <button type="button" class="pill" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: #820dfd; background: transparent;" onclick="document.querySelectorAll('.entity-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-entidad').value='JOA'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">JOA</button>
+                                <button type="button" class="pill" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: #e83e8c; background: transparent;" onclick="document.querySelectorAll('.entity-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-entidad').value='JOR'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">JOR</button>
+                                <button type="button" class="pill" style="border: none; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; color: #6c757d; background: transparent;" onclick="document.querySelectorAll('.entity-pills .pill').forEach(e=>e.classList.remove('active')); this.classList.add('active'); document.getElementById('filter-entidad').value='COMUN'; document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'))">COMUN</button>
+                            </div>
                         </div>
 
                     </div>

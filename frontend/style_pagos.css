@@ -113,8 +113,9 @@ tbody tr:hover {
     border: 1px solid var(--glass-border);
 }
 
-/* Pills activas de filtro de estados */
-.status-pills .pill.active {
+/* Pills activas de filtro de estados y entidades */
+.status-pills .pill.active,
+.entity-pills .pill.active {
     background: var(--accent-color) !important;
     color: #fff !important;
 }

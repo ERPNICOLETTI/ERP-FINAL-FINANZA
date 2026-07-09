@@ -71,8 +71,8 @@ def ingestar_inbox_a_raw(inbox_path):
                 logger.error(f"Error al verificar tamaño del archivo {f}: {e}")
                 continue
 
-            # 2. Validación de tipo (Solo PDFs para pagos)
-            if not f_upper.endswith('.PDF'):
+            # 2. Validación de tipo (PDF y ZIP para pagos)
+            if not f_upper.endswith('.PDF') and not f_upper.endswith('.ZIP'):
                 print(f"⚠️ [PAGOS-ELT] Formato no soportado: {f}. Desviando a no_reconocidos.")
                 import shutil
                 shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
@@ -88,11 +88,24 @@ def ingestar_inbox_a_raw(inbox_path):
                 os.remove(filepath_origen)
                 continue
 
-            # 4. Conversión Temprana a Markdown
+            # 4. Conversión Temprana a Markdown / Extracción de ZIP
+            markdown_text = ""
             try:
-                markdown_text = conversores.convertir_pdf_a_markdown(filepath_origen)
+                if f_upper.endswith('.ZIP'):
+                    import zipfile, io, pypdf
+                    with zipfile.ZipFile(filepath_origen, 'r') as z:
+                        for name in z.namelist():
+                            if name.upper().startswith('__MACOSX') or name.startswith('.'):
+                                continue
+                            data = z.read(name)
+                            pdf_file = io.BytesIO(data)
+                            reader = pypdf.PdfReader(pdf_file)
+                            pdf_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
+                            markdown_text += f"\n## ARCHIVO: {name}\n" + pdf_text + "\n"
+                else:
+                    markdown_text = conversores.convertir_pdf_a_markdown(filepath_origen)
             except Exception as e:
-                print(f"❌ [PAGOS-ELT] Error convirtiendo PDF a Markdown: {e}. Desviando.")
+                print(f"❌ [PAGOS-ELT] Error al extraer contenido de {f}: {e}. Desviando.")
                 conn.close()
                 import shutil
                 shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
@@ -161,7 +174,8 @@ def ingestar_inbox_a_raw(inbox_path):
 
             # 8. Nombre Canónico e Inyección en Bóveda de Crudos
             prefijo = "Comprobante" if any(kw in f_upper for kw in ['PAGO', 'COMPROBANTE', 'TICKET', 'RECIBO', 'TRANSFERENCIA']) else "Boleta"
-            nombre_canonico = f"{prefijo}_{concepto_detectado}_{mes_tentativo}_{anio_tentativo}.pdf"
+            ext = ".zip" if f_upper.endswith('.ZIP') else ".pdf"
+            nombre_canonico = f"{prefijo}_{concepto_detectado}_{mes_tentativo}_{anio_tentativo}{ext}"
 
             try:
                 path_final = archivar_documento(
@@ -251,13 +265,15 @@ def transformar_raw_a_produccion():
 
             # Construir la ruta canónica relativa a la Bóveda para guardar en DB
             prefijo = "Comprobante" if es_comprobante else "Boleta"
-            nombre_canonico = f"{prefijo}_{info['concepto']}_{mes}_{anio}.pdf"
+            ext = ".zip" if nombre_orig.upper().endswith('.ZIP') else ".pdf"
+            nombre_canonico = f"{prefijo}_{info['concepto']}_{mes}_{anio}{ext}"
             path_relativo = f"modulo_pagos/archivos_pagos/{info['categoria']}/{info['concepto']}/{anio}/{mes}/{nombre_canonico}"
 
             # Estructurar datos para persistencia
             data_sql = {
                 'concepto':           info['concepto'],
                 'categoria':          info['categoria'],
+                'entidad':            info.get('entidad', 'LDK'),
                 'periodo_mes':        mes,
                 'periodo_anio':       anio,
                 'monto':              info.get('monto') or 0,
@@ -390,6 +406,7 @@ def save_pago_con_conexion(conn, data: dict):
         conn.execute('''
             UPDATE pagos_vencimientos SET 
                 categoria = COALESCE(?, categoria),
+                entidad = COALESCE(?, entidad),
                 monto = COALESCE(?, monto),
                 fecha_vencimiento = COALESCE(?, fecha_vencimiento),
                 monto_2 = COALESCE(?, monto_2),
@@ -404,7 +421,7 @@ def save_pago_con_conexion(conn, data: dict):
                 numero_linea = COALESCE(?, numero_linea)
             WHERE id = ?
         ''', (
-            data.get('categoria'), final_monto, final_vto,
+            data.get('categoria'), data.get('entidad', 'LDK'), final_monto, final_vto,
             final_monto_2, final_vto_2,
             final_boleta, final_compro, data.get('hash_boleta'), final_estado,
             codigo_barras, json.dumps(data.get('meta_json', {})),
@@ -415,13 +432,13 @@ def save_pago_con_conexion(conn, data: dict):
         estado_inicial = 'PAGADO' if p_comprobante else 'PENDIENTE'
         cursor = conn.execute('''
             INSERT INTO pagos_vencimientos (
-                categoria, concepto, periodo_mes, periodo_anio, monto, fecha_vencimiento,
+                categoria, entidad, concepto, periodo_mes, periodo_anio, monto, fecha_vencimiento,
                 monto_2, fecha_vencimiento_2,
                 estado, path_boleta, path_comprobante, hash_boleta, codigo_barras, meta_json,
                 raw_ingesta_id, numero_linea
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            data.get('categoria', 'OTROS'), concepto, periodo_mes, periodo_anio,
+            data.get('categoria', 'OTROS'), data.get('entidad', 'LDK'), concepto, periodo_mes, periodo_anio,
             monto_cents, data.get('fecha_vencimiento'),
             monto_2_cents, data.get('fecha_vencimiento_2'),
             estado_inicial, p_boleta, p_comprobante, data.get('hash_boleta'),
