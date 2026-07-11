@@ -18,17 +18,37 @@ def procesar(TU, info):
     info['entidad'] = 'LDK'
     
     # 1. Extraer periodo
-    # Buscar formato MM/YYYY
-    m_per = re.search(r'(\d{2})/(\d{4})', TU)
-    if m_per:
-        info['periodo_mes'] = m_per.group(1)
-        info['periodo_anio'] = m_per.group(2)
+    # Buscar formato SIJPDJMM/YY o similar (común en VEPs de AFIP)
+    m_sij = re.search(r'SIJPDJ\s*(\d{2})/(\d{2})', TU)
+    if m_sij:
+        info['periodo_mes'] = m_sij.group(1)
+        info['periodo_anio'] = f"20{m_sij.group(2)}"
     else:
-        # Fallback formato YYYY-MM
-        m_per2 = re.search(r'PER[IÍI]ODO\s*:\s*(\d{4})-(\d{2})', TU)
-        if m_per2:
-            info['periodo_mes'] = m_per2.group(2)
-            info['periodo_anio'] = m_per2.group(1)
+        # Buscar formato MM/YYYY
+        m_per = re.search(r'(\d{2})/(\d{4})', TU)
+        if m_per:
+            info['periodo_mes'] = m_per.group(1)
+            info['periodo_anio'] = m_per.group(2)
+        else:
+            # Fallback formato YYYY-MM
+            m_per2 = re.search(r'PER[IÍI]ODO\s*:\s*(\d{4})-(\d{2})', TU)
+            if m_per2:
+                info['periodo_mes'] = m_per2.group(2)
+                info['periodo_anio'] = m_per2.group(1)
+
+    # 1.5 Fallback por Fecha de Pago (para VEPs Consolidados sin período en texto)
+    if not info.get('periodo_mes') or not info.get('periodo_anio'):
+        m_pay = re.search(r'FECHA DE PAGO\s*:\s*(\d{4})-(\d{2})-(\d{2})', TU)
+        if m_pay:
+            anio_pay = int(m_pay.group(1))
+            mes_pay = int(m_pay.group(2))
+            mes_dev = mes_pay - 1
+            anio_dev = anio_pay
+            if mes_dev == 0:
+                mes_dev = 12
+                anio_dev -= 1
+            info['periodo_mes'] = str(mes_dev).zfill(2)
+            info['periodo_anio'] = str(anio_dev)
 
     # 2. Extraer montos del bloque VIII
     sub_montos = {

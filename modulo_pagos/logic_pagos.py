@@ -97,6 +97,8 @@ def ingestar_inbox_a_raw(inbox_path):
                         for name in z.namelist():
                             if name.upper().startswith('__MACOSX') or name.startswith('.'):
                                 continue
+                            if not name.upper().endswith('.PDF'):
+                                continue
                             data = z.read(name)
                             pdf_file = io.BytesIO(data)
                             reader = pypdf.PdfReader(pdf_file)

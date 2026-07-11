@@ -188,12 +188,12 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
             if barcode_matched:
                 print(f"🔒 [PAGOS-VALIDACION] Match atómico por código de barras/pago detectado para ID {pago_id}. Aprobando comprobante.")
             else:
-                # --- VALIDACIÓN 1: PALABRAS CLAVE DE CONCEPTOS ---
                 concept_keywords = {
                     'SEC': ['SEC', 'COMERCIO'],
                     'FAECYS': ['FAECYS'],
                     'INACAP': ['INACAP'],
-                    'POLICIA': ['POLICIA', 'TRABAJO', 'TASAS']
+                    'POLICIA': ['POLICIA DEL TRABAJO', 'TASA RETRIBUTIVA'],
+                    '931': ['931', 'S.U.S.S.', 'AUTONOMOS', 'SICOSS']
                 }
                 
                 if text_content:
@@ -242,6 +242,9 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
                                                      int_2 in clean_text or
                                                      int_2_dots in text_content)
                     
+                    if concepto == '931':
+                        has_amount = True
+
                     if not has_amount:
                         if os.path.exists(temp_path): os.remove(temp_path)
                         val_esp_1 = f"${monto_esperado_1 / 100:,.2f}"
@@ -271,7 +274,10 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
                     diff_1 = abs(monto_cents - monto_esperado_1)
                     diff_2 = abs(monto_cents - monto_esperado_2) if monto_esperado_2 else 999999
                     
-                    if diff_1 > 500 and diff_2 > 500:
+                    if concepto == '931':
+                        # Toleramos diferencias por intereses resarcitorios/punitorios en F.931
+                        pass
+                    elif diff_1 > 500 and diff_2 > 500:
                         if os.path.exists(temp_path): os.remove(temp_path)
                         return {"status": "error", "message": f"El monto del comprobante (${monto_parsed:,.2f}) no coincide con los montos esperados de la boleta."}
 

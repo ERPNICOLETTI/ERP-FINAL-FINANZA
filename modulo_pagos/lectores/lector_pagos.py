@@ -76,7 +76,7 @@ def procesar_pago(filepath=None, text_content=None):
             info['concepto'] = 'POLICIA'
             from modulo_pagos.lectores.lector_policia import procesar as run_policia
             run_policia(TU, info)
-        elif "FORMULARIO F.931" in TU or "F931" in TU or "OBLIGACION MENSUAL/ANUAL" in TU:
+        elif "FORMULARIO F.931" in TU or "F931" in TU or "OBLIGACION MENSUAL/ANUAL" in TU or "(301)" in TU or "(351)" in TU:
             info['concepto'] = '931'
             info['categoria'] = 'IMPUESTOS'
             from modulo_pagos.lectores.lector_afip_931 import procesar as run_afip_931
