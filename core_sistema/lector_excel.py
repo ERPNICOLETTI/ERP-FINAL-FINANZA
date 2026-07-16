@@ -2,8 +2,6 @@ import os
 import re
 import csv
 import hashlib
-import json
-import sqlite3
 from datetime import datetime
 
 # Intentar importar openpyxl
@@ -20,6 +18,7 @@ except ImportError:
 
 
 def calcular_hash_archivo(filepath: str) -> str:
+    """Calcula el hash SHA-256 de un archivo físico para control de duplicados/linaje."""
     sha256 = hashlib.sha256()
     with open(filepath, 'rb') as f:
         while True:
@@ -30,69 +29,17 @@ def calcular_hash_archivo(filepath: str) -> str:
     return sha256.hexdigest()
 
 
-def inicializar_db_staging(conn: sqlite3.Connection):
-    """Crea la estructura aislada de base de datos para el staging de Excel."""
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS core_staging_raw (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hash_sha256 TEXT NOT NULL,
-            nombre_archivo TEXT NOT NULL,
-            pestana TEXT NOT NULL,
-            coordenada TEXT NOT NULL,
-            valor_raw TEXT,
-            color_hex TEXT,
-            color_fuente_hex TEXT,
-            metadatos_json TEXT,
-            fecha_ingesta DATETIME DEFAULT CURRENT_TIMESTAMP,
-            estado TEXT DEFAULT 'PENDIENTE'
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS core_auditoria_errores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hash_sha256 TEXT,
-            nombre_archivo TEXT,
-            error_msg TEXT,
-            traza TEXT,
-            fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS core_discrepancias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hash_sha256 TEXT,
-            nombre_archivo TEXT,
-            campo_clave TEXT,
-            valor_invalido TEXT,
-            motivo TEXT,
-            fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS core_historial_archivos (
-            hash_sha256 TEXT PRIMARY KEY,
-            nombre_archivo TEXT NOT NULL,
-            fecha_procesado DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-
 class LectorExcelUniversal:
-    """Clase extractora universal y robusta para archivos de planilla."""
-
-    def __init__(self, db_path: str = "excel_staging.db"):
-        self.db_path = db_path
-        conn = sqlite3.connect(self.db_path)
-        try:
-            inicializar_db_staging(conn)
-            conn.commit()
-        finally:
-            conn.close()
+    """
+    Parser general de Excel (.xlsx, .xls) y CSV.
+    Extrae la matriz física de celdas, valores, colores de fondo/fuente
+    y metadatos estructurales directamente en memoria.
+    """
 
     def extraer_raw(self, filepath: str) -> dict:
         """
         Interroga el archivo y extrae metadatos globales, pestañas y el ADN completo
-        de cada celda para permitir recrearla al bit exacto.
+        de cada celda (fuentes, bordes, alineación, fórmulas, celdas combinadas, etc.).
         """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"El archivo no existe: {filepath}")
@@ -121,9 +68,9 @@ class LectorExcelUniversal:
 
         elif ext == '.xlsx':
             if not openpyxl:
-                raise ImportError("openpyxl no instalado.")
+                raise ImportError("La librería openpyxl no está instalada.")
             
-            # Cargar en dos modos: fórmulas y valores para conservar el cálculo contable
+            # Abrir en modo fórmulas y modo valores
             wb_formulas = openpyxl.load_workbook(filepath, data_only=False)
             wb_values = openpyxl.load_workbook(filepath, data_only=True)
             pestanas_info = wb_values.sheetnames
@@ -132,10 +79,8 @@ class LectorExcelUniversal:
                 ws_val = wb_values[sheet_name]
                 ws_form = wb_formulas[sheet_name]
                 
-                # Mapear rangos de celdas combinadas en esta pestaña
                 merged_ranges = ws_val.merged_cells.ranges
                 
-                # Mapear rango de autofiltro
                 autofiltro_ref = ws_val.auto_filter.ref
                 autofiltro_col_start, autofiltro_row_start = 0, 0
                 autofiltro_col_end, autofiltro_row_end = 0, 0
@@ -151,13 +96,12 @@ class LectorExcelUniversal:
                         coord = cell_val.coordinate
                         cell_form = ws_form[coord]
                         
-                        # Extraer valor y fórmula
                         val = cell_val.value
                         formula = None
                         if cell_form.value and isinstance(cell_form.value, str) and cell_form.value.startswith('='):
                             formula = cell_form.value
 
-                        # Extraer color de fondo
+                        # Color fondo
                         color_hex = None
                         if cell_val.fill and getattr(cell_val.fill, 'fill_type', None) is not None:
                             start_color = getattr(cell_val.fill, 'start_color', None)
@@ -168,7 +112,7 @@ class LectorExcelUniversal:
                                         rgb = rgb[2:]
                                     color_hex = f"#{rgb}" if not rgb.startswith('#') else rgb
 
-                        # Extraer color de fuente
+                        # Color fuente
                         color_fuente_hex = None
                         if cell_val.font and getattr(cell_val.font, 'color', None) is not None:
                             font_color = cell_val.font.color
@@ -178,7 +122,7 @@ class LectorExcelUniversal:
                                     rgb = rgb[2:]
                                 color_fuente_hex = f"#{rgb}" if not rgb.startswith('#') else rgb
 
-                        # ADN completo de la celda
+                        # Metadatos de estilo
                         meta = {
                             "fuente": {
                                 "nombre": getattr(cell_val.font, 'name', None),
@@ -229,7 +173,7 @@ class LectorExcelUniversal:
 
         elif ext == '.xls':
             if not xlrd:
-                raise ImportError("xlrd no instalado.")
+                raise ImportError("La librería xlrd no está instalada.")
             wb = xlrd.open_workbook(filepath, formatting_info=True)
             pestanas_info = wb.sheet_names()
             for sheet_idx, sheet_name in enumerate(pestanas_info):
@@ -280,6 +224,7 @@ class LectorExcelUniversal:
 
         return {
             "nombre_archivo": os.path.basename(filepath),
+            "hash_sha256": calcular_hash_archivo(filepath),
             "cantidad_pestanas": len(pestanas_info),
             "pestanas": pestanas_info,
             "filas": filas_extraidas
@@ -293,6 +238,7 @@ class LectorExcelUniversal:
         return result
 
     def transformar_celda(self, valor, es_importe=False, es_identificador=False, es_fecha=False):
+        """Aplica reglas de tipado y saneamiento a un valor individual."""
         if valor is None or str(valor).strip() == "":
             return None
         val_str = str(valor).strip()
@@ -326,56 +272,3 @@ class LectorExcelUniversal:
                 pass
             raise ValueError(f"Fecha inválida: '{valor}'")
         return valor
-
-    def procesar_e_ingestar_archivo(self, filepath: str) -> dict:
-        hash_file = calcular_hash_archivo(filepath)
-        nombre_archivo = os.path.basename(filepath)
-        conn = sqlite3.connect(self.db_path)
-        try:
-            dup = conn.execute("SELECT nombre_archivo, fecha_procesado FROM core_historial_archivos WHERE hash_sha256 = ?", (hash_file,)).fetchone()
-            if dup:
-                return {
-                    "status": "duplicado",
-                    "message": f"Archivo duplicado. Procesado como '{dup[0]}' el {dup[1]}."
-                }
-
-            datos_raw = self.extraer_raw(filepath)
-            conn.execute("DELETE FROM core_staging_raw WHERE hash_sha256 = ?", (hash_file,))
-            
-            for fila in datos_raw["filas"]:
-                conn.execute("""
-                    INSERT INTO core_staging_raw (hash_sha256, nombre_archivo, pestana, coordenada, valor_raw, color_hex, color_fuente_hex, metadatos_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (hash_file, nombre_archivo, fila["pestana"], fila["coordenada"], str(fila["valor"]) if fila["valor"] is not None else None, fila["color"], fila["color_fuente"], json.dumps(fila["metadatos"])))
-            
-            conn.commit()
-            print(f"📊 [STAGE 1] {len(datos_raw['filas'])} celdas volcadas a core_staging_raw con metadatos JSON.")
-        except Exception as e:
-            conn.rollback()
-            conn.close()
-            raise e
-
-        try:
-            conn.execute("BEGIN TRANSACTION")
-            conn.execute("UPDATE core_staging_raw SET estado = 'PROCESADO' WHERE hash_sha256 = ?", (hash_file,))
-            conn.execute("INSERT INTO core_historial_archivos (hash_sha256, nombre_archivo) VALUES (?, ?)", (hash_file, nombre_archivo))
-            conn.commit()
-            return {
-                "status": "exito",
-                "hash": hash_file,
-                "pestanas": datos_raw["pestanas"],
-                "filas_ingestadas": len(datos_raw["filas"])
-            }
-        except Exception as err:
-            conn.rollback()
-            import traceback
-            tb = traceback.format_exc()
-            conn_aud = sqlite3.connect(self.db_path)
-            try:
-                conn_aud.execute("INSERT INTO core_auditoria_errores (hash_sha256, nombre_archivo, error_msg, traza) VALUES (?, ?, ?, ?)", (hash_file, nombre_archivo, str(err), tb))
-                conn_aud.commit()
-            finally:
-                conn_aud.close()
-            return {"status": "error", "message": str(err)}
-        finally:
-            conn.close()
