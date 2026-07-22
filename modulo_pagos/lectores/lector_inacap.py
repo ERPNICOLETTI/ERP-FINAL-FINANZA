@@ -23,14 +23,18 @@ def procesar(TU, info):
         info['periodo_mes']  = m.group(1)
         info['periodo_anio'] = m.group(2)
 
-    # 2. Extraer vencimiento y monto total
-    pat_vto = re.search(r'VENCIMIENTO:\s*(\d{2}/\d{2}/\d{4})', TU)
-    pat_monto = re.search(r'MONTO TOTAL:\s*\$\s*([\d\.]+,\d{2})', TU)
-    
-    if pat_vto:
-        info['fecha_vencimiento'] = _iso(pat_vto.group(1))
-    if pat_monto:
-        info['monto'] = _parse_monto(pat_monto.group(1))
+    # 2. Extraer vencimientos y monto total
+    pat_vto1 = re.search(r'(?:VENCIMIENTO DEL PER[IÍI]ODO|VENCIMIENTO):\s*(\d{2}/\d{2}/\d{4})', TU)
+    pat_vto2 = re.search(r'FECHA DE PAGO INDICADA:\s*(\d{2}/\d{2}/\d{4})', TU)
+    # Buscar todas las apariciones de importes tras MONTO TOTAL o al final del bloque
+    matches_monto = re.findall(r'MONTO TOTAL.*?\$\s*([\d\.]+,\d{2})', TU)
+    if not matches_monto:
+        matches_monto = re.findall(r'\$\s*([\d\.]+,\d{2})', TU)
+    if matches_monto:
+        # Tomar el valor numérico mayor para asegurar tomar el Monto Total final con intereses
+        parsed_vals = [_parse_monto(v) for v in matches_monto if _parse_monto(v) is not None]
+        if parsed_vals:
+            info['monto'] = max(parsed_vals)
 
     # 3. Formato Comprobante
     if not info['monto']:

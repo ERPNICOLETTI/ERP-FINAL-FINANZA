@@ -15,6 +15,31 @@ from modulo_pagos.lectores.lector_pagos import procesar_pago
 
 logger = logging.getLogger(__name__)
 
+def extraer_periodo_de_nombre_archivo(nombre_archivo):
+    """
+    Busca patrones de mes (MM) y año (YYYY) en el nombre de un archivo.
+    Soporta YYYY_MM, MM_YYYY, YYYY-MM, MM-YYYY, etc.
+    """
+    if not nombre_archivo:
+        return None, None
+    nombre_upper = nombre_archivo.upper()
+    # 1. Buscar YYYY_MM o YYYY-MM (ej: 2026_04, 2026-04)
+    m = re.search(r'\b(20\d{2})[-_](0[1-9]|1[0-2])\b', nombre_upper)
+    if m:
+        return m.group(2), m.group(1)
+    # 2. Buscar MM_YYYY o MM-YYYY (ej: 04_2026, 04-2026)
+    m = re.search(r'\b(0[1-9]|1[0-2])[-_](20\d{2})\b', nombre_upper)
+    if m:
+        return m.group(1), m.group(2)
+    # 3. Buscar sin límites de palabra estrictos
+    m = re.search(r'(20\d{2})[-_](0[1-9]|1[0-2])', nombre_upper)
+    if m:
+        return m.group(2), m.group(1)
+    m = re.search(r'(0[1-9]|1[0-2])[-_](20\d{2})', nombre_upper)
+    if m:
+        return m.group(1), m.group(2)
+    return None, None
+
 TAXONOMIA = {
     'SINDICALES': ['SEC', 'FAECYS', 'INACAP', 'POLICIA', 'SINDICAL'],
     'IMPUESTOS':  ['IIBB', 'IVA', 'GANANCIAS', 'AFIP', 'ARBA', 'AUTONOMO', '931'],
@@ -71,8 +96,9 @@ def ingestar_inbox_a_raw(inbox_path):
                 logger.error(f"Error al verificar tamaño del archivo {f}: {e}")
                 continue
 
-            # 2. Validación de tipo (PDF y ZIP para pagos)
-            if not f_upper.endswith('.PDF') and not f_upper.endswith('.ZIP'):
+            # 2. Validación de tipo (PDF, ZIP e imágenes JPG/PNG/WEBP para pagos)
+            es_imagen = any(f_upper.endswith(ext) for ext in ['.JPG', '.JPEG', '.PNG', '.WEBP'])
+            if not f_upper.endswith('.PDF') and not f_upper.endswith('.ZIP') and not es_imagen:
                 print(f"⚠️ [PAGOS-ELT] Formato no soportado: {f}. Desviando a no_reconocidos.")
                 import shutil
                 shutil.move(filepath_origen, os.path.join(no_reconocidos_dir, f))
@@ -88,7 +114,7 @@ def ingestar_inbox_a_raw(inbox_path):
                 os.remove(filepath_origen)
                 continue
 
-            # 4. Conversión Temprana a Markdown / Extracción de ZIP
+            # 4. Conversión Temprana a Markdown / Extracción de ZIP / OCR de Imágenes
             markdown_text = ""
             try:
                 if f_upper.endswith('.ZIP'):
@@ -104,6 +130,8 @@ def ingestar_inbox_a_raw(inbox_path):
                             reader = pypdf.PdfReader(pdf_file)
                             pdf_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
                             markdown_text += f"\n## ARCHIVO: {name}\n" + pdf_text + "\n"
+                elif es_imagen:
+                    markdown_text = conversores.convertir_imagen_a_markdown(filepath_origen)
                 else:
                     markdown_text = conversores.convertir_pdf_a_markdown(filepath_origen)
             except Exception as e:
@@ -153,12 +181,9 @@ def ingestar_inbox_a_raw(inbox_path):
             
             if not parsed_info.get('periodo_mes') or not parsed_info.get('periodo_anio'):
                 # Fallback por nombre de archivo si el parser no encontró periodo
-                patron_fecha = re.search(r'(\d{2})-(\d{4})|(\d{4})-(\d{2})', f)
-                if patron_fecha:
-                    if patron_fecha.group(1):
-                        mes_tentativo, anio_tentativo = patron_fecha.group(1), patron_fecha.group(2)
-                    else:
-                        anio_tentativo, mes_tentativo = patron_fecha.group(3), patron_fecha.group(4)
+                m_mes, m_anio = extraer_periodo_de_nombre_archivo(f)
+                if m_mes and m_anio:
+                    mes_tentativo, anio_tentativo = m_mes, m_anio
                 else:
                     m = re.search(r'PER[IÍI]ODO[:\s]+(\d{2})/(\d{4})', text_upper)
                     if m:
@@ -187,7 +212,8 @@ def ingestar_inbox_a_raw(inbox_path):
                     mes=mes_tentativo,
                     entidad=concepto_detectado,
                     subcategoria=categoria_detectada,
-                    forced_filename=nombre_canonico
+                    forced_filename=nombre_canonico,
+                    overwrite=True
                 )
                 if path_final:
                     print(f"✅ [PAGOS-ELT] Archivado en Bóveda: {os.path.basename(path_final)}")
@@ -258,9 +284,9 @@ def transformar_raw_a_produccion():
 
             # Fallback de periodo por nombre del archivo
             if not anio or not mes:
-                mf = re.search(r'_(\d{2})-(\d{4})_', nombre_orig.upper())
-                if mf:
-                    mes, anio = mf.group(1), mf.group(2)
+                m_mes, m_anio = extraer_periodo_de_nombre_archivo(nombre_orig)
+                if m_mes and m_anio:
+                    mes, anio = m_mes, m_anio
 
             if not anio or not mes:
                 raise ValueError(f"No se pudo determinar el período MM/YYYY para el archivo {nombre_orig}")
@@ -299,13 +325,61 @@ def transformar_raw_a_produccion():
                     boleta = db_transaction.execute("SELECT id, monto, monto_2 FROM pagos_vencimientos WHERE concepto = ? AND periodo_mes = ? AND periodo_anio = ?", (info['concepto'], mes, anio)).fetchone()
                 
                 if boleta:
-                    # NOTA: Los montos de la boleta ya están guardados en centavos (enteros) en la base de datos
-                    # Por lo tanto, multiplicamos el monto_pagado del comprobante por 100 para comparar manzanas con manzanas.
                     monto_pagado_cents = int(round(monto_pagado * 100))
                     m1 = boleta['monto']
                     m2 = boleta['monto_2']
                     
-                    if abs(monto_pagado_cents - m1) < 100 or (m2 and abs(monto_pagado_cents - m2) < 100):
+                    match_ok = False
+                    if monto_pagado_cents > 0 and (abs(monto_pagado_cents - m1) < 100 or (m2 and abs(monto_pagado_cents - m2) < 100)):
+                        match_ok = True
+                    else:
+                        # Si no matcheó por el float parseado, buscar m1/m2 directamente en el contenido crudo de staging
+                        raw_text = contenido.upper() if contenido else ""
+                        
+                        # Búsqueda por representaciones en texto
+                        for m_target in [m1, m2]:
+                            if not m_target: continue
+                            val = m_target / 100.0
+                            m_es = f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') # 4.021,99
+                            m_us = f"{val:,.2f}"                                                         # 4,021.99
+                            m_plain_es = f"{val:.2f}".replace('.', ',')                                 # 4021,99
+                            m_plain_us = f"{val:.2f}"                                                 # 4021.99
+                            
+                            if (m_es in raw_text or m_us in raw_text or m_plain_es in raw_text or m_plain_us in raw_text):
+                                match_ok = True
+                                break
+                                
+                        if not match_ok and raw_text:
+                            # Extracción de montos por regex
+                            parsed_cents = set()
+                            for token in re.findall(r'\$?\s*([0-9]{1,3}(?:[\.,][0-9]{3})*(?:[\.,][0-9]{2})|[0-9]+(?:[\.,][0-9]{2})?)', raw_text):
+                                clean = token.strip()
+                                try:
+                                    if ',' in clean and '.' in clean:
+                                        v = float(clean.replace(',', '')) if clean.find(',') < clean.find('.') else float(clean.replace('.', '').replace(',', '.'))
+                                    elif ',' in clean:
+                                        v = float(clean.replace(',', '.'))
+                                    elif '.' in clean:
+                                        parts = clean.split('.')
+                                        v = float(clean) if len(parts[-1]) == 2 else (float(clean.replace('.', '')) / 100.0 if len(parts[-1]) == 5 else float(clean))
+                                    else:
+                                        v = float(clean)
+                                    parsed_cents.add(int(round(v * 100)))
+                                except: pass
+                                
+                            if (m1 in parsed_cents) or (m2 and m2 in parsed_cents):
+                                match_ok = True
+                                
+                        if not match_ok:
+                            int_m1 = str(int(m1 // 100))
+                            int_m1_fmt = f"{int(int_m1):,}".replace(',', '.') # 17.856
+                            int_m2 = str(int(m2 // 100)) if m2 else None
+                            int_m2_fmt = f"{int(int_m2):,}".replace(',', '.') if int_m2 else None # 17.632
+                            
+                            if (int_m1 in raw_text or int_m1_fmt in raw_text) or (int_m2 and (int_m2 in raw_text or int_m2_fmt in raw_text)):
+                                match_ok = True
+                    
+                    if match_ok:
                         data_sql['path_comprobante'] = path_relativo
                     else:
                         raise ValueError(f"Discrepancia de monto en conciliación de pago. Boleta espera {m1/100.0}/{m2/100.0}, Comprobante dice {monto_pagado}")

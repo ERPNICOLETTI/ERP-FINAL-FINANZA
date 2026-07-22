@@ -43,7 +43,7 @@ async def list_pagos(request: Request, estado: str = None, categoria: str = None
             if vto2 and hoy > vto2:
                 priorityLabel = "VENCIDO 🔥"
                 priorityClass = "status-vencido"
-                suggestedAmount = p_dict.get('monto_2', 0)
+                suggestedAmount = p_dict.get('monto_2') if (p_dict.get('monto_2') and p_dict.get('monto_2') > 0) else p_dict.get('monto', 0)
             elif not vto2 and vto1 and hoy > vto1:
                 priorityLabel = "VENCIDO 🔥"
                 priorityClass = "status-vencido"
@@ -53,11 +53,11 @@ async def list_pagos(request: Request, estado: str = None, categoria: str = None
             elif vto2 and hoy == vto2:
                 priorityLabel = "VENCE HOY ⚠️"
                 priorityClass = "status-vence-hoy"
-                suggestedAmount = p_dict.get('monto_2', 0)
+                suggestedAmount = p_dict.get('monto_2') if (p_dict.get('monto_2') and p_dict.get('monto_2') > 0) else p_dict.get('monto', 0)
             elif vto1 and hoy > vto1 and vto2 and hoy < vto2:
                 priorityLabel = "2DA OPORTUNID. 🟠"
                 priorityClass = "status-vence-proximo"
-                suggestedAmount = p_dict.get('monto_2', 0)
+                suggestedAmount = p_dict.get('monto_2') if (p_dict.get('monto_2') and p_dict.get('monto_2') > 0) else p_dict.get('monto', 0)
             elif vto1 and hoy < vto1:
                 try:
                     d1 = datetime.strptime(vto1, "%Y-%m-%d")
@@ -162,150 +162,138 @@ async def upload_comprobante(pago_id: int, file: UploadFile = File(...)):
         from modulo_pagos.lectores.lector_pagos import procesar_pago
         ok_parse, parsed_info = procesar_pago(filepath=temp_path)
         
-        if ok_parse and parsed_info:
-            text_content = parsed_info.get('meta_json', {}).get('full_text', '').upper()
-            
-            # --- VALIDACIÓN 0: COINCIDENCIA POR CÓDIGO DE BARRAS / CÓDIGO DE PAGO ---
-            # Si el comprobante contiene el código de barras (o una subcadena significativa de al menos 15 dígitos)
-            # que coincida con el de la boleta, la validación se aprueba de inmediato.
-            import re
-            barcode_matched = False
-            codigo_barras_db = pago_dict.get('codigo_barras')
-            if codigo_barras_db and text_content:
-                db_digits = "".join(re.findall(r'\d+', str(codigo_barras_db)))
-                file_digits = "".join(re.findall(r'\d+', text_content))
-                
-                min_len = 15
-                if len(db_digits) >= min_len and len(file_digits) >= min_len:
-                    if db_digits in file_digits or file_digits in db_digits:
-                        barcode_matched = True
-                    else:
-                        for i in range(len(db_digits) - min_len + 1):
-                            if db_digits[i:i+min_len] in file_digits:
-                                barcode_matched = True
-                                break
-            
-            if barcode_matched:
-                print(f"🔒 [PAGOS-VALIDACION] Match atómico por código de barras/pago detectado para ID {pago_id}. Aprobando comprobante.")
-            else:
-                concept_keywords = {
-                    'SEC': ['SEC', 'COMERCIO'],
-                    'FAECYS': ['FAECYS'],
-                    'INACAP': ['INACAP'],
-                    'POLICIA': ['POLICIA DEL TRABAJO', 'TASA RETRIBUTIVA'],
-                    '931': ['931', 'S.U.S.S.', 'AUTONOMOS', 'SICOSS']
-                }
-                
-                if text_content:
-                    current_kws = concept_keywords.get(concepto, [])
-                    has_current_kw = any(kw in text_content for kw in current_kws)
-                    
-                    # Si el archivo tiene texto legible pero NO tiene la palabra clave de este concepto,
-                    # y SÍ tiene la palabra clave de otro concepto diferente, entonces lo bloqueamos.
-                    if not has_current_kw:
-                        for other_concept, other_kws in concept_keywords.items():
-                            if other_concept != concepto:
-                                if any(kw in text_content for kw in other_kws):
-                                    if os.path.exists(temp_path): os.remove(temp_path)
-                                    return {"status": "error", "message": f"El comprobante parece corresponder a {other_concept} (se detectó su palabra clave), pero estás cargándolo en la boleta de {concepto}."}
+        if not ok_parse or not parsed_info:
+            if os.path.exists(temp_path): os.remove(temp_path)
+            return {"status": "error", "message": "No se pudo analizar el contenido del comprobante para su validación de seguridad."}
 
-                # --- VALIDACIÓN 2: PRESENCIA DEL MONTO ESPERADO EN EL TEXTO ---
-                if text_content:
-                    # Construir representaciones en texto de los montos esperados
-                    monto_str_1a = f"{monto_esperado_1 / 100:.2f}".replace('.', ',') # Ej: 25.830,80 -> 25830,80
-                    monto_str_1b = f"{monto_esperado_1 / 100:.2f}"                  # Ej: 25830.80
-                    # Quitar puntos de miles si existieran en el texto
-                    clean_text = text_content.replace('.', '').replace(' ', '')
-                    monto_clean_1 = f"{monto_esperado_1 / 100:.2f}".replace('.', '').replace(',','') # Ej: 2583080
-                    
-                    # Fallback de parte entera para tolerar errores de OCR en centavos (ej: ",35" leído como "%")
-                    int_1 = str(int(monto_esperado_1 / 100)) # Ej: 16094
-                    int_1_dots = f"{int(monto_esperado_1 / 100):,}".replace(',', '.') # Ej: 16.094
-                    
-                    has_amount = (monto_str_1a in text_content or 
-                                  monto_str_1b in text_content or 
-                                  monto_clean_1 in clean_text or
-                                  int_1 in clean_text or
-                                  int_1_dots in text_content)
-                    
-                    if monto_esperado_2:
-                        monto_str_2a = f"{monto_esperado_2 / 100:.2f}".replace('.', ',')
-                        monto_str_2b = f"{monto_esperado_2 / 100:.2f}"
-                        monto_clean_2 = f"{monto_esperado_2 / 100:.2f}".replace('.', '').replace(',','')
-                        
-                        int_2 = str(int(monto_esperado_2 / 100)) # Ej: 16241
-                        int_2_dots = f"{int(monto_esperado_2 / 100):,}".replace(',', '.') # Ej: 16.241
-                        
-                        has_amount = has_amount or (monto_str_2a in text_content or 
-                                                     monto_str_2b in text_content or 
-                                                     monto_clean_2 in clean_text or
-                                                     int_2 in clean_text or
-                                                     int_2_dots in text_content)
-                    
-                    if concepto == '931':
+        text_content = parsed_info.get('meta_json', {}).get('full_text', '').upper()
+        
+        # --- VALIDACIÓN 0: COINCIDENCIA POR CÓDIGO DE BARRAS ESPECÍFICO DE ESTA BOLETA ---
+        import re
+        barcode_matched = False
+        codigo_barras_db = pago_dict.get('codigo_barras')
+        if codigo_barras_db and text_content:
+            db_digits = "".join(re.findall(r'\d+', str(codigo_barras_db)))
+            file_digits = "".join(re.findall(r'\d+', text_content))
+            
+            # Exigir coincidencia de código de barras completo (no fragmentos genéricos como el CUIT)
+            if len(db_digits) >= 30 and len(file_digits) >= 30:
+                if db_digits == file_digits or db_digits in file_digits:
+                    barcode_matched = True
+        
+        if barcode_matched:
+            print(f"🔒 [PAGOS-VALIDACION] Match atómico por código de barras exacto detectado para ID {pago_id}. Aprobando comprobante.")
+        else:
+            concept_keywords = {
+                'SEC': ['SEC', 'COMERCIO'],
+                'FAECYS': ['FAECYS'],
+                'INACAP': ['INACAP'],
+                'POLICIA': ['POLICIA DEL TRABAJO', 'TASA RETRIBUTIVA'],
+                '931': ['931', 'S.U.S.S.', 'AUTONOMOS', 'SICOSS']
+            }
+            
+            if text_content:
+                current_kws = concept_keywords.get(concepto, [])
+                has_current_kw = any(kw in text_content for kw in current_kws)
+                
+                if not has_current_kw:
+                    for other_concept, other_kws in concept_keywords.items():
+                        if other_concept != concepto:
+                            if any(kw in text_content for kw in other_kws):
+                                if os.path.exists(temp_path): os.remove(temp_path)
+                                return {"status": "error", "message": f"El comprobante parece corresponder a {other_concept} (se detectó su palabra clave), pero estás cargándolo en la boleta de {concepto}."}
+
+            # --- VALIDACIÓN 2: PRESENCIA DEL MONTO ESPERADO EN EL TEXTO O PARSER ---
+            if text_content:
+                monto_parseado = parsed_info.get('monto') or 0
+                monto_parseado_cents = int(round(monto_parseado * 100)) if monto_parseado else 0
+                
+                has_amount = False
+                if monto_parseado_cents > 0:
+                    if abs(monto_parseado_cents - monto_esperado_1) <= 100:
+                        has_amount = True
+                    elif monto_esperado_2 and abs(monto_parseado_cents - monto_esperado_2) <= 100:
                         has_amount = True
 
-                    if not has_amount:
-                        if os.path.exists(temp_path): os.remove(temp_path)
-                        val_esp_1 = f"${monto_esperado_1 / 100:,.2f}"
-                        val_esp_2 = f" o ${monto_esperado_2 / 100:,.2f}" if monto_esperado_2 else ""
-                        return {"status": "error", "message": f"El comprobante no contiene el monto esperado de {val_esp_1}{val_esp_2}. Verifique que el archivo sea correcto."}
-
-                # --- VALIDACIÓN 3: VALIDACIÓN ESTRUCTURAL DEL PARSER (FALLBACK) ---
-                # Validar concepto (Ej: SEC, FAECYS) si el parser lo identificó específicamente
-                c_parsed = parsed_info.get('concepto')
-                if c_parsed and c_parsed not in ['DESCONOCIDO', 'SINDICAL_GENERICO', 'PAGOS_GENERICO']:
-                    if c_parsed != concepto:
-                        if os.path.exists(temp_path): os.remove(temp_path)
-                        return {"status": "error", "message": f"El comprobante corresponde a {c_parsed}, pero estás cargándolo en la boleta de {concepto}."}
-                
-                # Validar período (Mes / Año)
-                m_parsed = parsed_info.get('periodo_mes')
-                a_parsed = parsed_info.get('periodo_anio')
-                if m_parsed and a_parsed:
-                    if m_parsed != mes or a_parsed != anio:
-                        if os.path.exists(temp_path): os.remove(temp_path)
-                        return {"status": "error", "message": f"El período del comprobante ({m_parsed}/{a_parsed}) no coincide con el de la boleta ({mes}/{anio})."}
-                
-                # Validar monto sugerido si el parser leyó uno específico
-                monto_parsed = parsed_info.get('monto')
-                if monto_parsed:
-                    monto_cents = int(round(float(monto_parsed) * 100))
-                    diff_1 = abs(monto_cents - monto_esperado_1)
-                    diff_2 = abs(monto_cents - monto_esperado_2) if monto_esperado_2 else 999999
+                if not has_amount:
+                    # Formato ES (4.059,02), Formato US (4,059.02), Formato llano (4059,02 / 4059.02)
+                    m_1_val = monto_esperado_1 / 100.0
+                    m1_es = f"{m_1_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') # 4.000,14
+                    m1_us = f"{m_1_val:,.2f}"                                                         # 4,000.14
+                    m1_plain_es = f"{m_1_val:.2f}".replace('.', ',')                                 # 4000,14
+                    m1_plain_us = f"{m_1_val:.2f}"                                                 # 4000.14
                     
-                    if concepto == '931':
-                        # Toleramos diferencias por intereses resarcitorios/punitorios en F.931
-                        pass
-                    elif diff_1 > 500 and diff_2 > 500:
-                        if os.path.exists(temp_path): os.remove(temp_path)
-                        return {"status": "error", "message": f"El monto del comprobante (${monto_parsed:,.2f}) no coincide con los montos esperados de la boleta."}
+                    has_amount = (m1_es in text_content or 
+                                  m1_us in text_content or 
+                                  m1_plain_es in text_content or 
+                                  m1_plain_us in text_content)
+                    
+                    if monto_esperado_2:
+                        m_2_val = monto_esperado_2 / 100.0
+                        m2_es = f"{m_2_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') # 4.059,02
+                        m2_us = f"{m_2_val:,.2f}"                                                         # 4,059.02
+                        m2_plain_es = f"{m_2_val:.2f}".replace('.', ',')                                 # 4059,02
+                        m2_plain_us = f"{m_2_val:.2f}"                                                 # 4059.02
+                        
+                        has_amount = has_amount or (m2_es in text_content or 
+                                                     m2_us in text_content or 
+                                                     m2_plain_es in text_content or 
+                                                     m2_plain_us in text_content)
 
-        # 3. Si pasó la validación, guardar en la bóveda física definitiva
-        dest_dir = os.path.join(WORKSPACE, "modulo_pagos", "archivos_pagos", categoria, concepto, anio, mes)
-        os.makedirs(dest_dir, exist_ok=True)
+                    # Extractor terciario para transferencias bancarias con superíndices de centavos (Banco Galicia, Santander, etc.)
+                    if not has_amount:
+                        int_m1 = str(int(monto_esperado_1 // 100))
+                        int_m1_formatted = f"{int(int_m1):,}".replace(',', '.') # 17.856
+                        int_m2 = str(int(monto_esperado_2 // 100)) if monto_esperado_2 else None
+                        int_m2_formatted = f"{int(int_m2):,}".replace(',', '.') if int_m2 else None # 17.632
+                        
+                        # Si matchea la parte entera del monto (17.856 o 17.632)
+                        has_amount = (int_m1 in text_content or int_m1_formatted in text_content)
+                        if int_m2:
+                            has_amount = has_amount or (int_m2 in text_content or int_m2_formatted in text_content)
+
+                if concepto == '931':
+                    has_amount = True
+
+                if not has_amount:
+                    if os.path.exists(temp_path): os.remove(temp_path)
+                    val_esp_1 = f"${monto_esperado_1 / 100:,.2f}"
+                    val_esp_2 = f" o ${monto_esperado_2 / 100:,.2f}" if monto_esperado_2 else ""
+                    return {"status": "error", "message": f"El comprobante no contiene el monto esperado de {val_esp_1}{val_esp_2}. Verifique que el archivo sea el pago correspondiente a este vencimiento."}
+
+            # --- VALIDACIÓN 3: ESTRUCTURAL DEL PARSER ---
+            c_parsed = parsed_info.get('concepto')
+            if c_parsed and c_parsed not in ['DESCONOCIDO', 'SINDICAL_GENERICO', 'PAGOS_GENERICO']:
+                if c_parsed != concepto:
+                    if os.path.exists(temp_path): os.remove(temp_path)
+                    return {"status": "error", "message": f"El comprobante corresponde a {c_parsed}, pero estás cargándolo en la boleta de {concepto}."}
+            
+            m_parsed = parsed_info.get('periodo_mes')
+            a_parsed = parsed_info.get('periodo_anio')
+            if m_parsed and a_parsed:
+                if m_parsed != mes or a_parsed != anio:
+                    if os.path.exists(temp_path): os.remove(temp_path)
+                    return {"status": "error", "message": f"El período del comprobante ({m_parsed}/{a_parsed}) no coincide con el de la boleta ({mes}/{anio})."}
+
+        # 3. Cumplimiento 100% del TATUAJE SAGRADO ELT: Mover a Inbox para Ingesta Raw a Staging
+        inbox_dir = os.path.join(WORKSPACE, "modulo_pagos", "inbox_pagos")
+        os.makedirs(inbox_dir, exist_ok=True)
         
         ext = os.path.splitext(file.filename)[1]
-        filename = f"Comprobante_{concepto}_{mes}_{anio}{ext}"
-        dest_path = os.path.join(dest_dir, filename)
+        filename = f"{anio}_{mes}_Comprobante_{concepto}{ext}"
+        inbox_file_path = os.path.join(inbox_dir, filename)
         
-        # Mover desde temp a destino final
-        shutil.move(temp_path, dest_path)
+        # Mover desde temp a inbox para ingesta ELT oficial
+        if os.path.exists(inbox_file_path):
+            os.remove(inbox_file_path)
+        shutil.move(temp_path, inbox_file_path)
         
-        # 4. Actualizar en BD
-        db_path_compro = f"modulo_pagos/archivos_pagos/{categoria}/{concepto}/{anio}/{mes}/{filename}"
+        # 4. Disparar Fase 1 (Ingesta Raw a core_staging_raw + Bóveda) y Fase 2 (Transformación)
+        from modulo_pagos.logic_pagos import ingestar_inbox_a_raw, transformar_raw_a_produccion
+        st_count = ingestar_inbox_a_raw(inbox_dir)
+        tr_count = transformar_raw_a_produccion()
         
-        update_data = {
-            "id": pago_id,
-            "concepto": concepto,
-            "periodo_mes": mes,
-            "periodo_anio": anio,
-            "path_comprobante": db_path_compro,
-            "estado": "PAGADO"
-        }
-        
-        pagos_storage.save_pago(update_data)
-        return {"status": "success", "message": "Comprobante vinculado y estado cambiado a PAGADO."}
+        return {"status": "success", "message": f"Comprobante ingestado en Staging Raw ({st_count} raw) y conciliado exitosamente ({tr_count} actualizados)."}
     except Exception as e:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)

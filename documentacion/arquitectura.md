@@ -17,6 +17,10 @@ El sistema se organiza en dominios autónomos (módulos) representados por direc
 
 ## 🔄 2. Flujo de Datos en Tres Capas (Arquitectura ELT)
 
+> 🩸 **TATUAJE SAGRADO E INQUEBRANTABLE (REGLA DE ORO DE POR VIDA):**
+> **TODO ARCHIVO O DOCUMENTO QUE SE INGIERA EN EL ERP (BOLETAS, COMPROBANTES DE PAGO, FACTURAS DE COMPRA, EXTRACTOS BANCARIOS, RESÚMENES DE TARJETA, ETC.), SIN NINGUNA EXCEPCIÓN, DEBE INGRESAR PRIMERO A LA TABLA DE STAGING RAW (`core_staging_raw`) EN LA FASE 1 DE INGESTA.**
+> **ESTÁ TOTALMENTE PROHIBIDO ESCRIBIR DIRECTAMENTE O VINCULAR ARCHIVOS EN LAS TABLAS FINALES DE PRODUCCIÓN SIN PASAR OBLIGATORIAMENTE POR `core_staging_raw`, REGISTRANDO SU CONTENIDO RAW, HASH SHA256 Y ARCHIVADO EN BÓVEDA.**
+
 El flujo de procesamiento de archivos (extractos bancarios, cupones, facturas, comprobantes) adopta el modelo **ELT (Extract, Load, Transform)**:
 
 ```

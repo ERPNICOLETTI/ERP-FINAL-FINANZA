@@ -163,6 +163,47 @@
             }
 
             const pagosApp = {
+                showToast(type, message, toastId = null, duration = 4000) {
+                    let container = document.getElementById('toast-container');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'toast-container';
+                        document.body.appendChild(container);
+                    }
+                    
+                    let toast = toastId ? document.getElementById(toastId) : null;
+                    if (!toast) {
+                        toast = document.createElement('div');
+                        toast.className = `toast-card ${type}`;
+                        if (toastId) toast.id = toastId;
+                        container.appendChild(toast);
+                    } else {
+                        toast.className = `toast-card ${type}`;
+                    }
+
+                    let icon = '';
+                    if (type === 'loading') {
+                        icon = '<div class="toast-spinner"></div>';
+                    } else if (type === 'success') {
+                        icon = '<span style="font-size: 1.2rem;">✅</span>';
+                    } else {
+                        icon = '<span style="font-size: 1.2rem;">⚠️</span>';
+                    }
+
+                    toast.innerHTML = `${icon} <span>${message}</span>`;
+                    
+                    // Trigger animación
+                    requestAnimationFrame(() => toast.classList.add('show'));
+
+                    if (type !== 'loading') {
+                        setTimeout(() => {
+                            toast.classList.remove('show');
+                            setTimeout(() => toast.remove(), 350);
+                        }, duration);
+                    }
+                    return toast.id || null;
+                },
+
                 async uploadFiles(files) {
                     if (files.length === 0) return;
                     
@@ -170,6 +211,9 @@
                     const originalText = syncBtn.innerHTML;
                     syncBtn.innerHTML = "⏳ Subiendo...";
                     syncBtn.disabled = true;
+
+                    const toastId = 'toast-upload-' + Date.now();
+                    this.showToast('loading', '⏳ Ingestando boleta(s)... Por favor aguarde.', toastId);
 
                     try {
                         for (let file of files) {
@@ -187,12 +231,11 @@
                             }
                         }
                         
-                        // Sincronización automática inmediata tras subir
-                        syncBtn.innerHTML = "⚡ Procesando...";
-                        await this.fetchPagos();
+                        this.showToast('loading', '⚡ Procesando y conciliando en Staging Raw...', toastId);
+                        await this.fetchPagos(toastId);
                         
                     } catch (e) {
-                        alert("❌ Error: " + e.message);
+                        this.showToast('error', e.message, toastId, 6000);
                     } finally {
                         syncBtn.innerHTML = originalText;
                         syncBtn.disabled = false;
@@ -200,7 +243,7 @@
                     }
                 },
 
-                async fetchPagos() {
+                async fetchPagos(toastId = null) {
                     try {
                         const response = await fetch("/api/process", {
                             method: "POST"
@@ -208,17 +251,21 @@
                         const resData = await response.json();
                         if (resData.status === "success") {
                             document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'));
+                            this.showToast('success', '¡Procesamiento e ingesta en Staging Raw finalizada con éxito!', toastId, 4500);
                         } else {
-                            alert("❌ Error en sincronización: " + resData.message);
+                            this.showToast('error', 'Error en sincronización: ' + resData.message, toastId, 6000);
                         }
                     } catch(e) {
-                        alert("❌ Error de red: " + e.message);
+                        this.showToast('error', 'Error de red: ' + e.message, toastId, 6000);
                     }
                 },
 
                 async uploadReceipt(pagoId, files) {
                     if (files.length === 0) return;
                     
+                    const toastId = 'toast-receipt-' + Date.now();
+                    this.showToast('loading', '⏳ Ingestando comprobante en Staging Raw y conciliando...', toastId);
+
                     const formData = new FormData();
                     formData.append("file", files[0]);
                     
@@ -231,11 +278,12 @@
                         const resData = await response.json();
                         if (resData.status === "success") {
                             document.getElementById('tbody-pagos').dispatchEvent(new Event('refresh-table'));
+                            this.showToast('success', resData.message || '¡Comprobante ingestado y conciliado con éxito!', toastId, 5000);
                         } else {
-                            alert("❌ Error al subir comprobante: " + resData.message);
+                            this.showToast('error', resData.message || 'Error al procesar el comprobante', toastId, 6000);
                         }
                     } catch (e) {
-                        alert("❌ Error: " + e.message);
+                        this.showToast('error', 'Error: ' + e.message, toastId, 6000);
                     }
                 }
             };

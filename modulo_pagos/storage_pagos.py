@@ -112,35 +112,42 @@ def save_pago(data: dict):
             pago_id = res['id']
             estado_actual = res['estado']
             
-            # SI EL REGISTRO YA ESTÁ 'PAGADO' 🟢
-            if estado_actual == 'PAGADO':
-                logger.warning(f"⚠️ [PAGOS] Intento de modificar {concepto} {periodo_mes}/{periodo_anio} que ya está PAGADO. Operación ignorada para evitar errores.")
-                return pago_id
-            
-            # SI EL REGISTRO EXISTE Y ESTÁ 'IMPAGO/VENCIDO' o 'PENDIENTE'
+            # Determinar archivos y estado final
             final_boleta = p_boleta if p_boleta else res['path_boleta']
             final_compro = p_comprobante if p_comprobante else res['path_comprobante']
-            final_estado = 'PAGADO' if final_compro else 'PENDIENTE'
             
-            # Si es un comprobante, no sobreescribir montos ni vencimientos
+            # Si se actualizan montos o boleta nueva, re-evaluar estado o mantener PAGADO si el comprobante sigue presente
             if p_comprobante:
                 final_monto = res['monto'] if res['monto'] else monto_cents
                 final_monto_2 = res['monto_2'] if res['monto_2'] else monto_2_cents
                 final_vto = res['fecha_vencimiento'] if res['fecha_vencimiento'] else data.get('fecha_vencimiento')
                 final_vto_2 = res['fecha_vencimiento_2'] if res['fecha_vencimiento_2'] else data.get('fecha_vencimiento_2')
+                final_estado = 'PAGADO'
             else:
+                # Es una nueva BOLETA rectificada:
+                # REGLA DE SEGURIDAD ELT:
+                # Si la boleta previa YA TIENE UN COMPROBANTE VINCULADO (o estado == 'PAGADO'),
+                # NO se permite reemplazar la boleta automáticamente. Se salta una ALERTA.
+                if res['path_comprobante'] or res['estado'] == 'PAGADO':
+                    raise ValueError(
+                        f"⚠️ No se puede reemplazar la boleta de {concepto} {periodo_mes}/{periodo_anio} porque ya tiene un comprobante de pago vinculado. "
+                        f"Por favor, desvinculá primero el comprobante o revé la rectificación con los contadores."
+                    )
+                
+                # Si NO tiene comprobante cargado, se reemplaza libremente por la nueva boleta
                 final_monto = monto_cents
                 final_monto_2 = monto_2_cents
                 final_vto = data.get('fecha_vencimiento')
                 final_vto_2 = data.get('fecha_vencimiento_2')
+                final_estado = 'PENDIENTE'
             
             conn.execute('''
                 UPDATE pagos_vencimientos SET 
                     categoria = COALESCE(?, categoria),
-                    monto = COALESCE(?, monto),
-                    fecha_vencimiento = COALESCE(?, fecha_vencimiento),
-                    monto_2 = COALESCE(?, monto_2),
-                    fecha_vencimiento_2 = COALESCE(?, fecha_vencimiento_2),
+                    monto = ?,
+                    fecha_vencimiento = ?,
+                    monto_2 = ?,
+                    fecha_vencimiento_2 = ?,
                     path_boleta = ?,
                     path_comprobante = ?,
                     hash_boleta = COALESCE(?, hash_boleta),
@@ -183,7 +190,7 @@ def save_pago(data: dict):
             return cursor.lastrowid
     except Exception as e:
         logger.error(f"Error en save_pago: {e}")
-        return None
+        raise e
     finally:
         conn.close()
 

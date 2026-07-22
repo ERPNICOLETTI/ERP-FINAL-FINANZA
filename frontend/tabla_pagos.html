@@ -40,10 +40,10 @@
     <td>
         <div style="display:flex; gap:8px; align-items:center; width:100%;">
             {% if p.path_boleta %}
-            <button class="pill" title="Ver Boleta" onclick="window.open('/archivos/pagos/' + '{{ p.path_boleta }}'.replace('modulo_pagos/archivos_pagos/', ''), '_blank')">📄</button>
+            <button class="pill" title="Ver Boleta" onclick="window.open('/archivos/pagos/' + '{{ p.path_boleta }}'.replace('modulo_pagos/archivos_pagos/', '') + '?v=' + Date.now(), '_blank')">📄</button>
             {% endif %}
             {% if p.path_comprobante %}
-            <button class="pill completed" title="Ver Comprobante" onclick="window.open('/archivos/pagos/' + '{{ p.path_comprobante }}'.replace('modulo_pagos/archivos_pagos/', ''), '_blank')">💵</button>
+            <button class="pill completed" title="Ver Comprobante" onclick="window.open('/archivos/pagos/' + '{{ p.path_comprobante }}'.replace('modulo_pagos/archivos_pagos/', '') + '?v=' + Date.now(), '_blank')">💵</button>
             {% endif %}
             {% if p.estado == 'PENDIENTE' %}
             <button class="pill" title="Cargar Comprobante" onclick="document.getElementById('receipt-upload-{{ p.id }}').click()">📤</button>

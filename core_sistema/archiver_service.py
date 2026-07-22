@@ -111,11 +111,28 @@ def archivar_documento(filepath_origen, modulo, anio, mes, entidad, use_vault=Tr
             # Sobreescribir (Comportamiento deseado en Histórico de Reportes)
             logger.info(f"🔄 Sobreescribiendo reporte anterior: {target_filename}")
 
-    # 3. Mover Archivo
+    # 3. Mover/Convertir Archivo
     try:
-        shutil.move(filepath_origen, target_path)
-        logger.info(f"✅ Archivo archivado legalmente en: {target_path}")
+        ext_target = os.path.splitext(target_path)[1].lower()
+        ext_orig = os.path.splitext(filepath_origen)[1].lower()
+        es_img_orig = ext_orig in ['.jpg', '.jpeg', '.png', '.webp']
+        
+        if ext_target == '.pdf' and es_img_orig:
+            # Convertir imagen a PDF auténtico para que se visualice correctamente en el navegador
+            from PIL import Image
+            img = Image.open(filepath_origen)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.save(target_path, 'PDF', resolution=100.0)
+            img.close()
+            if os.path.exists(filepath_origen):
+                os.remove(filepath_origen)
+            logger.info(f"✅ Imagen convertida y archivada como PDF auténtico en: {target_path}")
+        else:
+            shutil.move(filepath_origen, target_path)
+            logger.info(f"✅ Archivo archivado legalmente en: {target_path}")
+            
         return target_path.replace('\\', '/')
     except Exception as e:
-        logger.error(f"❌ Error al mover el archivo: {e}")
+        logger.error(f"❌ Error al mover/convertir el archivo: {e}")
         return None

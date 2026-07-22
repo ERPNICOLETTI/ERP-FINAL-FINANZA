@@ -59,7 +59,67 @@ def convertir_pdf_a_markdown(filepath):
             markdown_content.append("\n" + "\n".join(pypdf_text))
     except Exception as e:
         pass
+        
+    # Si el texto acumulado es demasiado corto, es probable que sea un PDF escaneado. Aplicamos OCR.
+    import re
+    texto_plano_acumulado = "".join(markdown_content)
+    letras_y_num = re.sub(r'[^a-zA-Z0-9]', '', texto_plano_acumulado)
+    if len(letras_y_num) < 50:
+        try:
+            import pypdfium2 as pdfium
+            import pytesseract
+            from PIL import Image
+            
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+            tessdata_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tessdata'))
+            os.environ['TESSDATA_PREFIX'] = tessdata_dir
+            
+            doc = pdfium.PdfDocument(filepath)
+            try:
+                ocr_text = []
+                # Procesamos máximo las primeras 3 páginas para optimizar rendimiento
+                for page_idx in range(min(len(doc), 3)):
+                    page = doc[page_idx]
+                    bitmap = page.render(scale=2)
+                    pil_img = bitmap.to_pil()
+                    text_page = pytesseract.image_to_string(pil_img, lang='spa+eng')
+                    if text_page.strip():
+                        ocr_text.append(f"\n## Texto OCR (Página {page_idx + 1})\n")
+                        ocr_text.append(text_page)
                 
+                if ocr_text:
+                    markdown_content.append("\n".join(ocr_text))
+            finally:
+                doc.close()
+        except Exception as e:
+            # Silencioso para que no rompa el flujo si Tesseract no está instalado localmente o falla
+            print(f"⚠️ [OCR-FALLBACK] Error al procesar PDF {os.path.basename(filepath)} con OCR: {e}")
+                 
+    return "\n".join(markdown_content)
+
+
+def convertir_imagen_a_markdown(filepath):
+    """
+    Lee una imagen (.png, .jpg, .jpeg, .webp) usando pytesseract OCR o PIL
+    y extrae todo su texto en formato Markdown para la ingesta raw.
+    """
+    markdown_content = [f"\n## CONTENIDO IMAGEN ({os.path.basename(filepath)})\n"]
+    try:
+        import pytesseract
+        from PIL import Image
+        
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        tessdata_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tessdata'))
+        if os.path.exists(tessdata_dir):
+            os.environ['TESSDATA_PREFIX'] = tessdata_dir
+        
+        img = Image.open(filepath)
+        text = pytesseract.image_to_string(img, lang='spa+eng')
+        if text.strip():
+            markdown_content.append(text)
+    except Exception as e:
+        print(f"⚠️ [OCR-IMAGEN] Error al procesar imagen {os.path.basename(filepath)} con OCR: {e}")
+        
     return "\n".join(markdown_content)
 
 

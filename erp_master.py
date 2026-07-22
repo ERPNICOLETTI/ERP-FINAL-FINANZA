@@ -37,7 +37,30 @@ def detectar_parser_pdf(filepath):
                         text += extracted
         except Exception as ex:
             print(f"⚠️ pdfplumber también falló para {os.path.basename(filepath)}: {ex}")
-            return None
+
+    # Fallback de OCR rápido si no hay suficiente texto legible
+    if not text or len(re.sub(r'[^a-zA-Z0-9]', '', text)) < 50:
+        try:
+            import pypdfium2 as pdfium
+            import pytesseract
+            
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+            tessdata_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'core_sistema', 'tessdata'))
+            os.environ['TESSDATA_PREFIX'] = tessdata_dir
+            
+            doc = pdfium.PdfDocument(filepath)
+            try:
+                if len(doc) > 0:
+                    page = doc[0]
+                    bitmap = page.render(scale=2)
+                    pil_img = bitmap.to_pil()
+                    ocr_result = pytesseract.image_to_string(pil_img, lang='spa+eng')
+                    if ocr_result:
+                        text += ocr_result
+            finally:
+                doc.close()
+        except Exception as ocr_err:
+            pass
 
     if not text:
         return None

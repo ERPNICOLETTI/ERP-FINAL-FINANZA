@@ -4,6 +4,20 @@ Este archivo define las reglas de auto-regulación y consciencia artificial que 
 
 ---
 
+## 🩸 TATUAJE SAGRADO E INQUEBRANTABLE DE ARQUITECTURA ELT (DE POR VIDA)
+> 🚨 **REGLA ABSOLUTA:**
+> **TODO ARCHIVO QUE ENTRA AL ERP NICOLETTI (BOLETAS, COMPROBANTES DE PAGO, FACTURAS DE COMPRA, EXTRACTOS BANCARIOS, RESÚMENES DE TARJETA, ETC.), SIN NINGUNA EXCEPCIÓN, DEBE INGRESAR PRIMERO A LA TABLA DE STAGING RAW (`core_staging_raw`) EN LA FASE 1 DE INGESTA.**
+> **ESTÁ TOTALMENTE PROHIBIDO ESCRIBIR DIRECTAMENTE O VINCULAR ARCHIVOS EN LAS TABLAS FINALES DE PRODUCCIÓN SIN PASAR OBLIGATORIAMENTE POR `core_staging_raw`, REGISTRANDO SU CONTENIDO RAW, HASH SHA256 Y ARCHIVADO EN BÓVEDA.**
+
+---
+
+## 🛡️ INMUTABILIDAD Y PROTECCIÓN DE ARCHIVOS FÍSICOS (RESGUARDO LEGAL)
+> 🚨 **REGLA ABSOLUTA:**
+> **ESTÁ ESTRICTAMENTE PROHIBIDO BORRAR O SOBREESCRIBIR ARCHIVOS FÍSICOS ORIGINALES EN LAS CARPETAS DE CRUDOS Y BÓVEDA (`crudos_pagos/` Y `archivos_pagos/`).**
+> **TODO ARCHIVO INGESTADO DEBE QUEDAR RESGUARDADO EN LA CARPETA DE CRUDOS INMUTABLES CON SU NOMBRE Y HASH SHA256 ORIGINAL PARA VALIDEZ JURÍDICA Y PROBATORIA.**
+
+---
+
 ## 🧠 1. El Autochequeo de Consciencia
 Antes de responder cualquier mensaje que implique modificar el código o la base de datos de producción (`erp_nicoletti.db`), el agente **DEBE** hacerse y responderse mentalmente las siguientes preguntas de seguridad:
 *   ¿Estoy por escribir directamente en una tabla final sin pasar por la tabla de staging (`core_staging_raw`)? **(Si la respuesta es SÍ, se debe activar el Freno de Mano).**

@@ -49,6 +49,32 @@ def procesar_pago(filepath=None, text_content=None):
                     t = page.extract_text()
                     if t:
                         full_text += t + "\n"
+            
+            # Fallback OCR si es PDF escaneado
+            if not full_text or len(re.sub(r'[^a-zA-Z0-9]', '', full_text)) < 50:
+                try:
+                    import pypdfium2 as pdfium
+                    import pytesseract
+                    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+                    tessdata_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'core_sistema', 'tessdata'))
+                    os.environ['TESSDATA_PREFIX'] = tessdata_dir
+                    
+                    doc = pdfium.PdfDocument(filepath)
+                    try:
+                        ocr_text = []
+                        for page_idx in range(min(len(doc), 3)):
+                            page = doc[page_idx]
+                            bitmap = page.render(scale=2)
+                            pil_img = bitmap.to_pil()
+                            text_page = pytesseract.image_to_string(pil_img, lang='spa+eng')
+                            if text_page.strip():
+                                ocr_text.append(text_page)
+                        if ocr_text:
+                            full_text += "\n" + "\n".join(ocr_text)
+                    finally:
+                        doc.close()
+                except Exception as ocr_err:
+                    pass
 
         info['meta_json']['full_text'] = full_text
         TU = full_text.upper()
