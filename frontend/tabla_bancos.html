@@ -13,7 +13,7 @@
             <span class="cat-badge cat-{{ mov.categoria.replace(' ', '_') }}">{% if mov.categoria == 'SIN_CATEGORIZAR' %}Sin Categorizar ❓{% else %}{{ mov.categoria }}{% endif %}</span>
         </div>
     </td>
-    <td class="{{ 'val-positive' if mov.importe > 0 else 'val-negative' }}" style="font-weight: 600; text-align: right; white-space: nowrap;">
+    <td class="{{ 'monto-ingreso' if mov.importe > 0 else 'monto-egreso' }}" style="font-weight: 700; text-align: right; white-space: nowrap;">
         $ {{ "{:,.2f}".format(mov.importe).replace(',', 'X').replace('.', ',').replace('X', '.') }}
     </td>
     <td style="color: var(--text-muted); text-align: right; white-space: nowrap; font-family: monospace;">

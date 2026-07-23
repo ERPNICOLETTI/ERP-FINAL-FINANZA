@@ -95,6 +95,10 @@ def detectar_parser_excel(filepath):
             return "CREDICOOP"
         elif "CHUBUT" in content or "PROVINCIA DEL CHUBUT" in content:
             return "CHUBUT"
+        elif "GALICIA" in content:
+            return "GALICIA"
+        elif "MERCADOPAGO" in content or "MERCADO PAGO" in content or "SETTLEMENT" in content:
+            return "MERCADOPAGO"
         elif "HIPOTECARIO" in content:
             if "USD" in filepath.upper() or "CA_USD" in content or "DOLARES" in content or "DÓLARES" in content:
                 return "HIPOTECARIO_USD"
@@ -105,6 +109,17 @@ def detectar_parser_excel(filepath):
             return "CALIM"
     except Exception as e:
         print(f"⚠️ Error detectando contenido de Excel {os.path.basename(filepath)}: {e}")
+    return None
+
+def detectar_parser_csv(filepath):
+    """Detecta el parser del CSV leyendo la primera línea de cabecera."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            first_line = f.readline().upper()
+        if "SETTLEMENT_DATE" in first_line or "TRANSACTION_AMOUNT" in first_line:
+            return "MERCADOPAGO"
+    except:
+        pass
     return None
 
 class ERPMaster:
@@ -208,6 +223,8 @@ class ERPMaster:
                         detected_type = detectar_parser_pdf(filepath)
                     elif f_upper.endswith((".XLSX", ".XLS")):
                         detected_type = detectar_parser_excel(filepath)
+                    elif f_upper.endswith(".CSV"):
+                        detected_type = detectar_parser_csv(filepath)
 
                     # 1. MODULO TARJETAS
                     if detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
@@ -236,9 +253,17 @@ class ERPMaster:
                         success, info = generador_libro_iva.procesar_archivo(filepath)
 
                     # 3. MODULO BANCOS
-                    elif detected_type == "CHUBUT" or (("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith(".XLSX")):
-                        from modulo_bancos.lectores import lector_chubut
-                        success, info = lector_chubut.procesar_archivo(filepath)
+                    elif detected_type == "CHUBUT" or (("CHUBUT" in f_upper or "HISTORICOS" in f_upper) and f_upper.endswith((".XLSX", ".XLS"))):
+                        from modulo_bancos.lectores import lector_chubut_elt
+                        success, info = lector_chubut_elt.procesar_archivo(filepath)
+                    
+                    elif detected_type == "GALICIA" or ("GALICIA" in f_upper and f_upper.endswith((".XLSX", ".XLS"))):
+                        from modulo_bancos.lectores import lector_galicia
+                        success, info = lector_galicia.procesar_archivo(filepath)
+                        
+                    elif detected_type == "MERCADOPAGO" or ("SETTLEMENT" in f_upper and f_upper.endswith(".CSV")):
+                        from modulo_bancos.lectores import lector_mercadopago
+                        success, info = lector_mercadopago.procesar_archivo(filepath)
                     
                     elif detected_type == "CREDICOOP" or ("CREDICOOP" in f_upper and f_upper.endswith(".XLSX")):
                         from modulo_bancos.lectores import lector_credicoop_joaquin

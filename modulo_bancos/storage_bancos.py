@@ -45,7 +45,8 @@ def init_db_bancos():
             hash_archivo    TEXT,
             metadata_cruda  TEXT DEFAULT '{}',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)
+            raw_ingesta_id  INTEGER,
+            entidad         TEXT DEFAULT 'LDK'
         )
     ''')
     

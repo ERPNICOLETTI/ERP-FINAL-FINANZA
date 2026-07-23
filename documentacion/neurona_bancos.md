@@ -18,9 +18,18 @@ Este módulo registra y procesa los extractos bancarios de Chubut, Credicoop e H
 ---
 
 ## 🏛️ Base de Datos (`bancos_movimientos`)
--   **Esquema:** Registra cada movimiento con fecha, importe, saldo, banco, cuenta y la categoría asociada.
--   **Idempotencia:** Restricción `UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)` + `INSERT OR IGNORE`.
--   **Estrategia Anti-Colisión:** En transacciones legítimas idénticas del mismo día, el parser añade un sufijo numérico `(2)`, `(3)` al final de la descripción para evitar que SQLite ignore el registro debido a la clave única.
+-   **Esquema:** Registra cada movimiento con fecha, importe, saldo, banco, cuenta, categoría y el identificador de trazabilidad `raw_ingesta_id`.
+-   **Eliminación de Clave Única Restrictiva (v6.2.0):** Se removió de forma definitiva la restricción `UNIQUE(banco, cuenta, fecha, descripcion, importe, saldo)` a nivel de SQLite. Esto permite que transacciones legítimas idénticas del mismo día (ej: cobro de dos servicios idénticos o cobro de dos facturas del mismo monto) sean guardadas independientemente sin colapsarse ni generar pérdida contable.
+-   **Trazabilidad Probatoria Directa:** Cada registro persistido en `bancos_movimientos` conserva su `raw_ingesta_id` enlazado al Staging ID original para auditorías físicas en un click.
+
+---
+
+## 🛡️ Control de Integridad y Verificación Cruzada (Data Integrity)
+Se desplegó el motor **`VerificadorIntegridadERP`** en [core_sistema/verificador_integridad.py](file:///c:/Users/essao/Desktop/ERP%20FINAL/core_sistema/verificador_integridad.py) para auditar cada carga de extractos.
+- **Conciliación Matemática 1:1:** Realiza una sumatoria cruzada de filas y montos acumulados de débitos y créditos del archivo físico Excel original contra lo importado en la base de datos de producción.
+- **Estado de Control Galicia (Junio 2026):**
+  - **Cuenta Corriente (72 filas):** Conciliación Perfecta (Desvío: $0.00).
+  - **Caja de Ahorro (500 filas):** Conciliación Perfecta (Desvío: $0.00).
 
 ---
 

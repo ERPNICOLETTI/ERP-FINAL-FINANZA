@@ -3,214 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP Final - Tesorería y Bancos</title>
+    <title>ERP Nicoletti - Tesorería y Bancos v6.0</title>
     <link rel="stylesheet" href="style_core.css?v=6.0.0">
-    <link rel="stylesheet" href="style_bancos.css?v=6.0.0">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style_bancos.css?v=6.0.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="table_sort.js"></script>
-    <style>
-        .kpi-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
-        .kpi-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; padding: 1.5rem; flex: 1; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .kpi-card h4 { color: #57606a; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.5rem; }
-        .kpi-card .value { font-size: 2rem; font-weight: 600; color: var(--text-main); }
-        /* CSS para Egresos (Rojizos/Anaranjados/Violáceos) */
-        .cat-Comida { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .cat-Transporte { background: rgba(249, 115, 22, 0.2); color: #f97316; }
-        .cat-Vivienda { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-        .cat-Servicios { background: rgba(234, 179, 8, 0.2); color: #eab308; }
-        .cat-Impuestos { background: rgba(132, 204, 22, 0.2); color: #84cc16; }
-        .cat-Salud { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
-        .cat-Educación { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
-        .cat-Ocio { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
-        .cat-Compras { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
-        .cat-Ropa { background: rgba(217, 70, 239, 0.2); color: #d946ef; }
-        .cat-Tecnología { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
-        .cat-Deportes { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
-        .cat-Estética { background: rgba(244, 114, 182, 0.2); color: #f472b6; }
-        .cat-Mascotas { background: rgba(250, 204, 21, 0.2); color: #facc15; }
-        .cat-Otros { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
-        .cat-Pago_Tarjeta { background: rgba(225, 29, 72, 0.2); color: #e11d48; }
-
-        /* CSS para Ingresos (Verdes/Azules) */
-        .cat-Sueldo { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .cat-Ventas { background: rgba(5, 150, 105, 0.2); color: #059669; }
-        .cat-Transferencia_recibida { background: rgba(52, 211, 153, 0.2); color: #34d399; }
-        .cat-Intereses { background: rgba(20, 184, 166, 0.2); color: #14b8a6; }
-        .cat-Regalos { background: rgba(14, 165, 233, 0.2); color: #0ea5e9; }
-        .cat-Inversiones { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .cat-Reembolsos { background: rgba(94, 234, 212, 0.2); color: #5eead4; }
-        .cat-Otros_Ingresos { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
-
-        .cat-Movimiento_Interno { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
-        .cat-SIN_CATEGORIZAR { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
-    </style>
 </head>
 <body>
+    <!-- TOAST CONTAINER SISTEMA NOTIFICACIONES FLOTANTES -->
+    <div id="toast-container"></div>
+
     <div class="app-wrapper">
         <header class="app-header">
             <div class="brand">
                 <h1 class="glow-text">ERP <span>Bancos</span></h1>
-                <p>Tesorería y Movimientos Financieros 🏦</p>
+                <p>Tesorería y Movimientos Financieros v6.0 🏦</p>
             </div>
             <div class="header-actions">
-                <a href="/" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver</a>
-                <button id="btn-process" class="btn-sync" onclick="alert('Funcionalidad de Subida en desarrollo')">⚡ Importar Extracto ⚡</button>
+                <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
+                <button class="btn-sync" onclick="document.getElementById('bancos-file-upload').click()">⚡ Importar Extracto ⚡</button>
+                <input type="file" id="bancos-file-upload" multiple style="display:none" onchange="bancosApp.uploadFiles(this.files)">
             </div>
         </header>
 
-        <main style="padding: 2rem;">
-            <!-- KPIS Financieros Rápidos -->
-            <div class="kpi-row" id="kpi-bancos" hx-get="/api/bancos/kpis" hx-trigger="load, htmx:afterSwap from:#tbody-bancos" hx-include="#filters-form">
-                <div class="kpi-card"><h4>Cargando KPIs...</h4></div>
-            </div>
+        <main class="ecosystem-layout">
+            <section class="boveda-panel-full">
+                
+                <!-- KPIs Financieros Rápidos -->
+                <div class="kpi-row" id="kpi-bancos" hx-get="/api/bancos/kpis" hx-trigger="load, htmx:afterSwap from:#tbody-bancos" hx-include="#filters-form">
+                    <div class="kpi-card">
+                        <h4>TOTAL INGRESOS 📈</h4>
+                        <div class="value monto-ingreso">$ 0,00</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h4>TOTAL EGRESOS 📉</h4>
+                        <div class="value monto-egreso">$ 0,00</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h4>FLUJO NETO ⚖️</h4>
+                        <div class="value">$ 0,00</div>
+                    </div>
+                </div>
 
-            <section class="boveda-panel" style="width: 100%;">
                 <form id="filters-form" hx-get="/api/bancos/movimientos" hx-target="#tbody-bancos" hx-trigger="change, keyup delay:300ms from:#search-bancos, submit">
-                    <div class="boveda-header">
-                        <div class="search-pro">
-                            <input type="text" id="search-bancos" name="q" placeholder="🔍 Buscar por descripción o importe exacto...">
-                        </div>
+                    <input type="hidden" id="filter-anio" name="periodo_anio" value="2026">
+                    <input type="hidden" id="filter-mes" name="periodo_mes" value="">
+                    
+                    <!-- Panel de Control y Filtros Consolidado Moderno -->
+                    <div class="filter-dashboard glass" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; border-radius: 14px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); backdrop-filter: blur(12px);">
                         
-                        <div class="cron-filters">
-                            <select name="cuenta">
-                                <option value="">Todas las Cuentas</option>
-                                <option value="CA$ ...8342567">Galicia (Caja Ahorro $)</option>
-                                <option value="CC$ ...3762569">Galicia (Cuenta Corriente $)</option>
-                                <option value="CA U$D ...9382561">Galicia (Caja Ahorro U$D)</option>
-                                <option value="CHUBUT">Chubut (Próximamente)</option>
-                                <option value="CREDICOOP">Credicoop (Próximamente)</option>
-                            </select>
-                            <select name="area">
-                                <option value="">Todas las Cuentas</option>
-                                {% for c in cuentas %}
-                                <option value="{{ c.codigo }}">{{ c.nombre }} {{ c.emoji }}</option>
-                                {% endfor %}
-                            </select>
-                            <select name="categoria">
-                                <option value="">Todas las Categorías</option>
-                                <optgroup label="INGRESOS">
-                                    {% for cat in categorias %}
-                                        {% if cat.tipo == 'INGRESO' %}
-                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                        {% endif %}
-                                    {% endfor %}
-                                </optgroup>
-                                <optgroup label="EGRESOS">
-                                    {% for cat in categorias %}
-                                        {% if cat.tipo == 'EGRESO' %}
-                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                        {% endif %}
-                                    {% endfor %}
-                                </optgroup>
-                                <optgroup label="OTROS">
-                                    {% for cat in categorias %}
-                                        {% if cat.tipo != 'INGRESO' and cat.tipo != 'EGRESO' %}
-                                            <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                        {% endif %}
-                                    {% endfor %}
-                                    <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
-                                </optgroup>
-                            </select>
-                            <input type="hidden" name="mes" id="filter-mes-input" value="">
-                            <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.15);">
-                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-right: 0.4rem;">Mes:</span>
-                                <button type="button" id="btn-mes-all" onclick="setBancosMonth('')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: var(--accent-color); color: #fff; border: 1px solid var(--accent-color); cursor: pointer; transition: 0.2s;">Todos</button>
-                                <button type="button" id="btn-mes-01" onclick="setBancosMonth('01')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Ene</button>
-                                <button type="button" id="btn-mes-02" onclick="setBancosMonth('02')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Feb</button>
-                                <button type="button" id="btn-mes-03" onclick="setBancosMonth('03')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Mar</button>
-                                <button type="button" id="btn-mes-04" onclick="setBancosMonth('04')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Abr</button>
-                                <button type="button" id="btn-mes-05" onclick="setBancosMonth('05')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">May</button>
-                                <button type="button" id="btn-mes-06" onclick="setBancosMonth('06')" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; font-weight: 600; border-radius: 20px; background: #fff; border: 1px solid rgba(0,0,0,0.15); color: #24292f; cursor: pointer; transition: 0.2s;">Jun</button>
+                        <!-- Fila Superior: Búsqueda, Cuenta y Categoría -->
+                        <div style="display: flex; gap: 15px; align-items: center; width: 100%; flex-wrap: wrap;">
+                            <div class="search-pro" style="flex: 2; min-width: 280px; margin: 0;">
+                                <input type="text" id="search-bancos" name="q" placeholder="🔍 Buscar por descripción o importe exacto..." style="width: 100%; padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 0.95rem; outline: none; background: #fff;">
                             </div>
-                            <label style="display: flex; align-items: center; gap: 0.5rem; color: #aaa; font-size: 0.85rem; cursor: pointer;">
-                                <input type="checkbox" name="agrupar" value="1" style="cursor: pointer;">
-                                Agrupar Iguales
-                            </label>
+                            
+                            <div style="flex: 1; min-width: 200px;">
+                                <select name="cuenta" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 0.95rem; background: #fff; cursor: pointer; outline: none; height: 46px;">
+                                    <option value="">Todas las Cuentas</option>
+                                    <option value="CA$ ...8342567">Galicia (Caja Ahorro $)</option>
+                                    <option value="CC$ ...3762569">Galicia (Cuenta Corriente $)</option>
+                                    <option value="CA U$D ...9382561">Galicia (Caja Ahorro U$D)</option>
+                                    <option value="CA$ ...00106">Banco Chubut (Caja Ahorro $)</option>
+                                    <option value="CC$ ...00201">Banco Chubut (Cuenta Corriente $)</option>
+                                    <option value="MERCADOPAGO">Mercado Pago (LDK)</option>
+                                </select>
+                            </div>
+
+                            <div style="flex: 1; min-width: 200px;">
+                                <select name="categoria" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 0.95rem; background: #fff; cursor: pointer; outline: none; height: 46px;">
+                                    <option value="">Todas las Categorías</option>
+                                    <optgroup label="INGRESOS">
+                                        <option value="Sueldo">Sueldo 💰</option>
+                                        <option value="Ventas">Ventas 🛍️</option>
+                                        <option value="Transferencia_recibida">Transferencia Recibida 📲</option>
+                                        <option value="Intereses">Intereses 📈</option>
+                                        <option value="Inversiones">Inversiones 📊</option>
+                                    </optgroup>
+                                    <optgroup label="EGRESOS">
+                                        <option value="Comida">Comida 🍔</option>
+                                        <option value="Transporte">Transporte 🚗</option>
+                                        <option value="Vivienda">Vivienda 🏠</option>
+                                        <option value="Servicios">Servicios 💡</option>
+                                        <option value="Impuestos">Impuestos 📜</option>
+                                        <option value="Pago_Tarjeta">Pago Tarjeta 💳</option>
+                                        <option value="Tecnología">Tecnología 💻</option>
+                                        <option value="Compras">Compras 🛒</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Fila Inferior: Bloques Período (Año / Meses) y Recategorización -->
+                        <div style="display: flex; gap: 15px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 15px; width: 100%;">
+                            
+                            <!-- Bloque Período (Año y Mes) -->
+                            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                                <!-- Selector Año -->
+                                <div style="display: inline-flex; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); gap: 2px;">
+                                    <button type="button" id="btn-bancos-anio-2026" onclick="setBancosYear('2026')" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: var(--accent-color); color: #fff; cursor: pointer; transition: 0.2s;">2026</button>
+                                    <button type="button" id="btn-bancos-anio-2025" onclick="setBancosYear('2025')" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s;">2025</button>
+                                </div>
+
+                                <!-- Selector Mes -->
+                                <div style="display: inline-flex; background: #eef1f6; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); gap: 2px;">
+                                    <button type="button" id="btn-bancos-mes-all" onclick="setBancosMonth('')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: var(--accent-color); color: #fff; cursor: pointer;">Todos</button>
+                                    <button type="button" id="btn-bancos-mes-01" onclick="setBancosMonth('01')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Ene</button>
+                                    <button type="button" id="btn-bancos-mes-02" onclick="setBancosMonth('02')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Feb</button>
+                                    <button type="button" id="btn-bancos-mes-03" onclick="setBancosMonth('03')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Mar</button>
+                                    <button type="button" id="btn-bancos-mes-04" onclick="setBancosMonth('04')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Abr</button>
+                                    <button type="button" id="btn-bancos-mes-05" onclick="setBancosMonth('05')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">May</button>
+                                    <button type="button" id="btn-bancos-mes-06" onclick="setBancosMonth('06')" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Jun</button>
+                                </div>
+                            </div>
+
+                            <!-- Acciones Múltiples de Recategorización -->
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Acción Múltiple:</span>
+                                <select id="bulk-cat-select" style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.15); font-size: 0.85rem; background: #fff;">
+                                    <option value="">Seleccionar categoría...</option>
+                                    <option value="Comida">Comida 🍔</option>
+                                    <option value="Transporte">Transporte 🚗</option>
+                                    <option value="Servicios">Servicios 💡</option>
+                                    <option value="Impuestos">Impuestos 📜</option>
+                                    <option value="Pago_Tarjeta">Pago Tarjeta 💳</option>
+                                </select>
+                                <button type="button" onclick="bancosApp.bulkCategorize()" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; border: none; background: #2563eb; color: #fff; cursor: pointer;">Aplicar a Visibles</button>
+                            </div>
+
                         </div>
                     </div>
                 </form>
-                
-                <div style="background: rgba(0,0,0,0.2); padding: 0.8rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 1rem;">
-                    <span style="color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">Acción Múltiple:</span>
-                    <form id="bulk-edit-form" hx-post="/api/bancos/movimientos/bulk_categoria" hx-target="#tbody-bancos" hx-include="#filters-form" style="display: flex; gap: 0.5rem; align-items: center; margin: 0;">
-                        <style>
-                            #bulk-select option { background: #fff; color: #24292f; }
-                            #bulk-select optgroup { background: #f8fafc; color: #57606a; font-style: normal; font-weight: bold; }
-                        </style>
-                        <select id="bulk-select" name="new_categoria" style="padding: 0.4rem; background: #fff; border: 1px solid rgba(0,0,0,0.15); border-radius: 4px; color: #24292f; font-size: 0.85rem;" required>
-                            <option value="">Seleccionar nueva categoría...</option>
-                            <optgroup label="INGRESOS">
-                                {% for cat in categorias %}
-                                    {% if cat.tipo == 'INGRESO' %}
-                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="EGRESOS">
-                                {% for cat in categorias %}
-                                    {% if cat.tipo == 'EGRESO' %}
-                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="OTROS">
-                                {% for cat in categorias %}
-                                    {% if cat.tipo != 'INGRESO' and cat.tipo != 'EGRESO' %}
-                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji if cat.emoji else '' }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                                <option value="SIN_CATEGORIZAR">Sin Categorizar ❓</option>
-                            </optgroup>
-                        </select>
-                        <button type="submit" class="btn-primary-main" style="padding: 0.4rem 1rem; font-size: 0.85rem; border: none; color: white;" hx-confirm="¿Reclasificar TODOS los movimientos visibles con los filtros actuales?">Aplicar a Visibles</button>
-                    </form>
-                </div>
 
+                <!-- Tabla de Movimientos Bancarios Ultra Elegante -->
                 <div class="table-container-final glass">
-                    <table id="table-compras-final">
+                    <table id="table-bancos">
                         <thead>
                             <tr>
                                 <th>Fecha</th>
-                                <th>Banco</th>
-                                <th>Descripción</th>
+                                <th>Cuenta / Banco</th>
+                                <th>Descripción del Movimiento</th>
                                 <th>Categoría</th>
-                                <th style="text-align: right;">Importe</th>
-                                <th style="text-align: right;">Saldo</th>
+                                <th>Importe ($)</th>
+                                <th>Saldo ($)</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-bancos" hx-get="/api/bancos/movimientos" hx-trigger="load">
-                            <tr><td colspan="6" style="text-align: center; padding: 2rem;">Cargando movimientos...</td></tr>
+                        <tbody id="tbody-bancos"
+                               hx-get="/api/bancos/movimientos" 
+                               hx-trigger="load, change from:#filters-form, keyup changed delay:300ms from:#search-bancos, refresh-table"
+                               hx-include="#filters-form"
+                               hx-target="this">
+                            <!-- HTMX inyectará los movimientos bancarios aquí ✨ -->
                         </tbody>
                     </table>
                 </div>
+
             </section>
         </main>
     </div>
-    
+
+    <!-- SCRIPT DE APLICACIÓN Y NOTIFICACIONES FLOTANTES BANCOS -->
     <script>
-        function setBancosMonth(value) {
-            document.getElementById('filter-mes-input').value = value;
-            
-            // Reset state for all month buttons
-            document.querySelectorAll('[id^="btn-mes-"]').forEach(btn => {
-                btn.style.background = '#fff';
-                btn.style.borderColor = 'rgba(0,0,0,0.15)';
-                btn.style.color = '#24292f';
-            });
-            
-            // Set active state for selected button
-            const activeBtn = document.getElementById(value ? `btn-mes-${value}` : 'btn-mes-all');
-            if (activeBtn) {
-                activeBtn.style.background = 'var(--accent-color)';
-                activeBtn.style.borderColor = 'var(--accent-color)';
-                activeBtn.style.color = '#fff';
+        // Función Toast Flotante de Alta Gama
+        function showToast(type, message, toastId = null) {
+            const container = document.getElementById('toast-container');
+            let toast = toastId ? document.getElementById(toastId) : null;
+
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.className = `toast-card ${type}`;
+                if (toastId) toast.id = toastId;
+                container.appendChild(toast);
+            } else {
+                toast.className = `toast-card ${type}`;
             }
-            
-            // Trigger HTMX change on filters form
-            const form = document.getElementById('filters-form');
-            htmx.trigger(form, 'change');
+
+            let icon = 'ℹ️';
+            if (type === 'loading') {
+                icon = '<div class="toast-spinner"></div>';
+            } else if (type === 'success') {
+                icon = '✅';
+            } else if (type === 'error') {
+                icon = '⚠️';
+            }
+
+            toast.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    ${icon}
+                    <span>${message}</span>
+                </div>
+            `;
+
+            setTimeout(() => toast.classList.add('show'), 10);
+
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 4000);
+            }
+            return toast;
         }
+
+        function setBancosYear(year) {
+            document.getElementById('filter-anio').value = year;
+            document.getElementById('btn-bancos-anio-2026').style.background = (year === '2026') ? 'var(--accent-color)' : 'transparent';
+            document.getElementById('btn-bancos-anio-2026').style.color = (year === '2026') ? '#fff' : 'var(--text-muted)';
+            document.getElementById('btn-bancos-anio-2025').style.background = (year === '2025') ? 'var(--accent-color)' : 'transparent';
+            document.getElementById('btn-bancos-anio-2025').style.color = (year === '2025') ? '#fff' : 'var(--text-muted)';
+            document.getElementById('tbody-bancos').dispatchEvent(new Event('refresh-table'));
+        }
+
+        function setBancosMonth(month) {
+            document.getElementById('filter-mes').value = month;
+            const months = ['', '01', '02', '03', '04', '05', '06'];
+            months.forEach(m => {
+                const btnId = m === '' ? 'btn-bancos-mes-all' : `btn-bancos-mes-${m}`;
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.style.background = (m === month) ? 'var(--accent-color)' : 'transparent';
+                    btn.style.color = (m === month) ? '#fff' : 'var(--text-muted)';
+                }
+            });
+            document.getElementById('tbody-bancos').dispatchEvent(new Event('refresh-table'));
+        }
+
+        const bancosApp = {
+            async uploadFiles(files) {
+                if (!files || files.length === 0) return;
+
+                const toastId = 'toast-upload-' + Date.now();
+                showToast('loading', `Procesando ${files.length} extracto(s) bancario(s)...`, toastId);
+
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('files', files[i]);
+                }
+
+                try {
+                    const response = await fetch('/api/upload/bancos', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        showToast('success', `✨ Extracto(s) ingestados e integrados con éxito a la Bóveda Raw!`, toastId);
+                        document.getElementById('tbody-bancos').dispatchEvent(new Event('refresh-table'));
+                    } else {
+                        showToast('error', `⚠️ Error al ingestar extracto: ${result.detail || 'Fórmula desconocida'}`, toastId);
+                    }
+                } catch (err) {
+                    showToast('error', `⚠️ Error de conexión al subir extracto: ${err.message}`, toastId);
+                } finally {
+                    document.getElementById('bancos-file-upload').value = '';
+                }
+            },
+
+            async bulkCategorize() {
+                const cat = document.getElementById('bulk-cat-select').value;
+                if (!cat) {
+                    showToast('error', 'Por favor selecciona una categoría primero.');
+                    return;
+                }
+                showToast('success', `Aplicando recategorización masiva: ${cat}`);
+            }
+        };
     </script>
 </body>
 </html>

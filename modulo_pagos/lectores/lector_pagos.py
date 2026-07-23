@@ -98,7 +98,7 @@ def procesar_pago(filepath=None, text_content=None):
             info['concepto'] = 'SEC'
             from modulo_pagos.lectores.lector_sec import procesar as run_sec
             run_sec(TU, info)
-        elif "TRABAJO - TASAS" in TU or "SECRETARIA DE TRABAJO" in TU or "MINISTERIO DE TRABAJO" in TU:
+        elif "TRABAJO - TASAS" in TU or "SECRETARIA DE TRABAJO" in TU or "MINISTERIO DE TRABAJO" in TU or "RENTAS CHUBUT" in TU or "DIREC GRAL D RENTAS" in TU or "POLICIA" in TU:
             info['concepto'] = 'POLICIA'
             from modulo_pagos.lectores.lector_policia import procesar as run_policia
             run_policia(TU, info)

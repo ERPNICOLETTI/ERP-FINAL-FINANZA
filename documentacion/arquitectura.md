@@ -58,6 +58,14 @@ El flujo de procesamiento de archivos (extractos bancarios, cupones, facturas, c
 *   **FastAPI Gateway (`erp_api.py`):** Expone las rutas de control, APIs de datos y endpoints HTMX.
 *   **CLI Orchestrator:** Acceso por consola a auditorías (`--audit`), búsquedas globales indexadas (`--search`) y reprocesamiento selectivo (`--reprocess`).
 
+### 🛡️ Capa de Verificación e Integridad de Datos (Data Integrity Checker)
+*   **Propósito:** Garantizar que todo documento procesado e ingresado a las tablas finales de producción posea una consistencia matemática del 100% con su archivo original de origen.
+*   **Implementación (`core_sistema/verificador_integridad.py`):**
+    1. Lee de forma independiente las filas, débitos y créditos acumulados del archivo físico (PDF/Excel) en disco.
+    2. Sumariza los registros reales creados en la base de datos de producción (`bancos_movimientos`, `pagos_vencimientos`).
+    3. Evalúa discrepancias centavo a centavo e informa alertas de desvío.
+*   **Control Anticolisión:** Prohíbe el uso de claves únicas estriadas `UNIQUE` en tablas operativas que colapsen transacciones gemelas válidas del mismo día.
+
 ---
 
 ## 💰 3. Clasificación Financiera: Las 4 Esferas
