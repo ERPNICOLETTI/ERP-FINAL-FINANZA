@@ -1,18 +1,14 @@
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-import os
-
+from erp_api.helpers import templates
 from modulo_tarjetas import storage_finanzas as storage
 
 router = APIRouter()
-WORKSPACE = r"c:\Users\essao\Desktop\ERP FINAL"
-templates = Jinja2Templates(directory=os.path.join(WORKSPACE, "frontend"))
 
 @router.get("/finanzas", response_class=HTMLResponse)
 async def view_finanzas(request: Request):
     """Renderiza la vista principal del panel de finanzas y conciliación."""
-    return templates.TemplateResponse("finanzas.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="finanzas.html", context={"request": request})
 
 @router.get("/api/finanzas/reporte", response_class=HTMLResponse)
 async def api_get_reporte(
@@ -22,10 +18,11 @@ async def api_get_reporte(
     q: str = Query(""),
 ):
     """Devuelve las filas de la tabla de conciliación de cobros mediante HTMX."""
-    movimientos = storage.obtener_reporte_conciliacion(periodo_anio, periodo_mes, q)
+    movimientos = storage.obtener_reporte_conciliacion(periodo_anio, periodo_mes)
     return templates.TemplateResponse(
-        "tabla_finanzas.html",
-        {
+        request=request,
+        name="tabla_finanzas.html",
+        context={
             "request": request,
             "movimientos": movimientos
         }
@@ -63,3 +60,23 @@ async def api_get_kpis(
     </div>
     """
     return HTMLResponse(content=html)
+
+@router.get("/api/finanzas/auditoria", response_class=HTMLResponse)
+async def api_get_auditoria(
+    request: Request,
+    periodo_anio: str = Query("2026"),
+    periodo_mes: str = Query(""),
+):
+    """Devuelve la tabla de auditoría detallada de clearing bancario."""
+    data = storage.obtener_auditoria_clearing(periodo_anio, periodo_mes)
+    return templates.TemplateResponse(
+        request=request,
+        name="auditoria_clearing.html",
+        context={
+            "request": request,
+            "matches": data["matches"],
+            "liquidaciones_huerfanas": data["liquidaciones_huerfanas"],
+            "depositos_huerfanos": data["depositos_huerfanos"]
+        }
+    )
+

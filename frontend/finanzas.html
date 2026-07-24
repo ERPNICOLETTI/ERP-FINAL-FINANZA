@@ -113,6 +113,17 @@
                     </table>
                 </div>
 
+                <!-- Sección Reactiva de Auditoría de Clearing y Huérfanos -->
+                <div id="seccion-auditoria" 
+                     hx-get="/api/finanzas/auditoria" 
+                     hx-trigger="load, change from:#filters-form" 
+                     hx-include="#filters-form" 
+                     style="margin-top: 35px;">
+                    <div class="glass-panel text-center text-muted" style="padding: 40px; border-radius: 16px;">
+                        Cargando conciliación de caja y clearing...
+                    </div>
+                </div>
+
             </section>
         </main>
     </div>

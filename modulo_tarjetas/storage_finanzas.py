@@ -206,3 +206,191 @@ def obtener_kpis_finanzas(anio: str = None, mes: str = None) -> dict:
         "comisiones_aranceles": costos_liq,
         "tasa_acreditacion": round(tasa_acre, 1)
     }
+
+def obtener_auditoria_clearing(anio: str, mes: str) -> dict:
+    """Retorna los matches consolidados, depósitos huérfanos y liquidaciones huérfanas de un mes."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    
+    periodo_tarjetas = f"{anio}-{mes}" if mes else anio
+    mes_banco = f"/{mes}/{anio}" if mes else f"/{anio}"
+    
+    # 1. Obtener todas las liquidaciones detalladas (diarias) del período
+    if mes:
+        query_liq = """
+            SELECT ld.fecha, ld.monto_bruto, ld.monto_neto, l.marca, ld.descripcion as lote_desc
+            FROM main.tarjetas_liquidaciones_detalles ld
+            JOIN main.tarjetas_liquidaciones l ON ld.liquidacion_id = l.id
+            WHERE l.fuente = 'PAYWAY'
+              AND l.periodo = ?
+            ORDER BY ld.fecha ASC
+        """
+        liquidaciones = conn.execute(query_liq, (periodo_tarjetas,)).fetchall()
+    else:
+        query_liq = """
+            SELECT ld.fecha, ld.monto_bruto, ld.monto_neto, l.marca, ld.descripcion as lote_desc
+            FROM main.tarjetas_liquidaciones_detalles ld
+            JOIN main.tarjetas_liquidaciones l ON ld.liquidacion_id = l.id
+            WHERE l.fuente = 'PAYWAY'
+              AND l.periodo LIKE ?
+            ORDER BY ld.fecha ASC
+        """
+        liquidaciones = conn.execute(query_liq, (f"{anio}-%",)).fetchall()
+    
+    # 2. Obtener todas las acreditaciones de tarjetas en Chubut (incluidos débitos para compensar)
+    query_bco = """
+        SELECT id, fecha, descripcion, importe
+        FROM main.bancos_movimientos
+        WHERE banco = 'CHUBUT'
+          AND cuenta = 'CA$ ...00106'
+          AND (descripcion LIKE '%PRISMA%' OR descripcion LIKE '%LIQUID COMERC%' OR descripcion LIKE '%ACREDIT%')
+    """
+    depósitos_raw = conn.execute(query_bco).fetchall()
+    
+    # Filtrar depósitos por mes
+    depósitos_chubut = []
+    for d in depósitos_raw:
+        fecha_d = d['fecha']
+        # Buscar si coincide con el mes/año
+        if mes_banco in fecha_d or (fecha_d.startswith(f"{anio}-{mes}") if mes else False):
+            depósitos_chubut.append({
+                'id': d['id'],
+                'fecha': fecha_d,
+                'descripcion': d['descripcion'],
+                'importe': d['importe'],
+                'usado': False
+            })
+            
+    matches = []
+    liquidaciones_huerfanas = []
+    
+    from datetime import datetime
+    
+    # Auxiliar para normalizar fecha a un objeto datetime real
+    def parse_fecha(d_str):
+        if not d_str: return None
+        d_str = d_str.strip()
+        # Probar formato DD/MM/YYYY
+        if "/" in d_str:
+            try:
+                return datetime.strptime(d_str, "%d/%m/%Y")
+            except:
+                pass
+        # Probar formato YYYY-MM-DD
+        if "-" in d_str:
+            try:
+                return datetime.strptime(d_str[:10], "%Y-%m-%d")
+            except:
+                pass
+        return None
+        
+    for l in liquidaciones:
+        fecha_pago_dt = parse_fecha(l['fecha'])
+        if not fecha_pago_dt:
+            continue
+            
+        neto = l['monto_neto']
+        bruto = l['monto_bruto']
+        
+        # Agrupamos movimientos del banco por día en un rango de 0 a 4 días posteriores
+        deps_por_dia = {}
+        for dep in depósitos_chubut:
+            if dep['usado']:
+                continue
+            try:
+                diff_days = (parse_fecha(dep['fecha']) - fecha_pago_dt).days
+            except:
+                diff_days = 999
+                
+            if 0 <= diff_days <= 4:
+                f_str = dep['fecha']
+                if f_str not in deps_por_dia:
+                    deps_por_dia[f_str] = []
+                deps_por_dia[f_str].append(dep)
+                
+        match_dia = None
+        
+        # Buscar en qué día hay una combinación exacta de movimientos que sumados/restados den el neto esperado
+        for f_str, list_movs in deps_por_dia.items():
+            # Caso A: Match 1:1 estricto
+            for d in list_movs:
+                if abs(d['importe'] - neto) < 5.0:
+                    match_dia = [d]
+                    break
+            if match_dia:
+                break
+                
+            # Caso B: Combinatoria de 2 movimientos del mismo día (ej. desdoblamiento de banco o débito compensatorio)
+            n_movs = len(list_movs)
+            for i in range(n_movs):
+                for j in range(i + 1, n_movs):
+                    suma_2 = list_movs[i]['importe'] + list_movs[j]['importe']
+                    if abs(suma_2 - neto) < 5.0:
+                        match_dia = [list_movs[i], list_movs[j]]
+                        break
+                if match_dia:
+                    break
+            if match_dia:
+                break
+                
+            # Caso C: Combinatoria de 3 movimientos del mismo día
+            for i in range(n_movs):
+                for j in range(i + 1, n_movs):
+                    for k in range(j + 1, n_movs):
+                        suma_3 = list_movs[i]['importe'] + list_movs[j]['importe'] + list_movs[k]['importe']
+                        if abs(suma_3 - neto) < 5.0:
+                            match_dia = [list_movs[i], list_movs[j], list_movs[k]]
+                            break
+                    if match_dia:
+                        break
+                if match_dia:
+                    break
+            if match_dia:
+                break
+                
+        if match_dia:
+            is_desdoblado = len(match_dia) > 1
+            for d in match_dia:
+                d['usado'] = True
+                fecha_acre_str = parse_fecha(d['fecha']).strftime("%Y-%m-%d") if parse_fecha(d['fecha']) else d['fecha']
+                
+                matches.append({
+                    "fecha_lote": l['fecha'],
+                    "marca": l['marca'],
+                    "bruto": bruto,
+                    "neto": neto,
+                    "lote": l['lote_desc'] or "-",
+                    "fecha_acreditacion": fecha_acre_str,
+                    "acreditado": d['importe'],
+                    "diferencia": 0.0 if not is_desdoblado else d['importe'], # mostramos el importe individual para que sume visualmente
+                    "banco_desc": d['descripcion'],
+                    "tipo_match": "DESDOBLADO" if is_desdoblado else "DIRECTO"
+                })
+        else:
+            liquidaciones_huerfanas.append({
+                "fecha_lote": l['fecha'],
+                "marca": l['marca'],
+                "bruto": bruto,
+                "neto": neto,
+                "lote": l['lote_desc'] or "-"
+            })
+            
+    # Depósitos huérfanos son los no marcados
+    depósitos_huerfanos = []
+    for d in depósitos_chubut:
+        if not d['usado'] and ("LIQUID COMERC" in d['descripcion'] or "PRISMA" in d['descripcion']):
+            fecha_d_dt = parse_fecha(d['fecha'])
+            fecha_d_str = fecha_d_dt.strftime("%Y-%m-%d") if fecha_d_dt else d['fecha']
+            depósitos_huerfanos.append({
+                "fecha": fecha_d_str,
+                "importe": d['importe'],
+                "descripcion": d['descripcion']
+            })
+            
+    conn.close()
+    return {
+        "matches": matches,
+        "liquidaciones_huerfanas": liquidaciones_huerfanas,
+        "depositos_huerfanos": depósitos_huerfanos
+    }
+
