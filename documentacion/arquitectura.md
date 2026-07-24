@@ -12,6 +12,7 @@ El sistema se organiza en dominios autónomos (módulos) representados por direc
 ### ⚖️ Reglas de Aislamiento Lógico:
 1.  **Sin Cruce de SQL:** Ningún módulo puede realizar consultas SQL sobre tablas pertenecientes a otro módulo. Toda comunicación inter-módulo se hace mediante APIs en código Python o servicios del core.
 2.  **Patrón Repositorio Estricto:** Está **estrictamente prohibido** importar `sqlite3` fuera de los archivos `storage_*.py` de cada módulo. Toda la persistencia e interacción con la base de datos se delega a las funciones del repositorio de su respectivo dominio.
+3.  **Prohibición de Importación Externa de Código:** Ningún módulo puede importar, llamar o modificar archivos `.py` que se encuentren físicamente fuera de su propio directorio (con la única excepción de las utilidades comunes compartidas en `core_sistema`). Cada módulo debe resolver su lógica de forma 100% interna y autocontenida.
 
 ---
 
@@ -61,10 +62,15 @@ El flujo de procesamiento de archivos (extractos bancarios, cupones, facturas, c
 ### 🛡️ Capa de Verificación e Integridad de Datos (Data Integrity Checker)
 *   **Propósito:** Garantizar que todo documento procesado e ingresado a las tablas finales de producción posea una consistencia matemática del 100% con su archivo original de origen.
 *   **Implementación (`core_sistema/verificador_integridad.py`):**
-    1. Lee de forma independiente las filas, débitos y créditos acumulados del archivo físico (PDF/Excel) en disco.
-    2. Sumariza los registros reales creados en la base de datos de producción (`bancos_movimientos`, `pagos_vencimientos`).
-    3. Evalúa discrepancias centavo a centavo e informa alertas de desvío.
+   1. Lee de forma independiente las filas, débitos y créditos acumulados del archivo físico (PDF/Excel) en disco.
+   2. Sumariza los registros reales creados en la base de datos de producción (`bancos_movimientos`, `pagos_vencimientos`).
+   3. Evalúa discrepancias centavo a centavo e informa alertas de desvío.
 *   **Control Anticolisión:** Prohíbe el uso de claves únicas estriadas `UNIQUE` en tablas operativas que colapsen transacciones gemelas válidas del mismo día.
+
+### 🏠 2.1 Base de Datos Histórica del Local (`admglobal.db`)
+*   **Origen de Datos:** Base de datos SQLite migrada del sistema local Access (`.mdb`) comercial del negocio. Convive en el directorio raíz como `admglobal.db` (solo lectura).
+*   **Contenido:** Historial desde Septiembre 2021 a Julio 2026 conteniendo más de 16.900 ventas (`Documentos`), 3.600 artículos con costo/precio (`Articulos`) y 650 clientes (`Clientes`).
+*   **Integración Contable (ATTACH):** Se vincula de forma dinámica mediante sentencias SQLite `ATTACH DATABASE 'admglobal.db' AS adm_local` para habilitar cruces directos en consultas de conciliación de cobros de tarjetas (Mercado Pago / Payway) y control de stock de mercadería.
 
 ---
 

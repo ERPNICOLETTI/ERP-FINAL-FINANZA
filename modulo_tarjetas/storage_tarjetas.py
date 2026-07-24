@@ -249,3 +249,20 @@ def get_cupon_detalle(cupon_id):
             pass
         return res
     return None
+
+def save_liquidacion_detalles(liq_id, detalles):
+    """Guarda los lotes diarios de liquidación de Payway detallados."""
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM tarjetas_liquidaciones_detalles WHERE liquidacion_id = ?", (liq_id,))
+        for d in detalles:
+            conn.execute("""
+                INSERT INTO tarjetas_liquidaciones_detalles (
+                    liquidacion_id, fecha, descripcion, monto_bruto, arancel, financiero, iva, retenciones, monto_neto
+                ) VALUES (?, ?, ?, ?, ?, 0.0, 0.0, 0.0, ?)
+            """, (liq_id, d['fecha_pago'], f"Liq Nro {d['nro_liq']} - Lote {d['lote']}", d['bruto'], d['descuentos'], d['neto']))
+        conn.commit()
+    except Exception as e:
+        print(f"Error guardando detalles de liquidación: {e}")
+    finally:
+        conn.close()

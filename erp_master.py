@@ -67,7 +67,7 @@ def detectar_parser_pdf(filepath):
 
     text_upper = text.upper()
     
-    if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper:
+    if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper or "RESUMEN MENSUAL DE LIQUIDACIONES" in text_upper:
         return "PAYWAY"
     elif "LIBRO IVA" in text_upper or "LIBRO DE IVA" in text_upper or "F2051" in text_upper:
         return "LIBRO_IVA"
@@ -99,8 +99,8 @@ def detectar_parser_excel(filepath):
             return "GALICIA"
         elif "MERCADOPAGO" in content or "MERCADO PAGO" in content or "SETTLEMENT" in content:
             return "MERCADOPAGO"
-        elif "HIPOTECARIO" in content:
-            if "USD" in filepath.upper() or "CA_USD" in content or "DOLARES" in content or "DÓLARES" in content:
+        elif "HIPOTECARIO" in content or "9087" in content or "2646" in content or "9087" in filepath or "2646" in filepath:
+            if "USD" in filepath.upper() or "CA_USD" in content or "DOLARES" in content or "DÓLARES" in content or "2646" in content or "2646" in filepath:
                 return "HIPOTECARIO_USD"
             return "HIPOTECARIO_PESOS"
         elif "NARANJA" in content:
@@ -114,10 +114,20 @@ def detectar_parser_excel(filepath):
 def detectar_parser_csv(filepath):
     """Detecta el parser del CSV leyendo la primera línea de cabecera."""
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            first_line = f.readline().upper()
+        # Intentar leer con utf-8 y fallback a latin1
+        first_line = ""
+        for enc in ['utf-8', 'latin1']:
+            try:
+                with open(filepath, 'r', encoding=enc) as f:
+                    first_line = f.readline().upper()
+                break
+            except:
+                continue
+                
         if "SETTLEMENT_DATE" in first_line or "TRANSACTION_AMOUNT" in first_line:
             return "MERCADOPAGO"
+        elif "PAYWAY" in first_line or "TRANSACCIONES EN PESOS DE PAYWAY" in first_line or "MOVIMIENTOS PRESENTADOS" in os.path.basename(filepath).upper():
+            return "PAYWAY_CSV"
     except:
         pass
     return None
@@ -230,6 +240,10 @@ class ERPMaster:
                     if detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
                         from modulo_tarjetas.lectores import lector_payway_liq
                         success, info = lector_payway_liq.procesar_archivo(filepath)
+                    
+                    elif detected_type == "PAYWAY_CSV" or ("MOVIMIENTOS" in f_upper and f_upper.endswith(".CSV")):
+                        from modulo_tarjetas.lectores import lector_payway_csv
+                        success, info = lector_payway_csv.procesar_archivo(filepath)
                     
                     elif detected_type == "NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".XLSX")):
                         from modulo_tarjetas.lectores import lector_naranja_xlsx

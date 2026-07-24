@@ -1,120 +1,130 @@
-import pandas as pd
 import os
-import logging
+import shutil
 import hashlib
-import json
-from modulo_bancos import storage_bancos as storage
-from modulo_compras import storage_compras
+import sqlite3
+import openpyxl
+from datetime import datetime
 
-# Parser Banco Hipotecario USD (Joaquín) - Phase 3 🏗️🧱🧠⚖️🚀
-# Esta versión implementa el Diseño Híbrido y el archivado legal.
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-def calculate_sha256(file_path):
-    """Calcula el hash SHA-256 del archivo para el control de idempotencia."""
-    sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-def normalizar_importe_usd(val):
-    if pd.isna(val) or val is None: return 0.0
-    if isinstance(val, (int, float)): return float(val)
-    s = str(val).replace('.', '').replace(',', '.')
-    try: return float(s)
-    except: return 0.0
-
-def procesar_archivo(file_path):
-    """Función principal (Phase 3): Ingesta el extracto de Hipotecario USD y retorna (success, info)."""
-    if not os.path.exists(file_path):
-        logger.error(f"⚠️ El archivo no existe: {file_path}")
-        return False, None
-
-    logger.info(f"💵 Analizando extracto Hipotecario USD: {os.path.basename(file_path)}")
-    file_hash = calculate_sha256(file_path)
-    
+def procesar_archivo(filepath: str) -> tuple[bool, dict]:
+    """
+    Procesador ELT para Extracto de Banco Hipotecario Dólares.
+    Entidad: JOA (Cuentas Joaquín).
+    """
     try:
-        df = pd.read_excel(file_path, header=None)
+        # 1. Calcular Hash SHA256 Legal
+        sha256 = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            sha256.update(f.read())
+        hash_hex = sha256.hexdigest()
         
-        # 2. DETECCIÓN DINÁMICA DE CABECERA
-        header_idx = -1
-        for i, row in df.iterrows():
-            row_str = " ".join(str(v).lower() for v in row.values)
-            if "fecha" in row_str and "importe" in row_str:
-                header_idx = i
-                break
+        # 2. Generar representación Markdown Raw Completa (Fase 1)
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        ws = wb.active # Toma la pestaña activa
         
-        if header_idx == -1:
-            logger.error("❌ No se pudo detectar la cabecera en el Excel USD.")
-            return False, None
-
-        column_names = [str(c).strip().upper() for c in df.iloc[header_idx]]
-        df_movs = df.iloc[header_idx + 1:].copy()
-        df_movs.columns = column_names
+        cuenta_alias = "CA U$D ...2646"
         
-        movimientos = []
-        last_id = None
-        first_date = "2026-01-01"
-
-        for _, row in df_movs.iterrows():
-            raw_fecha = row.get('FECHA')
-            if pd.isna(raw_fecha): continue
+        raw_md_lines = []
+        raw_md_lines.append("# EXTRACTO BANCARIO BANCO HIPOTECARIO - CAJA DE AHORRO DOLARES")
+        raw_md_lines.append(f"**Cuenta:** {cuenta_alias}")
+        raw_md_lines.append(f"**SHA256:** {hash_hex}\n")
+        raw_md_lines.append("| Fecha | Movimiento / Descripción | Importe | Saldo Parcial |")
+        raw_md_lines.append("| --- | --- | --- | --- |")
+        
+        movimientos_parsed = []
+        
+        # El archivo tiene filas de encabezado basura, los datos reales de movimientos empiezan más abajo (skiprows=4 en pandas)
+        for r in range(6, ws.max_row + 1):
+            fecha_val = ws.cell(r, 1).value
+            desc_val = ws.cell(r, 2).value
+            imp_val = ws.cell(r, 3).value
+            saldo_val = ws.cell(r, 4).value
             
-            try:
-                fecha_dt = pd.to_datetime(raw_fecha, dayfirst=True)
-                fecha_iso = fecha_dt.strftime('%Y-%m-%d')
-                if not movimientos: first_date = fecha_iso
-            except: continue
-
-            desc = str(row.get('DESCRIPCIÓN', row.get('CONCEPTO', 'MOVIMIENTO USD'))).strip()
-            importe = normalizar_importe_usd(row.get('IMPORTE', 0))
-            
-            if importe != 0:
-                movimientos.append({
-                    "banco": "HIPOTECARIO",
-                    "cuenta": "CA_USD_2646",
-                    "fecha": fecha_iso,
-                    "descripcion": desc,
-                    "tipo_movimiento": "CA_USD",
-                    "importe": importe,
-                    "hash_archivo": file_hash,
-                    "row_dump": row.to_dict()
-                })
+            if not fecha_val or not desc_val:
+                continue
                 
-                # IVA Bancario
-                if "iva" in desc.lower() and "21" in desc.lower():
-                    storage_compras.registrar_impuesto({
-                        "modulo": "BANCOS", "fuente": "HIPOTECARIO_USD", "fecha": fecha_iso,
-                        "neto_gravado": 0, "iva_21": abs(importe), "iva_105": 0,
-                        "descripcion": f"IVA Bancario USD: {desc}", "hash_archivo": file_hash
-                    })
-
-        if movimientos:
-            agregados, last_id = storage.save_movimiento_banco(movimientos, file_hash)
-            if last_id:
-                info = {
-                    "modulo": "BANCOS",
-                    "anio": first_date[:4],
-                    "mes": first_date[5:7],
-                    "entidad": "BANCO_HIPOTECARIO_USD",
-                    "db_table": "bancos_movimientos",
-                    "id_insertado": last_id
-                }
-                return True, info
+            clean_mov = " ".join(str(desc_val).split('\n')).strip()
+            raw_md_lines.append(f"| {fecha_val} | {clean_mov} | {imp_val} | {saldo_val} |")
+            
+            def to_float(val):
+                if not val: return 0.0
+                try:
+                    return float(str(val).replace('.', '').replace(',', '.'))
+                except:
+                    return 0.0
+                    
+            imp_f = to_float(imp_val)
+            saldo_f = to_float(saldo_val)
+            
+            movimientos_parsed.append({
+                'fecha': str(fecha_val),
+                'descripcion': clean_mov,
+                'importe': imp_f,
+                'saldo': saldo_f,
+                'cuenta': cuenta_alias,
+                'banco': 'HIPOTECARIO'
+            })
+            
+        raw_md_text = "\n".join(raw_md_lines)
         
-        logger.warning(f"🚫 Archivo Hipotecario USD omitido: {os.path.basename(file_path)}")
-        return False, None
-
+        # 3. Guardar en core_staging_raw
+        conn = sqlite3.connect('c:/Users/essao/Desktop/ERP FINAL/erp_nicoletti.db')
+        conn.row_factory = sqlite3.Row
+        
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM core_staging_raw WHERE hash_sha256 = ?", (hash_hex,))
+        cursor.execute("""
+            INSERT INTO core_staging_raw (
+                nombre_archivo, hash_sha256, modulo, tipo_fuente, formato_raw, parser_version, contenido_raw, filas_leidas, estado, fecha_ingesta, fecha_procesado
+            ) VALUES (
+                ?, ?, 'bancos', 'EXCEL', 'MARKDOWN', 'v6.2.0', ?, ?, 'PROCESADO', datetime('now', 'localtime'), datetime('now', 'localtime')
+            )
+        """, (os.path.basename(filepath), hash_hex, raw_md_text, len(movimientos_parsed)))
+        
+        staging_id = cursor.lastrowid
+        conn.commit()
+        
+        # 4. Insertar en bancos_movimientos
+        conn.execute("DELETE FROM bancos_movimientos WHERE cuenta = ? AND raw_ingesta_id IN (SELECT id FROM core_staging_raw WHERE hash_sha256 = ?)", (cuenta_alias, hash_hex))
+        
+        for m in movimientos_parsed:
+            cat = 'SIN_CATEGORIZAR'
+            desc = m['descripcion'].upper()
+            if 'AFIP' in desc or 'VEP' in desc or 'LEY 25413' in desc:
+                cat = 'Impuestos'
+            elif 'SUELDO' in desc or 'HABERES' in desc:
+                cat = 'Sueldo'
+            elif 'INTERES' in desc:
+                cat = 'Intereses'
+            elif 'MERCADO LIBRE' in desc or 'MERCADOPAGO' in desc:
+                cat = 'Compras'
+                
+            conn.execute("""
+                INSERT OR REPLACE INTO bancos_movimientos (fecha, cuenta, banco, descripcion, importe, saldo, categoria, raw_ingesta_id, entidad)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'JOA')
+            """, (m['fecha'], m['cuenta'], m['banco'], m['descripcion'], m['importe'], m['saldo'], cat, staging_id))
+            
+        conn.commit()
+        conn.close()
+        
+        # 5. Correr el Verificador de Integridad Automático en Caliente
+        try:
+            from core_sistema.verificador_integridad import VerificadorIntegridadERP
+            vi = VerificadorIntegridadERP()
+            res_v = vi.verificar_y_reportar(filepath, staging_id)
+            if res_v['status'] != 'OK':
+                print(f"⚠️ [DISCREPANCIA DETECTADA EN INGESTA HIPOTECARIO USD] Staging ID: {staging_id} | Desvío: {res_v.get('diferencias')}")
+        except Exception as ver_err:
+            print(f"⚠️ Error al ejecutar verificador automático en caliente: {ver_err}")
+            
+        info = {
+            "modulo": "bancos",
+            "anio": datetime.now().strftime("%Y"),
+            "mes": datetime.now().strftime("%m"),
+            "entidad": "JOA",
+            "db_table": "bancos_movimientos",
+            "id_insertado": staging_id
+        }
+        return True, info
     except Exception as e:
-        logger.error(f"❌ Error en Hipotecario USD: {e}")
-        return False, None
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1:
-        procesar_archivo(sys.argv[1])
-    else:
-        logger.warning("Uso: python parser_hipotecario_usd.py <absolute_path>")
+        print(f"❌ Error en lector_hipotecario_usd: {e}")
+        return False, {}

@@ -109,6 +109,16 @@ def procesar_archivo(filepath: str) -> tuple[bool, dict]:
         conn.commit()
         conn.close()
         
+        # 5. Correr el Verificador de Integridad Automático en Caliente
+        try:
+            from core_sistema.verificador_integridad import VerificadorIntegridadERP
+            vi = VerificadorIntegridadERP()
+            res_v = vi.verificar_y_reportar(filepath, staging_id)
+            if res_v['status'] != 'OK':
+                print(f"⚠️ [DISCREPANCIA DETECTADA EN INGESTA CHUBUT] Staging ID: {staging_id} | Desvío: {res_v.get('diferencias')}")
+        except Exception as ver_err:
+            print(f"⚠️ Error al ejecutar verificador automático en caliente: {ver_err}")
+            
         info = {
             "modulo": "bancos",
             "anio": datetime.now().strftime("%Y"),

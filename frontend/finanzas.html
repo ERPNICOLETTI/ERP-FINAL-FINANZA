@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Nicoletti - Finanzas y Conciliación v1.0</title>
+    <link rel="stylesheet" href="style_core.css?v=6.0.0">
+    <link rel="stylesheet" href="style_bancos.css?v=6.0.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="table_sort.js"></script>
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">ERP <span>Finanzas</span></h1>
+                <p>Conciliación en Cascada: Ventas ➜ Liquidaciones ➜ Acreditaciones 📊</p>
+            </div>
+            <div class="header-actions">
+                <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
+            </div>
+        </header>
+
+        <main class="ecosystem-layout">
+            <section class="boveda-panel-full">
+                
+                <!-- KPIs de Finanzas -->
+                <div class="kpi-row" id="kpi-finanzas" hx-get="/api/finanzas/kpis" hx-trigger="load, htmx:afterSwap from:#tbody-finanzas" hx-include="#filters-form">
+                    <div class="kpi-card">
+                        <h3>Ventas Totales</h3>
+                        <p class="monto-kpi">$0.00</p>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>Ventas Tarjeta</h3>
+                        <p class="monto-kpi">$0.00</p>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>Comisiones Retenidas</h3>
+                        <p class="monto-kpi">$0.00</p>
+                    </div>
+                </div>
+
+                <!-- Formulario de Filtros de Conciliación -->
+                <form id="filters-form" hx-get="/api/finanzas/reporte" hx-target="#tbody-finanzas" hx-trigger="change, keyup delay:300ms from:#search-finanzas, submit">
+                    
+                    <div class="filter-dashboard glass" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; border-radius: 14px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); backdrop-filter: blur(12px);">
+                        
+                        <div style="display: flex; gap: 15px; align-items: center; width: 100%; flex-wrap: wrap;">
+                            <div class="search-pro" style="flex: 2; min-width: 280px; margin: 0;">
+                                <input type="text" id="search-finanzas" name="q" placeholder="🔍 Buscar por Nro. Comprobante o Cliente..." style="width: 100%; padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); font-size: 0.95rem; outline: none; background: #fff;">
+                            </div>
+                            
+                            <div style="flex: 1; min-width: 150px;">
+                                <select name="periodo_anio" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); background: #fff;">
+                                    <option value="2026">Año: 2026</option>
+                                    <option value="2025">Año: 2025</option>
+                                    <option value="2024">Año: 2024</option>
+                                    <option value="2023">Año: 2023</option>
+                                    <option value="2022">Año: 2022</option>
+                                    <option value="2021">Año: 2021</option>
+                                </select>
+                            </div>
+                            
+                            <div style="flex: 1; min-width: 150px;">
+                                <select name="periodo_mes" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.15); background: #fff;">
+                                    <option value="">Todos los Meses</option>
+                                    <option value="01">Enero</option>
+                                    <option value="02">Febrero</option>
+                                    <option value="03">Marzo</option>
+                                    <option value="04">Abril</option>
+                                    <option value="05">Mayo</option>
+                                    <option value="06">Junio</option>
+                                    <option value="07">Julio</option>
+                                    <option value="08">Agosto</option>
+                                    <option value="09">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+                        </div>
+
+                    </div>
+                </form>
+
+                <!-- Tabla de Conciliación de Transacciones -->
+                <div class="table-container" style="margin-top: 25px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(0, 0, 0, 0.1);">
+                    <table class="sortable">
+                        <thead>
+                            <tr>
+                                <th style="width: 8%;">Fecha Venta</th>
+                                <th style="width: 12%;">Comprobante</th>
+                                <th style="width: 20%;">Cliente</th>
+                                <th style="width: 10%;">Tarjeta</th>
+                                <th style="width: 15%;">Lote / Liquidación</th>
+                                <th class="text-right" style="width: 10%;">Bruto (Local)</th>
+                                <th class="text-right" style="width: 10%;">Neto (Procesadora)</th>
+                                <th class="text-right" style="width: 10%;">Acreditado (Banco)</th>
+                                <th style="width: 12%;">Destino Fondos</th>
+                                <th class="text-center" style="width: 8%;">Comisión</th>
+                                <th class="text-center" style="width: 8%;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-finanzas" hx-get="/api/finanzas/reporte" hx-trigger="load" hx-include="#filters-form">
+                            <!-- Inyectado dinámicamente por HTMX -->
+                            <tr>
+                                <td colspan="9" class="text-center text-muted" style="padding: 40px;">
+                                    Cargando conciliaciones y cruzando registros...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+    </div>
+</body>
+</html>

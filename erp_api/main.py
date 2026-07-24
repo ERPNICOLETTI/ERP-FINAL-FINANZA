@@ -30,6 +30,7 @@ from erp_api.routes_bancos import router as bancos_router
 from erp_api.routes_tarjetas import router as tarjetas_router
 from erp_api.routes_compras import router as compras_router
 from erp_api.routes_pagos import router as pagos_router
+from erp_api.routes_finanzas import router as finanzas_router
 
 # Include routes (the order can be important if we have catch-all/legacy mounts)
 app.include_router(pages_router)
@@ -38,6 +39,7 @@ app.include_router(bancos_router)
 app.include_router(tarjetas_router)
 app.include_router(compras_router)
 app.include_router(pagos_router)
+app.include_router(finanzas_router)
 
 # 5. Core Actions
 @app.post("/sync")

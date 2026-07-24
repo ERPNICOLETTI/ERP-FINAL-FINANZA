@@ -1,0 +1,39 @@
+{% if movimientos %}
+    {% for mov in movimientos %}
+    <tr>
+        <td class="col-fecha">{{ mov.fecha }}</td>
+        <td class="col-comprobante font-mono">{{ mov.comprobante }}</td>
+        <td class="col-cliente">{{ mov.cliente }}</td>
+        <td class="col-tarjeta font-semibold text-xs" style="color: rgba(255, 255, 255, 0.75);">
+            {% if "VISA" in mov.tarjeta.upper() %}
+                <span class="badge" style="background: rgba(26, 82, 118, 0.4); color: #5dade2; border: 1px solid rgba(93, 173, 226, 0.2);">VISA</span>
+            {% else %}
+                <span class="badge" style="background: rgba(120, 40, 140, 0.3); color: #d7bde2; border: 1px solid rgba(215, 189, 226, 0.2);">MASTER</span>
+            {% endif %}
+        </td>
+        <td class="col-lote text-muted text-xs font-mono" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ mov.lote }}
+        </td>
+        <td class="col-monto text-right font-mono">${{ mov.monto_venta|round(2) }}</td>
+        <td class="col-monto text-right font-mono text-muted">${{ mov.monto_liquidado|round(2) }}</td>
+        <td class="col-monto text-right font-mono text-success-light">${{ mov.monto_acreditado|round(2) }}</td>
+        <td class="col-banco font-mono">{{ mov.banco }}</td>
+        <td class="col-tasa text-center font-mono text-muted">
+            {% if mov.tasa_descuento > 0 %}
+                {{ mov.tasa_descuento }}%
+            {% else %}
+                -
+            {% endif %}
+        </td>
+        <td class="col-estado text-center">
+            <span class="badge badge-{{ mov.color }}">{{ mov.estado }}</span>
+        </td>
+    </tr>
+    {% endfor %}
+{% else %}
+    <tr>
+        <td colspan="9" class="text-center text-muted" style="padding: 40px;">
+            No se encontraron transacciones conciliadas para los filtros seleccionados.
+        </td>
+    </tr>
+{% endif %}

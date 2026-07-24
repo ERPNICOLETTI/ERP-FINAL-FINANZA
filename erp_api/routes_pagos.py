@@ -95,17 +95,28 @@ async def get_summary(anio: str = None):
     }
 
 @router.post("/api/upload/{modulo}")
-async def upload_file(modulo: str, file: UploadFile = File(...)):
+async def upload_file(modulo: str, files: list[UploadFile] = File(...)):
     """Fase de Recepción v4.6 (Tránsito Crudo)."""
     try:
         inbox_dir = os.path.join(WORKSPACE, f"modulo_{modulo}", f"inbox_{modulo}")
         os.makedirs(inbox_dir, exist_ok=True)
-        file_path = os.path.join(inbox_dir, file.filename)
         
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        saved_names = []
+        for file in files:
+            file_path = os.path.join(inbox_dir, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_names.append(file.filename)
             
-        return {"status": "success", "message": f"Archivo {file.filename} received en Inbox."}
+        # Ejecutar de forma asíncrona o directa el procesamiento del Inbox tras la subida
+        try:
+            from erp_master import ERPMaster
+            master = ERPMaster(WORKSPACE)
+            master.ingest_inbox()
+        except Exception as proc_err:
+            print(f"⚠️ Error al procesar inbox tras subida: {proc_err}")
+            
+        return {"status": "success", "message": f"Archivos {saved_names} recibidos y procesados en Inbox."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

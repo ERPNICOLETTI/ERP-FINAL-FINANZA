@@ -40,3 +40,12 @@ La lógica de categorización se autogestiona en caliente desde la base de datos
 -   **Edición Masiva con Aprendizaje (Bulk Edit):** Permite reclasificar todos los movimientos coincidentes con la búsqueda y filtros mediante `bulk_edit_categoria`. Si la re-clasificación se realiza habiendo ingresado una consulta de búsqueda `q` (mínimo 3 letras), el término buscado se aprende y se guarda como palabra clave para dicha categoría.
 -   **Filtro de Palabras Genéricas**: Para evitar contaminar las reglas, el helper `extraer_palabra_clave` en `erp_api.py` filtra automáticamente prefijos de tarjeta y palabras genéricas (como `DEBITO`, `PAGO`, `TRANSFERENCIA`, `AUTOMATICO`, `RECIBIDA`, etc.), capturando únicamente el nombre real del comercio.
 -   **Filtro por Similitud (Agrupación):** Enviando `agrupar=1`, la base de datos agrupa descripciones idénticas y muestra la cantidad de repeticiones (ej. "15 repeticiones").
+
+---
+
+## 🏠 Integración Analítica con Ventas del Local (`admglobal.db`)
+*   **Estrategia de Conciliación de Cobros:**
+    *   La base de datos `admglobal.db` (enlazada al backend mediante `ATTACH`) provee la tabla `Documentos` con los campos `PagoTarjeta` y `idTarjeta`.
+    *   Se implementa el cruce analítico de transacciones entre los movimientos netos liquidados de Mercado Pago (`movimientos_mp`) / Payway y las ventas brutas registradas en el local.
+    *   **Detección de Fugas:** Permite auditar si existen ventas marcadas como cobradas con tarjeta en el local que no impactaron en los bancos, o calcular la tasa de deducción real por comisiones y retenciones impositivas de cada canal de venta.
+
