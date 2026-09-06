@@ -21,6 +21,11 @@ def buscar_cupon(cupon_id):
     """Busca detalle de un cupón. (Usa storage)"""
     return storage.get_cupon_detalle(cupon_id)
 
+
+def conciliacion_payway(fecha_desde, fecha_hasta):
+    """Conciliacion exacta por fecha de pago, marca y establecimiento."""
+    return storage.get_payway_conciliacion(fecha_desde, fecha_hasta)
+
 def auditoria_360():
     """Cruce de Ventas vs Liquidaciones (Lógica de negocio sobre datos de Storage)."""
     data = storage.get_data_auditoria()

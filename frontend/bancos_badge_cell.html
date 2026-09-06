@@ -1,5 +1,6 @@
 <td id="cat-cell-{{mov.id}}" hx-target="this" hx-swap="outerHTML">
     <div hx-get="/api/bancos/movimientos/{{ mov.id }}/edit_categoria" style="cursor:pointer; display:inline-block;" title="Click para reclasificar">
-        <span class="cat-badge cat-{{ mov.categoria.replace(' ', '_') }}">{% if mov.categoria == 'SIN_CATEGORIZAR' %}Sin Categorizar ❓{% else %}{{ mov.categoria }}{% endif %}</span>
+        {% set categoria = mov.categoria or 'SIN_CATEGORIZAR' %}
+        <span class="cat-badge cat-{{ categoria.replace(' ', '_') }}">{% if categoria == 'SIN_CATEGORIZAR' %}Sin Categorizar ❓{% else %}{{ categoria }}{% endif %}</span>
     </div>
 </td>

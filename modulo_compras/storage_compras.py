@@ -30,7 +30,15 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _ensure_column(conn, table, column, definition):
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db_compras():
@@ -113,8 +121,286 @@ def init_db_compras():
         )
     ''')
 
+    arca_columns = {
+        'tipo_comprobante_codigo': 'INTEGER', 'signo': 'INTEGER DEFAULT 1', 'cae': 'TEXT',
+        'raw_ingesta_id': 'INTEGER', 'zip_raw_ingesta_id': 'INTEGER', 'numero_linea': 'INTEGER',
+        'neto_gravado_centavos': 'INTEGER DEFAULT 0', 'neto_iva_0_centavos': 'INTEGER DEFAULT 0',
+        'iva_25_centavos': 'INTEGER DEFAULT 0', 'neto_iva_25_centavos': 'INTEGER DEFAULT 0',
+        'iva_5_centavos': 'INTEGER DEFAULT 0', 'neto_iva_5_centavos': 'INTEGER DEFAULT 0',
+        'iva_105_centavos': 'INTEGER DEFAULT 0', 'neto_iva_105_centavos': 'INTEGER DEFAULT 0',
+        'iva_21_centavos': 'INTEGER DEFAULT 0', 'neto_iva_21_centavos': 'INTEGER DEFAULT 0',
+        'iva_27_centavos': 'INTEGER DEFAULT 0', 'neto_iva_27_centavos': 'INTEGER DEFAULT 0',
+        'no_gravado_centavos': 'INTEGER DEFAULT 0', 'exento_centavos': 'INTEGER DEFAULT 0',
+        'otros_tributos_centavos': 'INTEGER DEFAULT 0', 'total_iva_centavos': 'INTEGER DEFAULT 0',
+        'total_centavos': 'INTEGER DEFAULT 0', 'documento_receptor': 'TEXT', 'updated_at': 'TIMESTAMP',
+        'calim_raw_ingesta_id': 'INTEGER', 'calim_hash_archivo': 'TEXT',
+        'calim_neto_centavos': 'INTEGER', 'calim_iva_total_centavos': 'INTEGER',
+        'calim_total_centavos': 'INTEGER', 'calim_estado': 'TEXT',
+    }
+    for column, definition in arca_columns.items():
+        _ensure_column(conn, 'compras_facturas', column, definition)
+
+    conn.execute('''CREATE TABLE IF NOT EXISTS compras_arca_ingestas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        zip_raw_ingesta_id INTEGER NOT NULL,
+        csv_raw_ingesta_id INTEGER NOT NULL,
+        nombre_zip TEXT NOT NULL,
+        nombre_csv TEXT NOT NULL,
+        hash_zip TEXT NOT NULL,
+        hash_csv TEXT NOT NULL,
+        path_archivo TEXT NOT NULL,
+        filas INTEGER NOT NULL,
+        fecha_min TEXT NOT NULL,
+        fecha_max TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(zip_raw_ingesta_id, csv_raw_ingesta_id),
+        FOREIGN KEY(zip_raw_ingesta_id) REFERENCES core_staging_raw(id),
+        FOREIGN KEY(csv_raw_ingesta_id) REFERENCES core_staging_raw(id)
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS compras_calim_ingestas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        raw_ingesta_id INTEGER NOT NULL UNIQUE,
+        nombre_archivo TEXT NOT NULL,
+        hash_archivo TEXT NOT NULL UNIQUE,
+        path_archivo TEXT NOT NULL,
+        filas INTEGER NOT NULL,
+        fecha_min TEXT,
+        fecha_max TEXT,
+        conciliadas INTEGER NOT NULL DEFAULT 0,
+        diferencias INTEGER NOT NULL DEFAULT 0,
+        solo_calim INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(raw_ingesta_id) REFERENCES core_staging_raw(id)
+    )''')
+
     conn.commit()
     conn.close()
+
+
+def _stage_raw(conn, *, name, digest, source_type, raw_format, parser_version, content, rows):
+    found = conn.execute('SELECT id FROM core_staging_raw WHERE hash_sha256=?', (digest,)).fetchone()
+    if found:
+        return found['id']
+    cursor = conn.execute('''INSERT INTO core_staging_raw
+        (nombre_archivo, hash_sha256, modulo, tipo_fuente, formato_raw, parser_version,
+         contenido_raw, filas_leidas, estado, fecha_procesado)
+        VALUES (?, ?, 'compras', ?, ?, ?, ?, ?, 'PROCESADO', datetime('now','localtime'))''',
+        (name, digest, source_type, raw_format, parser_version, content, rows))
+    return cursor.lastrowid
+
+
+def ingest_arca_recibidos(package: dict) -> dict:
+    """Ingesta atomica ZIP -> raw ZIP/CSV -> comprobantes recibidos."""
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        zip_raw_id = None
+        if package.get('formato_fuente') == 'ZIP':
+            zip_raw_id = _stage_raw(conn, name=package['nombre_archivo'], digest=package['hash_sha256'],
+                source_type='ARCA_ZIP_RECIBIDOS', raw_format='ZIP_MANIFEST', parser_version=package['parser_version'],
+                content=package['manifest_raw'], rows=sum(len(csv_file['filas']) for csv_file in package['csvs']))
+        processed = 0
+        csv_raw_ids = []
+        for csv_file in package['csvs']:
+            csv_raw_id = _stage_raw(conn, name=csv_file['nombre'], digest=csv_file['hash_sha256'],
+                source_type='ARCA_COMPROBANTES_RECIBIDOS', raw_format='CSV', parser_version=package['parser_version'],
+                content=csv_file['contenido_raw'], rows=len(csv_file['filas']))
+            csv_raw_ids.append(csv_raw_id)
+            if zip_raw_id is None:
+                zip_raw_id = csv_raw_id
+            conn.execute('''INSERT INTO compras_arca_ingestas
+                (zip_raw_ingesta_id, csv_raw_ingesta_id, nombre_zip, nombre_csv, hash_zip, hash_csv,
+                 path_archivo, filas, fecha_min, fecha_max)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(zip_raw_ingesta_id, csv_raw_ingesta_id) DO UPDATE SET
+                  path_archivo=excluded.path_archivo, filas=excluded.filas,
+                  fecha_min=excluded.fecha_min, fecha_max=excluded.fecha_max''',
+                (zip_raw_id, csv_raw_id, package['nombre_archivo'], csv_file['nombre'], package['hash_sha256'],
+                 csv_file['hash_sha256'], package['path_archivo'], len(csv_file['filas']), package['fecha_min'], package['fecha_max']))
+            for row in csv_file['filas']:
+                signed = row['signo']
+                values = {key: row[key] * signed for key in (
+                    'neto_gravado_centavos', 'neto_iva_0_centavos', 'iva_25_centavos', 'neto_iva_25_centavos',
+                    'iva_5_centavos', 'neto_iva_5_centavos', 'iva_105_centavos', 'neto_iva_105_centavos',
+                    'iva_21_centavos', 'neto_iva_21_centavos', 'iva_27_centavos', 'neto_iva_27_centavos',
+                    'no_gravado_centavos', 'exento_centavos', 'otros_tributos_centavos',
+                    'total_iva_centavos', 'total_centavos')}
+                metadata = {'numero_hasta': row['numero_hasta'], 'tipo_doc_emisor': row['tipo_doc_emisor'],
+                    'tipo_doc_receptor': row['tipo_doc_receptor'], 'tipo_cambio': row['tipo_cambio'],
+                    'row_raw': row['row_raw']}
+                # Normaliza importaciones AFIP antiguas cuyo nombre de tipo podia estar mojibakeado.
+                candidates = conn.execute('''SELECT id, tipo_comprobante_codigo, meta_json
+                    FROM compras_facturas WHERE cuit_proveedor=? AND punto_venta=? AND numero_comprobante=?''',
+                    (row['cuit_proveedor'], row['punto_venta'], row['numero_comprobante'])).fetchall()
+                for candidate in candidates:
+                    legacy_code = candidate['tipo_comprobante_codigo']
+                    if legacy_code is None:
+                        try:
+                            legacy = json.loads(candidate['meta_json'] or '{}').get('row_dump', {})
+                            legacy_code = int(legacy.get('Tipo de Comprobante'))
+                        except (ValueError, TypeError, AttributeError):
+                            legacy_code = None
+                    if legacy_code == row['tipo_comprobante_codigo']:
+                        conn.execute('UPDATE compras_facturas SET tipo_comprobante=?, tipo_comprobante_codigo=? WHERE id=?',
+                                     (row['tipo_comprobante'], row['tipo_comprobante_codigo'], candidate['id']))
+                        break
+                conn.execute('''INSERT INTO compras_facturas (
+                    fecha, tipo_comprobante, tipo_comprobante_codigo, signo, punto_venta, numero_comprobante,
+                    cuit_proveedor, proveedor, neto, iva21, iva105, iva27, exento, percepcion_iva, total,
+                    moneda, tipo_operacion, status, tiene_foto, path_archivo, hash_archivo, origen, meta_json,
+                    cae, raw_ingesta_id, zip_raw_ingesta_id, numero_linea, documento_receptor,
+                    neto_gravado_centavos, neto_iva_0_centavos, iva_25_centavos, neto_iva_25_centavos,
+                    iva_5_centavos, neto_iva_5_centavos, iva_105_centavos, neto_iva_105_centavos,
+                    iva_21_centavos, neto_iva_21_centavos, iva_27_centavos, neto_iva_27_centavos,
+                    no_gravado_centavos, exento_centavos, otros_tributos_centavos, total_iva_centavos,
+                    total_centavos, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPRA', 'SOLO_ARCA', 0,
+                    ?, ?, 'ARCA_CSV_RECIBIDOS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
+                    ON CONFLICT(cuit_proveedor, punto_venta, numero_comprobante, tipo_comprobante) DO UPDATE SET
+                      fecha=excluded.fecha, proveedor=excluded.proveedor, neto=excluded.neto,
+                      iva21=excluded.iva21, iva105=excluded.iva105, iva27=excluded.iva27,
+                      exento=excluded.exento, percepcion_iva=excluded.percepcion_iva, total=excluded.total,
+                      moneda=excluded.moneda, hash_archivo=excluded.hash_archivo, meta_json=excluded.meta_json,
+                      tipo_comprobante_codigo=excluded.tipo_comprobante_codigo, signo=excluded.signo,
+                      cae=excluded.cae, raw_ingesta_id=excluded.raw_ingesta_id,
+                      zip_raw_ingesta_id=excluded.zip_raw_ingesta_id, numero_linea=excluded.numero_linea,
+                      documento_receptor=excluded.documento_receptor,
+                      neto_gravado_centavos=excluded.neto_gravado_centavos,
+                      neto_iva_0_centavos=excluded.neto_iva_0_centavos, iva_25_centavos=excluded.iva_25_centavos,
+                      neto_iva_25_centavos=excluded.neto_iva_25_centavos, iva_5_centavos=excluded.iva_5_centavos,
+                      neto_iva_5_centavos=excluded.neto_iva_5_centavos, iva_105_centavos=excluded.iva_105_centavos,
+                      neto_iva_105_centavos=excluded.neto_iva_105_centavos, iva_21_centavos=excluded.iva_21_centavos,
+                      neto_iva_21_centavos=excluded.neto_iva_21_centavos, iva_27_centavos=excluded.iva_27_centavos,
+                      neto_iva_27_centavos=excluded.neto_iva_27_centavos, no_gravado_centavos=excluded.no_gravado_centavos,
+                      exento_centavos=excluded.exento_centavos, otros_tributos_centavos=excluded.otros_tributos_centavos,
+                      total_iva_centavos=excluded.total_iva_centavos, total_centavos=excluded.total_centavos,
+                      updated_at=datetime('now','localtime')''', (
+                    row['fecha'], row['tipo_comprobante'], row['tipo_comprobante_codigo'], row['signo'],
+                    row['punto_venta'], row['numero_comprobante'], row['cuit_proveedor'], row['proveedor'],
+                    values['neto_gravado_centavos']/100, values['iva_21_centavos']/100,
+                    values['iva_105_centavos']/100, values['iva_27_centavos']/100,
+                    (values['exento_centavos']+values['no_gravado_centavos'])/100,
+                    values['otros_tributos_centavos']/100, values['total_centavos']/100, row['moneda'],
+                    None, csv_file['hash_sha256'], json.dumps(metadata, ensure_ascii=False),
+                    row['cae'], csv_raw_id, zip_raw_id, row['numero_linea'], row['documento_receptor'],
+                    *(values[key] for key in (
+                      'neto_gravado_centavos','neto_iva_0_centavos','iva_25_centavos','neto_iva_25_centavos',
+                      'iva_5_centavos','neto_iva_5_centavos','iva_105_centavos','neto_iva_105_centavos',
+                      'iva_21_centavos','neto_iva_21_centavos','iva_27_centavos','neto_iva_27_centavos',
+                      'no_gravado_centavos','exento_centavos','otros_tributos_centavos','total_iva_centavos','total_centavos'))))
+                processed += 1
+            conn.execute("INSERT INTO core_staging_logs(staging_id, resultado, detalles) VALUES (?, 'OK', ?)",
+                         (csv_raw_id, f"{len(csv_file['filas'])} comprobantes recibidos ARCA"))
+        conn.commit()
+        return {'zip_raw_ingesta_id': zip_raw_id, 'csv_raw_ingesta_ids': csv_raw_ids, 'filas': processed}
+    except Exception:
+        conn.rollback()
+        logger.exception('Error en ingesta ELT de comprobantes recibidos ARCA')
+        raise
+    finally:
+        conn.close()
+
+
+def update_arca_zip_path(hash_zip, new_path):
+    safe = sanitize_path_db(new_path)
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE compras_arca_ingestas SET path_archivo=? WHERE hash_zip=?', (safe, hash_zip))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ingest_calim_compras(data: dict) -> dict:
+    """Ingesta CALIM transaccional y conciliación contra ARCA por identidad fiscal."""
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        raw_id = _stage_raw(conn, name=data['nombre_archivo'], digest=data['hash_sha256'],
+            source_type='CALIM_FACTURAS_COMPRA', raw_format='XLSX_JSON', parser_version=data['parser_version'],
+            content=data['contenido_raw'], rows=len(data['filas']))
+        counters = {'conciliadas': 0, 'diferencias': 0, 'solo_calim': 0}
+        for row in data['filas']:
+            candidates = conn.execute('''SELECT * FROM compras_facturas
+                WHERE punto_venta=? AND numero_comprobante=? AND fecha=?
+                  AND (tipo_comprobante_codigo=? OR tipo_comprobante_codigo IS NULL)
+                  AND (cuit_proveedor=? OR (cuit_proveedor IS NULL AND proveedor LIKE ?))
+                ORDER BY CASE WHEN raw_ingesta_id IS NOT NULL THEN 0 ELSE 1 END, id''',
+                (row['punto_venta'], row['numero_comprobante'], row['fecha'], row['tipo_comprobante_codigo'],
+                 row['cuit_proveedor'], row['cuit_proveedor'] + ' -%')).fetchall()
+            canonical = next((candidate for candidate in candidates if candidate['raw_ingesta_id'] is not None), None)
+            if canonical:
+                arca_iva = canonical['total_iva_centavos'] or 0
+                net_required = row['tipo_comprobante_codigo'] in {1, 2, 3, 51, 52, 53, 63}
+                matches = (arca_iva == row['iva_total_centavos'] and
+                           canonical['total_centavos'] == row['total_centavos'] and
+                           (not net_required or canonical['neto_gravado_centavos'] == row['neto_centavos']))
+                state = 'CONCILIADO_ARCA_CALIM' if matches else 'DIFERENCIA_ARCA_CALIM'
+                counters['conciliadas' if matches else 'diferencias'] += 1
+                target_id = canonical['id']
+                conn.execute('''UPDATE compras_facturas SET calim_raw_ingesta_id=?, calim_hash_archivo=?,
+                    calim_neto_centavos=?, calim_iva_total_centavos=?, calim_total_centavos=?, calim_estado=?,
+                    status=?, updated_at=datetime('now','localtime') WHERE id=?''',
+                    (raw_id, data['hash_sha256'], row['neto_centavos'], row['iva_total_centavos'],
+                     row['total_centavos'], state, state, target_id))
+                # Conserva filas viejas para auditoría, pero las excluye de reportes corrientes.
+                for legacy in candidates:
+                    if legacy['id'] != target_id and legacy['raw_ingesta_id'] is None:
+                        conn.execute("UPDATE compras_facturas SET status='DUPLICADO_LEGACY_CALIM', calim_estado='DUPLICADO_LEGACY_CALIM' WHERE id=?", (legacy['id'],))
+            else:
+                target = candidates[0] if candidates else None
+                counters['solo_calim'] += 1
+                if target:
+                    conn.execute('''UPDATE compras_facturas SET fecha=?, cuit_proveedor=?, proveedor=?, tipo_comprobante=?,
+                        tipo_comprobante_codigo=?, neto=?, iva21=?, total=?, signo=?, calim_raw_ingesta_id=?, calim_hash_archivo=?, calim_neto_centavos=?,
+                        calim_iva_total_centavos=?, calim_total_centavos=?, calim_estado='SOLO_CALIM',
+                        status='SOLO_CALIM', hash_archivo=?, updated_at=datetime('now','localtime') WHERE id=?''',
+                        (row['fecha'], row['cuit_proveedor'], row['proveedor'], row['tipo_comprobante'],
+                         row['tipo_comprobante_codigo'], row['neto_centavos']/100,
+                         row['iva_total_centavos']/100, row['total_centavos']/100, row['signo'], raw_id,
+                         data['hash_sha256'], row['neto_centavos'], row['iva_total_centavos'], row['total_centavos'],
+                         data['hash_sha256'], target['id']))
+                else:
+                    conn.execute('''INSERT INTO compras_facturas
+                        (fecha,tipo_comprobante,tipo_comprobante_codigo,signo,punto_venta,numero_comprobante,
+                         cuit_proveedor,proveedor,neto,iva21,total,tipo_operacion,status,origen,hash_archivo,
+                         calim_raw_ingesta_id,calim_hash_archivo,calim_neto_centavos,calim_iva_total_centavos,
+                         calim_total_centavos,calim_estado,numero_linea,created_at,updated_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,'COMPRA','SOLO_CALIM','CALIM_XLSX',?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)''',
+                        (row['fecha'], row['tipo_comprobante'], row['tipo_comprobante_codigo'], row['signo'],
+                         row['punto_venta'], row['numero_comprobante'], row['cuit_proveedor'], row['proveedor'],
+                         row['neto_centavos']/100, row['iva_total_centavos']/100, row['total_centavos']/100,
+                         data['hash_sha256'], raw_id, data['hash_sha256'], row['neto_centavos'],
+                         row['iva_total_centavos'], row['total_centavos'], 'SOLO_CALIM', row['numero_linea']))
+        conn.execute('''INSERT INTO compras_calim_ingestas
+            (raw_ingesta_id,nombre_archivo,hash_archivo,path_archivo,filas,fecha_min,fecha_max,conciliadas,diferencias,solo_calim)
+            VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(raw_ingesta_id) DO UPDATE SET
+              path_archivo=excluded.path_archivo, filas=excluded.filas, fecha_min=excluded.fecha_min,
+              fecha_max=excluded.fecha_max, conciliadas=excluded.conciliadas,
+              diferencias=excluded.diferencias, solo_calim=excluded.solo_calim, updated_at=CURRENT_TIMESTAMP''',
+            (raw_id,data['nombre_archivo'],data['hash_sha256'],data['path_archivo'],len(data['filas']),
+             data['fecha_min'],data['fecha_max'],counters['conciliadas'],counters['diferencias'],counters['solo_calim']))
+        conn.execute("INSERT INTO core_staging_logs(staging_id,resultado,detalles) VALUES (?,'OK',?)",
+                     (raw_id, json.dumps(counters, ensure_ascii=False)))
+        conn.commit()
+        return {'raw_ingesta_id': raw_id, 'filas': len(data['filas']), **counters}
+    except Exception:
+        conn.rollback()
+        logger.exception('Error en ingesta ELT de CALIM')
+        raise
+    finally:
+        conn.close()
+
+
+def update_calim_path(hash_archivo, new_path):
+    safe = sanitize_path_db(new_path)
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE compras_calim_ingestas SET path_archivo=? WHERE hash_archivo=?', (safe, hash_archivo))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def save_factura(f: dict):
@@ -296,6 +582,7 @@ def get_all_compras_facturas(anio=None, mes=None):
                    tiene_foto, path_archivo, origen, meta_json
             FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA'
+              AND COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
         '''
         params = []
         
@@ -354,7 +641,8 @@ def get_compras_facturas_sin_archivo():
         rows = conn.execute('''
             SELECT id, numero_comprobante, proveedor, fecha, total, origen 
             FROM compras_facturas 
-            WHERE tiene_foto = 0 OR path_archivo IS NULL
+            WHERE (tiene_foto = 0 OR path_archivo IS NULL)
+              AND COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
             ORDER BY fecha DESC
         ''').fetchall()
         return [dict(r) for r in rows]
@@ -399,6 +687,7 @@ def smart_search_invoice(query):
             SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
             FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA' 
+              AND COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
               AND (
                   numero_comprobante LIKE ? OR 
                   (punto_venta || numero_comprobante) LIKE ? OR
@@ -440,9 +729,10 @@ def get_resumen_facturacion(anio=None):
     params = [f"{anio}%"] if anio else []
     where = " WHERE fecha LIKE ?" if anio else ""
     cur = conn.cursor()
-    count = cur.execute(f"SELECT COUNT(*) FROM compras_facturas {where}", params).fetchone()[0] or 0
-    ventas = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'VENTA'", params).fetchone()[0] or 0.0
-    compras = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'COMPRA'", params).fetchone()[0] or 0.0
+    active = "COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'"
+    count = cur.execute(f"SELECT COUNT(*) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} {active}", params).fetchone()[0] or 0
+    ventas = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'VENTA' AND {active}", params).fetchone()[0] or 0.0
+    compras = cur.execute(f"SELECT SUM(total) FROM compras_facturas {where} {'AND' if anio else 'WHERE'} tipo_operacion = 'COMPRA' AND {active}", params).fetchone()[0] or 0.0
     conn.close()
     return {"total_count": count, "monto_ventas": ventas, "monto_compras": compras}
 
@@ -454,7 +744,8 @@ def buscar_compras_facturas(termino):
     q = f"%{termino}%"
     rows = cur.execute("""
         SELECT * FROM compras_facturas 
-        WHERE numero_comprobante LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?
+        WHERE COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
+          AND (numero_comprobante LIKE ? OR proveedor LIKE ? OR cuit_proveedor LIKE ?)
         ORDER BY fecha DESC LIMIT 20
     """, (q, q, q)).fetchall()
     conn.close()

@@ -95,18 +95,32 @@ async def get_summary(anio: str = None):
     }
 
 @router.post("/api/upload/{modulo}")
-async def upload_file(modulo: str, files: list[UploadFile] = File(...)):
-    """Fase de Recepción v4.6 (Tránsito Crudo)."""
+async def upload_file(
+    modulo: str, 
+    file: UploadFile = File(None), 
+    files: list[UploadFile] = File(None)
+):
+    """Fase de Recepción v4.6 (Tránsito Crudo). Admite singular o plural."""
     try:
         inbox_dir = os.path.join(WORKSPACE, f"modulo_{modulo}", f"inbox_{modulo}")
         os.makedirs(inbox_dir, exist_ok=True)
         
+        # Consolidar lista de archivos
+        upload_list = []
+        if file:
+            upload_list.append(file)
+        if files:
+            upload_list.extend(files)
+            
+        if not upload_list:
+            return {"status": "error", "message": "No se recibieron archivos para procesar."}
+            
         saved_names = []
-        for file in files:
-            file_path = os.path.join(inbox_dir, file.filename)
+        for f_item in upload_list:
+            file_path = os.path.join(inbox_dir, f_item.filename)
             with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            saved_names.append(file.filename)
+                shutil.copyfileobj(f_item.file, buffer)
+            saved_names.append(f_item.filename)
             
         # Ejecutar de forma asíncrona o directa el procesamiento del Inbox tras la subida
         try:

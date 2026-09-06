@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Nicoletti - Mi Espacio JOA v1.0</title>
+    <link rel="stylesheet" href="style_core.css?v=6.0.0">
+    <link rel="stylesheet" href="style_bancos.css?v=6.0.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="htmx.min.js?v=1.9.12"></script>
+    <script src="table_sort.js"></script>
+    <style>
+        /* Personalización Premium en Fondo Blanco/Claro para el Espacio Personal de Joaquín */
+        :root {
+            --bg-color: #f8fafc;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --accent-color: #0969da;
+            --success: #1a7f37;
+            --warning: #9a6700;
+            --danger: #cf222e;
+            --text-main: #24292f;
+            --text-muted: #57606a;
+        }
+        
+        body {
+            background: radial-gradient(circle at top right, #f1f5f9 0%, #ffffff 100%) !important;
+            color: var(--text-main) !important;
+        }
+
+        .app-header {
+            background: #ffffff !important;
+            border-bottom: 1px solid var(--glass-border) !important;
+        }
+
+        .glow-text span {
+            color: var(--accent-color) !important;
+            text-shadow: none !important;
+        }
+
+        .filter-dashboard {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05) !important;
+            backdrop-filter: blur(12px) !important;
+        }
+
+        .filter-dashboard input, .filter-dashboard select {
+            background: #ffffff !important;
+            color: var(--text-main) !important;
+            border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .filter-dashboard select option {
+            background: #ffffff !important;
+            color: var(--text-main) !important;
+        }
+
+        .kpi-card {
+            background: #ffffff !important;
+            border: 1px solid var(--glass-border) !important;
+            color: var(--text-main) !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02) !important;
+        }
+
+        .kpi-card h4 {
+            color: var(--text-muted) !important;
+        }
+
+        .kpi-card .value {
+            color: var(--text-main) !important;
+        }
+
+        .table-container-final {
+            background: #ffffff !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02) !important;
+        }
+
+        th {
+            background: #f8fafc !important;
+            color: var(--text-muted) !important;
+            border-bottom: 1px solid var(--glass-border) !important;
+        }
+
+        td {
+            color: var(--text-main) !important;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+        }
+
+        .btn-sync {
+            border: 1px solid var(--accent-color) !important;
+            color: var(--accent-color) !important;
+            background: rgba(9, 105, 218, 0.05) !important;
+        }
+
+        .btn-sync:hover {
+            background: var(--accent-color) !important;
+            color: #fff !important;
+            box-shadow: 0 0 20px rgba(9, 105, 218, 0.2) !important;
+        }
+
+        .btn-back {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: #f3f4f6;
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+        
+        .val-positive {
+            color: var(--success) !important;
+        }
+        
+        .val-negative {
+            color: var(--danger) !important;
+        }
+
+        /* Dashboard JOA: una sola vista financiera amplia por vez. */
+        .joa-workspace {
+            padding: 22px 28px !important;
+            gap: 16px !important;
+            overflow: hidden !important;
+            min-height: 0;
+        }
+
+        .joa-overview {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            flex: 0 0 auto;
+        }
+
+        .joa-overview h2 { font-size: 1.35rem; margin: 0 0 4px; }
+        .joa-overview p { color: var(--text-muted); font-size: .86rem; }
+
+        .account-switcher {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(230px, 1fr));
+            gap: 10px;
+            width: min(580px, 55vw);
+        }
+
+        .account-tab {
+            appearance: none;
+            border: 1px solid #d8dee8;
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px 15px;
+            display: grid;
+            grid-template-columns: 42px 1fr auto;
+            align-items: center;
+            gap: 11px;
+            text-align: left;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: .18s ease;
+        }
+
+        .account-tab:hover { border-color: #9abced; transform: translateY(-1px); }
+        .account-tab.active {
+            color: #fff;
+            border-color: #0969da;
+            background: linear-gradient(135deg, #0969da, #0550ae);
+            box-shadow: 0 8px 22px rgba(9, 105, 218, .22);
+        }
+
+        .account-tab .tab-icon {
+            width: 42px; height: 42px; display: grid; place-items: center;
+            border-radius: 11px; background: #eef5ff; font-size: 1.3rem;
+        }
+        .account-tab.active .tab-icon { background: rgba(255,255,255,.15); }
+        .account-tab strong { display: block; font-size: .94rem; }
+        .account-tab small { display: block; color: #6e7781; margin-top: 2px; font-size: .72rem; }
+        .account-tab.active small { color: rgba(255,255,255,.72); }
+        .account-tab .tab-arrow { font-size: 1.1rem; opacity: .65; }
+
+        .joa-filter-bar {
+            padding: 12px !important;
+            border-radius: 14px !important;
+            display: grid;
+            grid-template-columns: minmax(260px, 1.5fr) minmax(190px, .7fr) minmax(190px, .8fr) auto;
+            align-items: end;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+
+        .filter-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+        .filter-field > span {
+            color: var(--text-muted); font-size: .68rem; font-weight: 700;
+            letter-spacing: .06em; text-transform: uppercase;
+        }
+        .filter-field input, .filter-field select {
+            width: 100%; height: 40px; padding: 0 12px; border-radius: 9px !important;
+            outline: none; font-size: .84rem !important;
+        }
+        .date-filter { display: flex; align-items: center; gap: 6px; }
+        .date-filter input { width: 132px; }
+
+        #range-shortcuts {
+            display: inline-flex; padding: 3px; background: #eef2f7;
+            border: 1px solid #dde3eb; border-radius: 9px; gap: 2px;
+            grid-column: 4; justify-self: stretch;
+        }
+        #range-shortcuts button {
+            border: 0; padding: 7px 9px; border-radius: 7px; cursor: pointer;
+            color: var(--text-muted); background: transparent; white-space: nowrap; font-size: .76rem;
+        }
+
+        .finance-panel { display: none; min-height: 0; flex: 1; flex-direction: column; gap: 12px; }
+        .finance-panel.active { display: flex; }
+        .panel-heading { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; }
+        .panel-heading h3 { font-size: 1rem; margin: 0; }
+        .panel-heading p { color: var(--text-muted); font-size: .75rem; margin-top: 2px; }
+        .panel-pill { background: #edf5ff; color: #0550ae; border-radius: 999px; padding: 6px 10px; font-size: .72rem; font-weight: 700; }
+
+        .finance-panel .kpi-row {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px; margin: 0; flex: 0 0 auto;
+        }
+        #panel-card .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .finance-panel .kpi-card {
+            min-width: 0; padding: 12px 16px; border-radius: 12px; text-align: left;
+            box-shadow: none !important;
+        }
+        .finance-panel .kpi-card h4 { font-size: .68rem; margin: 0 0 5px; }
+        .finance-panel .kpi-card .value { font-size: clamp(1.12rem, 1.5vw, 1.55rem); letter-spacing: -.03em; }
+
+        .finance-panel .table-container-final {
+            min-height: 0; flex: 1 1 auto; overflow: auto !important;
+            border-radius: 13px; position: relative;
+        }
+        .finance-panel table { min-width: 980px; }
+        .finance-panel thead { position: sticky; top: 0; z-index: 4; }
+        .finance-panel th { padding: 11px 16px; font-size: .7rem; white-space: nowrap; }
+        .finance-panel td { padding: 10px 16px; font-size: .82rem; }
+
+        .card-only { display: none; }
+        body[data-view="card"] .savings-only { display: none; }
+        body[data-view="card"] #range-shortcuts.savings-only { display: none; }
+        body[data-view="card"] .card-only { display: flex; }
+        #card-summary-field { grid-column: 3 / 5; }
+
+        @media (max-width: 1100px) {
+            .joa-workspace { overflow-y: auto !important; }
+            .joa-overview { align-items: flex-start; flex-direction: column; }
+            .account-switcher { width: 100%; }
+            .joa-filter-bar { grid-template-columns: 1fr 1fr; }
+            #card-summary-field { grid-column: auto; }
+            .finance-panel { min-height: 620px; }
+            .finance-panel .kpi-row { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 680px) {
+            .app-header { padding: 12px 16px; }
+            .brand p { display: none; }
+            .joa-workspace { padding: 16px !important; }
+            .account-switcher, .joa-filter-bar { grid-template-columns: 1fr; }
+            .date-filter { flex-wrap: wrap; }
+            #range-shortcuts { overflow-x: auto; width: 100%; }
+            #range-shortcuts { grid-column: auto; }
+            .finance-panel .kpi-row, #panel-card .kpi-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="toast-container"></div>
+
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <h1 class="glow-text">Espacio <span>JOA</span></h1>
+                <p>Finanzas Personales de Joaquín 🧑‍💻</p>
+            </div>
+            <div class="header-actions">
+                <a href="index.html" class="btn-back">◀️ Volver al Dashboard</a>
+            </div>
+        </header>
+
+        <main class="ecosystem-layout">
+            <section class="boveda-panel-full joa-workspace">
+                <div class="joa-overview">
+                    <div>
+                        <h2>Tu dinero, claro y separado</h2>
+                        <p>Elegí una cuenta para ver su resumen y el detalle completo.</p>
+                    </div>
+                    <nav class="account-switcher" aria-label="Vista financiera">
+                        <button class="account-tab active" type="button" data-view="savings" aria-selected="true" onclick="switchFinanceView('savings')">
+                            <span class="tab-icon">🏦</span>
+                            <span><strong>Caja de ahorro</strong><small>Ingresos, egresos y saldo</small></span>
+                            <span class="tab-arrow">›</span>
+                        </button>
+                        <button class="account-tab" type="button" data-view="card" aria-selected="false" onclick="switchFinanceView('card')">
+                            <span class="tab-icon">💳</span>
+                            <span><strong>Visa Hipotecario</strong><small>Consumos y asignaciones</small></span>
+                            <span class="tab-arrow">›</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <form id="filters-form" onsubmit="event.preventDefault(); refreshJoaMovements();">
+                    <input type="hidden" name="entidad" value="JOA">
+                    <div class="filter-dashboard joa-filter-bar">
+                        <label class="filter-field">
+                            <span>Buscar</span>
+                            <input type="search" id="search-bancos" name="q" placeholder="Descripción o importe...">
+                        </label>
+                        <label class="filter-field savings-only">
+                            <span>Cuenta bancaria</span>
+                            <select name="cuenta">
+                                <option value="">Pesos + dólares</option>
+                                <option value="CA$ ...9087">Caja de ahorro ARS</option>
+                                <option value="CA U$D ...2646">Caja de ahorro USD</option>
+                            </select>
+                        </label>
+                        <label class="filter-field">
+                            <span>Categoría</span>
+                            <select name="categoria">
+                                <option value="">Todas las categorías</option>
+                                {% for tipo in ['INGRESO', 'EGRESO', 'OTRO'] %}
+                                    {% set items = categorias | selectattr('tipo', 'equalto', tipo) | list %}
+                                    {% if items %}
+                                    <optgroup label="{{ tipo }}">
+                                        {% for cat in items %}
+                                        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji or '' }}</option>
+                                        {% endfor %}
+                                    </optgroup>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <div class="filter-field savings-only">
+                            <span>Período</span>
+                            <div class="date-filter">
+                                <input type="date" id="fecha-desde" name="fecha_desde" aria-label="Desde" onchange="syncJoaRangeBounds('from')">
+                                <span>—</span>
+                                <input type="date" id="fecha-hasta" name="fecha_hasta" aria-label="Hasta" onchange="syncJoaRangeBounds('to')">
+                            </div>
+                        </div>
+                        <label class="filter-field card-only" id="card-summary-field">
+                            <span>Resumen de tarjeta</span>
+                            <select name="resumen_id" id="resumen-tarjeta" onchange="updateCardSummaryLabel()">
+                                {% for resumen in resumenes_tarjeta %}
+                                <option value="{{ resumen.value }}">{{ resumen.label }} · {{ resumen.consumos }} mov.{{ ' · conciliado' if resumen.conciliado else '' }}</option>
+                                {% else %}
+                                <option value="">No hay resúmenes importados</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <div id="range-shortcuts" class="savings-only">
+                            <button type="button" data-range="month" onclick="setJoaRange('month')">Mes</button>
+                            <button type="button" data-range="30" onclick="setJoaRange('30')">30 días</button>
+                            <button type="button" data-range="90" onclick="setJoaRange('90')">90 días</button>
+                            <button type="button" data-range="year" onclick="setJoaRange('year')">Año</button>
+                            <button type="button" data-range="all" onclick="setJoaRange('all')">Todo</button>
+                        </div>
+                    </div>
+                </form>
+
+                <section class="finance-panel active" id="panel-savings" aria-label="Caja de ahorro">
+                    <div class="panel-heading">
+                        <div><h3>Caja de ahorro · Banco Hipotecario</h3><p>Todos los movimientos del período seleccionado</p></div>
+                        <span class="panel-pill">ARS + USD separados</span>
+                    </div>
+                    <div class="kpi-row" id="kpi-bancos" hx-get="/api/bancos/kpis" hx-trigger="htmx:afterSwap from:#tbody-bancos" hx-include="#filters-form"></div>
+                    <div class="table-container-final">
+                        <table id="table-bancos">
+                            <thead><tr><th>Fecha</th><th>Cuenta</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Saldo</th></tr></thead>
+                            <tbody id="tbody-bancos" hx-get="/api/bancos/movimientos"
+                                   hx-trigger="load, change from:#filters-form, keyup changed delay:300ms from:#search-bancos, refresh-table"
+                                   hx-include="#filters-form" hx-target="this"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="finance-panel" id="panel-card" aria-label="Tarjeta Visa Hipotecario">
+                    <div class="panel-heading">
+                        <div><h3>Tarjeta Visa · Banco Hipotecario</h3><p>Consumos del resumen, sin mezclarlos con la caja</p></div>
+                        <span class="panel-pill" id="card-summary-label">Resumen Visa</span>
+                    </div>
+                    <div class="kpi-row" id="kpi-tarjeta" hx-get="/api/joa/tarjeta/kpis"
+                         hx-trigger="load, change from:#filters-form, keyup changed delay:300ms from:#search-bancos, refresh-card"
+                         hx-include="#filters-form"></div>
+                    <div class="table-container-final">
+                        <table id="table-joa-tarjeta">
+                            <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Asignado a</th><th>Importe original</th><th>Importe ARS</th></tr></thead>
+                            <tbody id="tbody-joa-tarjeta" hx-get="/api/joa/tarjeta/movimientos"
+                                   hx-trigger="load, change from:#filters-form, keyup changed delay:300ms from:#search-bancos, refresh-card"
+                                   hx-include="#filters-form" hx-target="this"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function switchFinanceView(view, updateHash = true) {
+            const isCard = view === 'card';
+            document.body.dataset.view = view;
+            document.querySelectorAll('.account-tab').forEach(tab => {
+                const active = tab.dataset.view === view;
+                tab.classList.toggle('active', active);
+                tab.setAttribute('aria-selected', String(active));
+            });
+            document.getElementById('panel-savings').classList.toggle('active', !isCard);
+            document.getElementById('panel-card').classList.toggle('active', isCard);
+            document.getElementById('search-bancos').placeholder = isCard
+                ? 'Buscar consumo o importe...'
+                : 'Buscar movimiento o importe...';
+            if (isCard) updateCardSummaryLabel();
+            if (updateHash) history.replaceState(null, '', isCard ? '#tarjeta' : '#caja');
+        }
+
+        function updateCardSummaryLabel() {
+            const select = document.getElementById('resumen-tarjeta');
+            const label = document.getElementById('card-summary-label');
+            if (!select || !label) return;
+            const selected = select.options[select.selectedIndex];
+            label.textContent = selected && selected.value
+                ? `Resumen · ${selected.textContent.split('·')[0].trim()}`
+                : 'Sin resumen';
+        }
+
+        function formatLocalDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function setJoaRange(range, shouldRefresh = true) {
+            const today = new Date();
+            let from = '';
+            let to = formatLocalDate(today);
+
+            if (range === 'month') {
+                from = formatLocalDate(new Date(today.getFullYear(), today.getMonth(), 1));
+            } else if (range === '30' || range === '90') {
+                const days = Number(range);
+                const start = new Date(today);
+                start.setDate(start.getDate() - (days - 1));
+                from = formatLocalDate(start);
+            } else if (range === 'year') {
+                from = `${today.getFullYear()}-01-01`;
+            } else if (range === 'all') {
+                to = '';
+            }
+
+            document.getElementById('fecha-desde').value = from;
+            document.getElementById('fecha-hasta').value = to;
+            syncJoaRangeBounds();
+            document.querySelectorAll('#range-shortcuts button').forEach(button => {
+                const active = button.dataset.range === range;
+                button.style.background = active ? 'var(--accent-color)' : 'transparent';
+                button.style.color = active ? '#fff' : 'var(--text-muted)';
+            });
+            if (shouldRefresh) refreshJoaMovements();
+        }
+
+        function syncJoaRangeBounds(changedSide = '') {
+            const fromInput = document.getElementById('fecha-desde');
+            const toInput = document.getElementById('fecha-hasta');
+            toInput.min = fromInput.value || '';
+            fromInput.max = toInput.value || '';
+            if (fromInput.value && toInput.value && fromInput.value > toInput.value) {
+                if (changedSide === 'to') fromInput.value = toInput.value;
+                else toInput.value = fromInput.value;
+            }
+            document.querySelectorAll('#range-shortcuts button').forEach(button => {
+                button.style.background = 'transparent';
+                button.style.color = 'var(--text-muted)';
+            });
+        }
+
+        function refreshJoaMovements() {
+            const tableBody = document.getElementById('tbody-bancos');
+            if (!tableBody) return;
+            if (window.htmx) {
+                htmx.trigger(tableBody, 'refresh-table');
+                htmx.trigger(document.getElementById('tbody-joa-tarjeta'), 'refresh-card');
+                htmx.trigger(document.getElementById('kpi-tarjeta'), 'refresh-card');
+            }
+            else loadJoaData();
+        }
+
+        async function loadJoaData() {
+            const form = document.getElementById('filters-form');
+            const tableBody = document.getElementById('tbody-bancos');
+            const kpis = document.getElementById('kpi-bancos');
+            const cardBody = document.getElementById('tbody-joa-tarjeta');
+            const cardKpis = document.getElementById('kpi-tarjeta');
+            const query = new URLSearchParams(new FormData(form)).toString();
+
+            tableBody.innerHTML = '<tr><td colspan="6" style="padding:28px;text-align:center;color:var(--text-muted);">Cargando movimientos...</td></tr>';
+            cardBody.innerHTML = '<tr><td colspan="6" style="padding:28px;text-align:center;color:var(--text-muted);">Cargando consumos...</td></tr>';
+            try {
+                const [movementsResponse, kpisResponse, cardResponse, cardKpisResponse] = await Promise.all([
+                    fetch(`/api/bancos/movimientos?${query}`, { headers: { 'HX-Request': 'true' } }),
+                    fetch(`/api/bancos/kpis?${query}`),
+                    fetch(`/api/joa/tarjeta/movimientos?${query}`),
+                    fetch(`/api/joa/tarjeta/kpis?${query}`)
+                ]);
+                if (!movementsResponse.ok || !kpisResponse.ok || !cardResponse.ok || !cardKpisResponse.ok) {
+                    throw new Error('Una o más consultas financieras fallaron');
+                }
+                tableBody.innerHTML = await movementsResponse.text();
+                kpis.innerHTML = await kpisResponse.text();
+                cardBody.innerHTML = await cardResponse.text();
+                cardKpis.innerHTML = await cardKpisResponse.text();
+                if (window.initSortableTables) window.initSortableTables();
+            } catch (error) {
+                console.error('No se pudo cargar Espacio JOA:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" style="padding:28px;text-align:center;color:var(--danger);font-weight:600;">No se pudieron cargar los movimientos. Reiniciá el ERP y recargá esta página.</td></tr>';
+                cardBody.innerHTML = '<tr><td colspan="6" style="padding:28px;text-align:center;color:var(--danger);font-weight:600;">No se pudieron cargar los consumos de tarjeta.</td></tr>';
+            }
+        }
+
+        function enableJoaFallback() {
+            const form = document.getElementById('filters-form');
+            const search = document.getElementById('search-bancos');
+            let searchTimer;
+            form.addEventListener('change', loadJoaData);
+            search.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(loadJoaData, 300);
+            });
+            loadJoaData();
+        }
+
+        setJoaRange('year', false);
+        updateCardSummaryLabel();
+        switchFinanceView(location.hash === '#tarjeta' ? 'card' : 'savings', false);
+        if (!window.htmx) enableJoaFallback();
+    </script>
+</body>
+</html>

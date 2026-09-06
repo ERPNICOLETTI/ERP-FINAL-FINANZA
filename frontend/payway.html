@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LDK · Conciliación Payway</title>
+  <style>
+    :root{--ink:#172033;--muted:#687386;--line:#e5e9f0;--bg:#f4f7fb;--blue:#1769e0;--green:#137a52;--amber:#a65b00;--red:#b42318}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,system-ui,sans-serif}
+    main{max-width:1500px;margin:auto;padding:28px}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+    h1{margin:0;font-size:26px}.sub{color:var(--muted);margin-top:5px}.back{color:var(--blue);text-decoration:none;font-weight:650}
+    .filters,.card,.table{background:white;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 28px #1831530c}
+    .filters{padding:16px;display:flex;gap:12px;align-items:end}.field{display:grid;gap:6px}.field label{font-size:11px;font-weight:750;color:var(--muted);letter-spacing:.06em}
+    input,button{height:42px;border:1px solid #d5dae3;border-radius:9px;padding:0 12px;background:white}button{background:var(--blue);color:white;border:0;font-weight:700;cursor:pointer}
+    .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:18px 0}.card{padding:18px}.card small{color:var(--muted);font-weight:700}.card strong{display:block;font-size:22px;margin-top:8px}.status{color:var(--amber)}
+    .table{overflow:auto}table{width:100%;border-collapse:collapse;min-width:1050px}th{font-size:11px;letter-spacing:.05em;color:var(--muted);text-align:left;background:#fafbfd}th,td{padding:13px 15px;border-bottom:1px solid var(--line)}.num{text-align:right;font-variant-numeric:tabular-nums}
+    .pill{display:inline-block;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:750}.CONCILIADO{background:#e9f7f0;color:var(--green)}.DIFERENCIA,.NO_LIQUIDADO{background:#fff0ed;color:var(--red)}.FALTA_MOVIMIENTOS{background:#fff6e5;color:var(--amber)}
+    @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.head{align-items:flex-start}.filters{flex-wrap:wrap}}
+  </style>
+</head>
+<body><main>
+  <div class="head"><div><h1>Conciliación Payway · LDK</h1><div class="sub">Cobros presentados contra liquidaciones, por fecha de pago</div></div><a class="back" href="/">Volver al ERP</a></div>
+  <form class="filters" method="get"><div class="field"><label>DESDE</label><input type="date" name="fecha_desde" value="{{ data.desde }}"></div><div class="field"><label>HASTA</label><input type="date" name="fecha_hasta" value="{{ data.hasta }}"></div><button>Aplicar rango</button></form>
+  {% set t=data.totales %}<section class="kpis">
+    <div class="card"><small>COBRADO</small><strong>${{ "{:,.2f}".format(t.cobrado_centavos/100) }}</strong></div>
+    <div class="card"><small>LIQUIDADO BRUTO</small><strong>${{ "{:,.2f}".format(t.liquidado_bruto_centavos/100) }}</strong></div>
+    <div class="card"><small>DESCUENTOS</small><strong>${{ "{:,.2f}".format(t.descuentos_centavos/100) }}</strong></div>
+    <div class="card"><small>NETO</small><strong>${{ "{:,.2f}".format(t.neto_centavos/100) }}</strong></div>
+    <div class="card"><small>CONTROL</small><strong class="status">{{ t.estado }}</strong></div>
+  </section>
+  <div class="table"><table><thead><tr><th>Fecha pago</th><th>Marca</th><th>Establecimiento</th><th>Pagador</th><th class="num">Mov.</th><th class="num">Cobrado</th><th class="num">Liquidado</th><th class="num">Descuentos</th><th class="num">Neto</th><th class="num">Diferencia</th><th>Estado</th></tr></thead>
+  <tbody>{% for r in data.filas %}<tr><td>{{ r.fecha_pago }}</td><td>{{ r.marca }}</td><td>{{ r.establecimiento }}</td><td>{{ r.pagadores or "—" }}</td><td class="num">{{ r.movimientos }}</td><td class="num">${{ "{:,.2f}".format(r.cobrado_centavos/100) }}</td><td class="num">${{ "{:,.2f}".format(r.liquidado_bruto_centavos/100) }}</td><td class="num">${{ "{:,.2f}".format(r.descuentos_centavos/100) }}</td><td class="num">${{ "{:,.2f}".format(r.neto_centavos/100) }}</td><td class="num">${{ "{:,.2f}".format(r.diferencia_centavos/100) }}</td><td><span class="pill {{ r.estado }}">{{ r.estado.replace('_',' ') }}</span></td></tr>{% else %}<tr><td colspan="11">No hay datos en el rango.</td></tr>{% endfor %}</tbody></table></div>
+</main></body></html>

@@ -21,7 +21,11 @@
                 <tbody>
                     {% if matches %}
                         {% for m in matches %}
-                        <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); background: {% if m.tipo_match == 'DESDOBLADO' %}rgba(241, 196, 15, 0.12){% else %}rgba(255,255,255,0.5){% endif %}; transition: background 0.2s ease;">
+                        {% if m.tipo_match == 'DESDOBLADO' %}
+                        <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); background: rgba(241, 196, 15, 0.12); transition: background 0.2s ease;">
+                        {% else %}
+                        <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); background: rgba(255,255,255,0.5); transition: background 0.2s ease;">
+                        {% endif %}
                             <td style="padding: 14px 18px; font-weight: 600; color: #2c3e50;">
                                 📅 {{ m.fecha_lote }}
                                 <div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">Ref: {{ m.lote }}</div>

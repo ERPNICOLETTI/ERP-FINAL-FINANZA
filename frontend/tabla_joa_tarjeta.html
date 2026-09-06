@@ -1,0 +1,19 @@
+{% for mov in movimientos %}
+<tr>
+    <td>{{ mov.fecha }}</td>
+    <td>{{ mov.descripcion }}</td>
+    <td id="card-cat-cell-{{ mov.id }}" hx-target="this" hx-swap="outerHTML">
+        <div hx-get="/api/joa/tarjeta/movimientos/{{ mov.id }}/edit_categoria" style="cursor:pointer;display:inline-block;" title="Click para reclasificar">
+            <span class="cat-badge cat-{{ (mov.categoria or 'SIN_CATEGORIZAR').replace(' ', '_') }}">{{ mov.emoji or '' }} {{ mov.categoria or 'Sin categorizar' }}</span>
+        </div>
+    </td>
+    <td id="card-owner-{{ mov.id }}"><span style="display:inline-flex;padding:4px 9px;border-radius:999px;background:#eef2f7;color:#475569;font-size:.72rem;font-weight:700;">{{ mov.asignacion }}</span></td>
+    <td style="font-weight:700; color:{{ '#1a7f37' if mov.monto_original < 0 else '#cf222e' }}; text-align:right;">
+        {% if mov.moneda_original == 'USD' %}U$D{% else %}${% endif %}
+        {{ "{:,.2f}".format(mov.monto_original).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+    </td>
+    <td style="font-weight:700;color:{{ '#1a7f37' if mov.monto < 0 else '#24292f' }};text-align:right;">$ {{ "{:,.2f}".format(mov.monto).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+</tr>
+{% else %}
+<tr><td colspan="6" style="padding:32px;text-align:center;color:#57606a;">No hay consumos de tarjeta para este rango.</td></tr>
+{% endfor %}

@@ -5,7 +5,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'erp_ni
 
 CATEGORIAS = [
     # EGRESOS
-    ('Pago Tarjeta', 'EGRESO', '💳', 'rgba(225, 29, 72, 0.2); color: #e11d48', 'pago tj,pago tarjeta,tarjeta visa,tarjeta master'),
+    ('Pago Tarjeta', 'EGRESO', '💳', 'rgba(225, 29, 72, 0.2); color: #e11d48', 'pago tj,pago tarjeta,pago de t.credito,tarjeta visa,tarjeta master'),
     ('Comida', 'EGRESO', '🍔', 'rgba(239, 68, 68, 0.2); color: #ef4444', 'coto,carrefour,jumbo,dia ,almacen,supermercado,fiambreria,pedidosya,rappi,mcdonalds,burger,restaurante,kiosco,panaderia'),
     ('Transporte', 'EGRESO', '🚗', 'rgba(249, 115, 22, 0.2); color: #f97316', 'uber,cabify,didi,taxi,nafta,ypf,shell,axion,sube,peaje'),
     ('Vivienda', 'EGRESO', '🏠', 'rgba(245, 158, 11, 0.2); color: #f59e0b', 'alquiler,expensas'),
@@ -25,7 +25,7 @@ CATEGORIAS = [
     # INGRESOS
     ('Sueldo', 'INGRESO', '💼', 'rgba(16, 185, 129, 0.2); color: #10b981', 'haberes,sueldo,honorarios'),
     ('Ventas', 'INGRESO', '🧾', 'rgba(5, 150, 105, 0.2); color: #059669', 'recaudacion,liquid,payway,naranja,mercado pago,cobro'),
-    ('Transferencia recibida', 'INGRESO', '💸', 'rgba(52, 211, 153, 0.2); color: #34d399', 'transferencia de terceros,credito transferencia coelsa'),
+    ('Transferencia recibida', 'INGRESO', '💸', 'rgba(52, 211, 153, 0.2); color: #34d399', 'transferencia de terceros,credito transferencia coelsa,recibiste una transferencia,recibiste transf cash out,credito cash out'),
     ('Intereses', 'INGRESO', '🏦', 'rgba(20, 184, 166, 0.2); color: #14b8a6', 'interes,plazo fijo,rendimiento'),
     ('Inversiones', 'INGRESO', '📈', 'rgba(16, 185, 129, 0.2); color: #10b981', 'cedear,bono,accion,fondo comun'),
     ('Reembolsos', 'INGRESO', '📦', 'rgba(94, 234, 212, 0.2); color: #5eead4', 'dev.compra,devolucion,reverso'),
@@ -33,7 +33,7 @@ CATEGORIAS = [
     ('Otros Ingresos', 'INGRESO', '🧮', 'rgba(156, 163, 175, 0.2); color: #9ca3af', ''),
     
     # OTROS
-    ('Movimiento Interno', 'OTRO', '🔄', 'rgba(99, 102, 241, 0.2); color: #6366f1', 'ctas propias,cuenta propia,extraccion,cajero automatico'),
+    ('Movimiento Interno', 'OTRO', '🔄', 'rgba(99, 102, 241, 0.2); color: #6366f1', 'ctas propias,cuenta propia,movimiento entre tus cuentas,transferencia de cuenta tuya,extraccion,cajero automatico'),
     ('Sin Categorizar', 'OTRO', '❓', 'rgba(107, 114, 128, 0.2); color: #9ca3af', '')
 ]
 

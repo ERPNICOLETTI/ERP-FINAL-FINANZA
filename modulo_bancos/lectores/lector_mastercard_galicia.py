@@ -1,366 +1,334 @@
+"""Lector ELT y parser puro del resumen Mastercard Banco Galicia."""
+
+from __future__ import annotations
+
+import hashlib
+import logging
 import os
 import re
-import hashlib
-import json
-import logging
-import sqlite3
+import unicodedata
+from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+
 import PyPDF2
-from modulo_gastos import storage_gastos
+
 from modulo_bancos import storage_bancos
+from modulo_gastos import storage_gastos
 
 logger = logging.getLogger(__name__)
+PARSER_VERSION = "mastercard-galicia/1.0.0"
+MONEY = r"-?[\d.]+,\d{2}"
 
-MONTHS_MAP = {
-    "ENE": "01", "FEB": "02", "MAR": "03", "ABR": "04", "MAY": "05", "JUN": "06",
-    "JUL": "07", "AGO": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DIC": "12"
-}
 
-def calculate_sha256(file_path):
-    """Calcula el hash SHA-256 del archivo para control de idempotencia."""
-    sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
+def _ascii(value: str) -> str:
+    return "".join(char for char in unicodedata.normalize("NFKD", value or "")
+                   if not unicodedata.combining(char))
 
-def procesar_archivo(file_path, force_reprocess=False):
-    """
-    Parsea el resumen de tarjeta Mastercard de Banco Galicia.
-    Separa consumos entre Jorgelina (JOR) y Joaquín (JOA) dinámicamente.
-    Extrae consumos e inserta en la base de datos de Gastos.
-    """
-    if not os.path.exists(file_path):
-        logger.error(f"⚠️ El archivo no existe: {file_path}")
-        return False, None
 
-    logger.info(f"💳 Procesando Resumen Mastercard Galicia: {os.path.basename(file_path)}")
-    file_hash = calculate_sha256(file_path)
+def _cents(value: str) -> int:
+    number = Decimal(value.strip().replace(".", "").replace(",", "."))
+    return int((number * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
-    # Control de Idempotencia por hash de archivo
-    conn = storage_bancos.get_db_connection()
-    exists = conn.execute("SELECT 1 FROM bancos_archivos_metadata WHERE hash_archivo = ?", (file_hash,)).fetchone()
-    conn.close()
-    
-    if exists and not force_reprocess:
-        logger.warning(f"🚫 El archivo {os.path.basename(file_path)} ya fue procesado previamente. Ignorando...")
-        return False, None
 
-    try:
-        # Extraer texto completo del PDF
-        text = ""
-        with open(file_path, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
+def _date(value: str) -> str:
+    months = {"ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6,
+              "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12}
+    day, month, year = value.upper().split("-")
+    return datetime(2000 + int(year), months[month], int(day)).date().isoformat()
 
-        # Conexión para obtener la taxonomía
-        db_path = storage_bancos.DB_PATH
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        tipos = conn.execute("SELECT id, nombre, cuenta_codigo, palabras_clave FROM gastos_tipos").fetchall()
-        conn.close()
 
-        # Ordenar reglas (las específicas primero, genéricas al final)
-        specific_rules = []
-        generic_rules = []
-        
-        for t in tipos:
-            kw_str = t['palabras_clave'] or ""
-            keywords = [k.strip().lower() for k in kw_str.split(',') if k.strip()]
-            keywords.append(t['nombre'].lower())
-            
-            rule = {
-                "id": t['id'],
-                "nombre": t['nombre'],
-                "cuenta": t['cuenta_codigo'],
-                "keywords": keywords
-            }
-            if t['nombre'] in ["Aportes de Capital", "Impuestos Comerciales", "Gastos Personales", "Gastos de Vida"]:
-                generic_rules.append(rule)
-            else:
-                specific_rules.append(rule)
-                
-        rules = specific_rules + generic_rules
+def _operation(*, order, line, date, description, kind, holder, currency,
+               amount, receipt=None, installment=None, original_country=None,
+               original_currency=None, original_amount=None):
+    return {
+        "orden": order, "linea_origen": line, "fecha_compra": date,
+        "comprobante": receipt, "descripcion": description, "cuota": installment,
+        "tipo_movimiento": kind, "titular_codigo": holder,
+        "moneda_original": currency, "monto_original_centavos": amount,
+        "monto_ars_centavos": amount if currency == "ARS" else 0,
+        "monto_usd_centavos": amount if currency == "USD" else 0,
+        # No se inventa un tipo de cambio para pesificar consumos en USD.
+        "monto_ars_valorizado_centavos": amount if currency == "ARS" else 0,
+        "tipo_cambio_milesimas": 1000 if currency == "ARS" else 0,
+        "pais_operacion_original": original_country,
+        "moneda_operacion_original": original_currency,
+        "monto_operacion_original_centavos": original_amount,
+    }
 
-        lines = text.split('\n')
-        
-        # 1. Detectar período de facturación buscando la fecha de emisión en la cabecera
-        billing_period = None
-        cierre_date = None
-        for line in lines:
-            m_cierre = re.search(r'\b(20\d{2})(\d{2})(\d{2})', line)
-            if m_cierre:
-                year, month, day = m_cierre.groups()
-                billing_period = f"{year}-{month}"
-                cierre_date = f"{year}-{month}-{day}"
-                break
-                
-        if not billing_period:
-            billing_period = "2026-05" # Fallback
-            
-        billing_year, billing_month = billing_period.split('-')
-        if not cierre_date:
-            cierre_date = f"{billing_year}-{billing_month}-28"
 
-        # 2. Procesar líneas y separar por bloques de tarjeta JOR/JOA
-        line_re = re.compile(r'^(\d{2})-([A-Za-z]{3})-(\d{2})\s+(.*)$')
-        amount_re = re.compile(r'(-?)(\d+(?:\.\d{3})*,?\d{2})\s*$')
-        summary_re = re.compile(
-            r'^(INTERESES?(?:\s+(?:DE\s+)?(?:FINANCIACION|PUNITORIOS|COMPENSATORIOS|FINANCIAR))?|IMPUESTO\s+(?:DE\s+)?SELLOS|IMP\.?\s*SELLOS|I\.V\.A\.\s+\d+,\d+%|PERCEPCION IVA DTO \d+/\d+|PERCEP\.AFIP RG \d+ \d*%)\s+(-?\d+(?:\.\d{3})*,?\d{2})(?:\s+(-?\d+(?:\.\d{3})*,?\d{2}))?\s*$',
-            re.IGNORECASE
-        )
-        
-        blocks = []
-        current_txs = []
+def _parse_detail(text: str) -> tuple[list[dict], dict]:
+    start = text.find("DETALLE DEL CONSUMO")
+    end_match = re.search(r"TOTAL ADICIONAL DE\s+NICOLETTI,JOAQUIN", text, re.I)
+    if start < 0 or not end_match:
+        raise ValueError("Detalle Mastercard Galicia incompleto")
+    detail = text[start:end_match.end()]
+    split_at = detail.rfind("\nSUBTOTAL ")
+    if split_at < 0:
+        raise ValueError("No se pudo separar titular y adicional Mastercard Galicia")
 
-        for line in lines:
-            line_clean = line.strip('\r\n') # Mantener espacios finales para detectar si es USD
-            m = line_re.match(line_clean.strip())
-            
-            if m:
-                day, month, year, rest = m.groups()
-                
-                am = amount_re.search(rest)
-                if not am:
-                    continue
-                    
-                minus_sign, amount_str = am.groups()
-                if minus_sign: # Omitir pagos/abonos de la tarjeta
-                    continue
-                    
-                amount_pos = rest.rfind(amount_str)
-                middle = rest[:amount_pos].strip()
-                
-                # Limpiar importes de cuotas intermedios o basura
-                middle = re.sub(r'-\s*$', '', middle).strip()
-                middle = re.sub(r'\d+(?:\.\d{3})*,\d{2}\s*$', '', middle).strip()
-                
-                # Buscar cuota en la descripción
-                cuota_match = re.search(r'\b(\d{2}/\d{2})\b', middle)
-                cuota_str = f" {cuota_match.group(1)}" if cuota_match else ""
-                
-                # Limpiar descripción
-                description = re.sub(r'\b\d{2}/\d{2}\b', '', middle).strip()
-                
-                # Determinar si es USD (no termina con dos espacios o tiene indicador de moneda extranjera)
-                is_usd = bool(re.search(r'\([A-Z]{3},', line_clean)) or not line_clean.endswith('  ')
-                
-                # Limpiar referencias de moneda extranjera e importes entre paréntesis
-                description = re.sub(r'\([A-Z]{3},[^)]+\)', '', description).strip()
-                description = re.sub(r'\b\d{5,}\b', '', description).strip() # Quitar nro comprobante
-                description = re.sub(r'\s+\$\s*$', '', description).strip() # Quitar signo pesos sobrante
-                description = re.sub(r'^[\*K\s]+', '', description).strip() # Limpiar prefijo de tarjeta
-                
-                # Formatear fecha usando el período de facturación del resumen
-                date_iso = f"{billing_year}-{billing_month}-{day}"
-                
-                # Convertir valor
-                val = float(amount_str.replace('.', '').replace(',', '.'))
-                if is_usd:
-                    val = round(val * 1400.0, 2)
-                    
-                month_num = MONTHS_MAP.get(month.upper(), "05")
-                fecha_compra = f"20{year}-{month_num}-{day}"
-                current_txs.append({
-                    "fecha": date_iso,
-                    "descripcion": f"{description}{cuota_str}".strip(),
-                    "monto": val,
-                    "is_usd": is_usd,
-                    "fecha_compra": fecha_compra
-                })
-                
-            elif "SUBTOTAL" in line_clean and current_txs:
-                # El primer subtotal pertenece a JOR (Jorgelina)
-                blocks.append(("JOR", current_txs))
-                current_txs = []
-                
-            elif "TOTAL ADICIONAL DE NICOLETTI,JOAQUIN" in line_clean and current_txs:
-                # El subtotal del adicional de Joaquín
-                blocks.append(("JOA", current_txs))
-                current_txs = []
-                
-            else:
-                m_summary = summary_re.match(line_clean.strip())
-                if m_summary:
-                    name = m_summary.group(1).upper()
-                    pesos_str = m_summary.group(2)
-                    usd_str = m_summary.group(3)
-                    
-                    if pesos_str.startswith('-'):
-                        # Omitir abonos/créditos
-                        continue
-                        
-                    val = float(pesos_str.replace('.', '').replace(',', '.'))
-                    if usd_str:
-                        val_usd = float(usd_str.replace('.', '').replace(',', '.'))
-                        val = round(val + (val_usd * 1400.0), 2)
-                        
-                    current_txs.append({
-                        "fecha": cierre_date,
-                        "descripcion": name.strip(),
-                        "monto": val,
-                        "is_usd": bool(usd_str),
-                        "fecha_compra": cierre_date
-                    })
-
-        if current_txs:
-            blocks.append(("JOR", current_txs))
-
-        registros_agregados = 0
-
-        # 3. Clasificar e insertar en la base de datos
-        for owner, txs in blocks:
-            # Filtrar reglas: categorias de tarjeta y personales restringidas al titular y comunas
-            # Para reglas específicas (como compras), permitimos de cualquier cuenta para soportar compras cruzadas/aprendizaje
-            pref_accounts = ['LDK', 'COMUN', 'JOR'] if owner == 'JOR' else ['JOA', 'COMUN']
-            valid_rules = []
-            for r in rules:
-                if r['nombre'] in ('Gasto Tarjeta', 'Intereses Tarjeta', 'Tarjeta', 'Gastos Personales', 'Gastos de Vida', 'Aportes de Capital', 'Impuestos Comerciales'):
-                    if r['cuenta'] in pref_accounts:
-                        valid_rules.append(r)
-                else:
-                    valid_rules.append(r)
-            
-            # Priorizar las reglas específicas del titular y comunas primero
-            prioritized_rules = sorted(
-                valid_rules,
-                key=lambda r: 0 if r['cuenta'] in pref_accounts else 1
-            )
-            
-            for tx in txs:
-                matched_concept = None
-                desc_lower = tx['descripcion'].lower()
-                
-                # 1. Intentar clasificar usando el historial de aprendizaje del usuario
-                conn_learning = storage_bancos.get_db_connection()
-                try:
-                    matched_concept = storage_gastos.buscar_clasificacion_previa(conn_learning, tx['descripcion'], tx['monto'])
-                finally:
-                    conn_learning.close()
-                    
-                # Evitar contaminación de cuentas personales (ej: de JOA a JOR o viceversa)
-                if matched_concept and matched_concept['cuenta'] not in pref_accounts:
-                    matched_concept = None
-                    
-                if not matched_concept:
-                    # Caso especial para ESCO: el más barato (102450) a JOR/ESCO Jorge, los otros a COMUN/ESCO
-                    if "esco" in desc_lower:
-                        target_name = "ESCO Jorge" if abs(tx['monto'] - 102450.0) < 10.0 else "ESCO"
-                        target_cuenta = "JOR" if target_name == "ESCO Jorge" else "COMUN"
-                        for r in prioritized_rules:
-                            if r['nombre'] == target_name and r['cuenta'] == target_cuenta:
-                                matched_concept = r
-                                break
-
-                    if not matched_concept:
-                        # Clasificar según palabras clave (limpiando puntos de abreviaciones)
-                        desc_clean = desc_lower.replace('.', '')
-                        for r in prioritized_rules:
-                            for kw in r['keywords']:
-                                kw_clean = kw.replace('.', '')
-                                if kw_clean in desc_clean:
-                                    matched_concept = r
-                                    break
-                            if matched_concept:
-                                break
-                            
-                    # Fallback especial para impuestos, percepciones e intereses de tarjeta
-                    if not matched_concept:
-                        desc_clean = desc_lower.replace('.', '')
-                        if any(k in desc_clean for k in ["iva", "sello", "percep", "afip", "rg", "sellado", "tasas"]):
-                            for r in prioritized_rules:
-                                if r['nombre'] in ('Gastos Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
-                                    matched_concept = r
-                                    break
-                        elif any(k in desc_clean for k in ["interes", "financia"]):
-                            for r in prioritized_rules:
-                                if r['nombre'] in ('Intereses Tarjeta', 'Tarjeta') and r['cuenta'] in pref_accounts:
-                                    matched_concept = r
-                                    break
-
-                    # Fallback general
-                    if not matched_concept:
-                        fallback_name = "Gastos de Vida" if owner == "JOR" else "Gastos Personales"
-                        for r in valid_rules:
-                            if r['nombre'] == fallback_name and r['cuenta'] == owner:
-                                matched_concept = r
-                                break
-                                
-                    # Fallback definitivo en caso de que no encuentre la categoría por nombre
-                    if not matched_concept and valid_rules:
-                        for r in valid_rules:
-                            if r['cuenta'] == owner:
-                                matched_concept = r
-                                break
-                                
-                if matched_concept:
-                    # Comprobar si ya existe el mismo registro para evitar duplicados
-                    conn_tx = storage_bancos.get_db_connection()
-                    try:
-                        matches = conn_tx.execute(
-                            "SELECT id, descripcion, fecha_compra, gasto_tipo_id FROM gastos_registros WHERE monto = ? AND fecha = ? AND fuente = ?",
-                            (tx['monto'], tx['fecha'], "Mastercard Galicia")
-                        ).fetchall()
-                    finally:
-                        conn_tx.close()
-
-                    exists_tx = False
-                    for m in matches:
-                        if storage_gastos.normalize_desc(m['descripcion']) == storage_gastos.normalize_desc(tx['descripcion']):
-                            if m['fecha_compra'] == tx['fecha_compra'] or m['fecha_compra'] == tx['fecha']:
-                                # Si es un registro migrado/antiguo, lo actualizamos con la fecha_compra real y la descripcion limpia
-                                conn_tx = storage_bancos.get_db_connection()
-                                try:
-                                    conn_tx.execute(
-                                        "UPDATE gastos_registros SET fecha_compra = ?, descripcion = ? WHERE id = ?",
-                                        (tx['fecha_compra'], tx['descripcion'], m['id'])
-                                    )
-                                    conn_tx.commit()
-                                finally:
-                                    conn_tx.close()
-                                exists_tx = True
-                                break
-                            elif m['fecha_compra'] == tx['fecha_compra']:
-                                exists_tx = True
-                                break
-
-                    if exists_tx:
-                        logger.info(f"⏭️ Registro de gasto omitido/actualizado (ya existe): {tx['descripcion']} ($ {tx['monto']}) el {tx['fecha']} (Compra: {tx['fecha_compra']})")
-                        continue
-
-                    storage_gastos.save_gasto_registro({
-                        "gasto_tipo_id": matched_concept["id"],
-                        "monto": tx['monto'],
-                        "fecha": tx['fecha'],
-                        "descripcion": tx['descripcion'],
-                        "fuente": "Mastercard Galicia",
-                        "fecha_compra": tx['fecha_compra']
-                    })
-                    registros_agregados += 1
-
-        # Registrar metadatos del archivo procesado para idempotencia
-        if registros_agregados > 0:
-            conn = storage_bancos.get_db_connection()
-            conn.execute('''
-                INSERT OR IGNORE INTO bancos_archivos_metadata (hash_archivo, banco, metadata_global)
-                VALUES (?, ?, ?)
-            ''', (
-                file_hash, 
-                "MASTERCARD_GALICIA", 
-                json.dumps({"registros_importados": registros_agregados, "fecha_proceso": f"{billing_year}-{billing_month}-01"}, ensure_ascii=False)
+    operations = []
+    row_re = re.compile(
+        rf"^(\d{{2}}-[A-Za-z]{{3}}-\d{{2}})\s+(.+?)\s+(\d{{5}})\s+({MONEY})\s*$"
+    )
+    foreign_re = re.compile(rf"\(([A-Z]{{3}}),([A-Z]{{3}}),\s*({MONEY})\)", re.I)
+    running_offset = 0
+    for line_number, line in enumerate(detail.splitlines(keepends=True), 1):
+        match = row_re.match(line.strip())
+        if match:
+            date_raw, reference, receipt, billed_raw = match.groups()
+            holder = "JOR" if running_offset < split_at else "JOA"
+            installment_match = re.search(r"\b(\d{2}/\d{2})\b", reference)
+            foreign_match = foreign_re.search(reference)
+            currency = "USD" if foreign_match else "ARS"
+            original_country = foreign_match.group(1).upper() if foreign_match else None
+            original_currency = foreign_match.group(2).upper() if foreign_match else None
+            original_amount = _cents(foreign_match.group(3)) if foreign_match else None
+            description = re.sub(r"\s+", " ", reference).strip()
+            if installment_match:
+                description = re.sub(r"\b\d{2}/\d{2}\b", "", description).strip()
+            operations.append(_operation(
+                order=len(operations) + 1,
+                line=text[:start].count("\n") + line_number,
+                date=_date(date_raw), description=description, kind="CONSUMO",
+                holder=holder, currency=currency, amount=_cents(billed_raw),
+                receipt=receipt,
+                installment=installment_match.group(1) if installment_match else None,
+                original_country=original_country, original_currency=original_currency,
+                original_amount=original_amount,
             ))
-            conn.commit()
-            conn.close()
-            
-        info = {
-            "modulo": "BANCOS",
-            "anio": billing_year,
-            "mes": billing_month,
-            "entidad": "MASTERCARD_GALICIA",
-            "db_table": "bancos_movimientos",
-            "id_insertado": 0
-        }
-        return True, info
-    except Exception as e:
-        logger.error(f"❌ Error procesando Mastercard Galicia: {e}")
-        return False, None
+        running_offset += len(line)
+
+    jor_subtotal = re.search(rf"SUBTOTAL\s+({MONEY})\s+({MONEY})", detail, re.I)
+    joa_subtotal = re.search(
+        rf"TOTAL ADICIONAL DE\s+NICOLETTI,JOAQUIN\s+({MONEY})\s+({MONEY})", text, re.I)
+    if not operations or not jor_subtotal or not joa_subtotal:
+        raise ValueError("Consumos o subtotales Mastercard Galicia incompletos")
+    declared = {
+        "JOR_ARS": _cents(jor_subtotal.group(1)), "JOR_USD": _cents(jor_subtotal.group(2)),
+        "JOA_ARS": _cents(joa_subtotal.group(1)), "JOA_USD": _cents(joa_subtotal.group(2)),
+    }
+    for holder in ("JOR", "JOA"):
+        for currency in ("ARS", "USD"):
+            parsed_total = sum(row["monto_original_centavos"] for row in operations
+                               if row["titular_codigo"] == holder
+                               and row["moneda_original"] == currency)
+            if parsed_total != declared[f"{holder}_{currency}"]:
+                raise ValueError(
+                    f"Subtotal {holder} {currency} no concilia: "
+                    f"PDF={declared[f'{holder}_{currency}']} parser={parsed_total}"
+                )
+    return operations, declared
+
+
+def _rate_milli(value: str) -> int:
+    return int((Decimal(value.replace(",", ".")) * 1000)
+               .quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _parse_financing(text: str) -> dict:
+    principal = re.search(rf"saldo adeudado de\s*\$\s*({MONEY})", text, re.I)
+    valid_until = re.search(r"beneficio hasta el\s+(\d{2}/\d{2}/\d{2})", text, re.I)
+    options = []
+    option_re = re.compile(
+        rf"(\d{{1,2}}) cuotas de \$\s*({MONEY})\*\s*\(TNA:\s*([\d,]+)%\s*-\s*"
+        rf"TEA:\s*([\d,]+)%\s*-\s*CFT:\s*([\d,]+)%\s*-\s*CFT S/IVA:\s*([\d,]+)%\)",
+        re.I,
+    )
+    for match in option_re.finditer(text):
+        installments, amount, tna, tea, cft, cft_no_vat = match.groups()
+        options.append({
+            "cuotas": int(installments), "cuota_centavos": _cents(amount),
+            "tna_milesimas": _rate_milli(tna), "tea_milesimas": _rate_milli(tea),
+            "cft_milesimas": _rate_milli(cft),
+            "cft_sin_iva_milesimas": _rate_milli(cft_no_vat),
+            "incluye_comision": False, "incluye_iva_intereses_comisiones": False,
+        })
+    if not principal or not valid_until or len(options) != 23:
+        raise ValueError("Oferta de financiación Mastercard Galicia incompleta")
+    return {
+        "capital_ofrecido_centavos": _cents(principal.group(1)),
+        "vigente_hasta": datetime.strptime(valid_until.group(1), "%d/%m/%y").date().isoformat(),
+        "opciones": options,
+    }
+
+
+def parse_mastercard_galicia_text(text: str) -> dict:
+    """Convierte el texto Mastercard a centavos y exige conciliación exacta."""
+    normalized = _ascii(text)
+    number = re.search(r"Resumen N.?\s*(\d{12})", normalized, re.I)
+    member = re.search(r"N.? de Socio:\s*([\d-]+)", normalized, re.I)
+    dates = re.search(
+        r"(\d{2}-[A-Za-z]{3}-\d{2})\s+(\d{2}-[A-Za-z]{3}-\d{2})\s+"
+        r"(\d{2}-[A-Za-z]{3}-\d{2})\s+(\d{2}-[A-Za-z]{3}-\d{2})\s+"
+        r"(\d{2}-[A-Za-z]{3}-\d{2})\s+(\d{2}-[A-Za-z]{3}-\d{2})", normalized)
+    status = re.search(r"DOMINGUEZ,JORGELINA B\s+([A-Z ]+?)\s+CUIT Banco", normalized, re.I)
+    if not number or not member or not dates or not status:
+        raise ValueError("Cabecera Mastercard Galicia incompleta")
+    date_values = [_date(value) for value in dates.groups()]
+    close_date, due_date = date_values[2], date_values[3]
+
+    previous = re.search(rf"SALDO ANTERIOR\s+({MONEY})\s+({MONEY})", normalized, re.I)
+    total = re.search(rf"TOTAL A PAGAR\s+({MONEY})\s+({MONEY})", normalized, re.I)
+    minimum = re.search(rf"PAGO MINIMO.*?\$\s*({MONEY})", normalized, re.I | re.S)
+    purchases_total = re.search(rf"TOTAL CONSUMOS DEL MES\s+({MONEY})\s+({MONEY})", normalized, re.I)
+    if not previous or not total or not minimum or not purchases_total:
+        raise ValueError("Saldos Mastercard Galicia incompletos")
+
+    operations = []
+    payment = re.search(rf"^(\d{{2}}-[A-Za-z]{{3}}-\d{{2}})\s+SU PAGO\s+({MONEY})", normalized, re.I | re.M)
+    transfers = re.findall(rf"^(\d{{2}}-[A-Za-z]{{3}}-\d{{2}})\s+TRANSFER FINANC\. PESOS\s+({MONEY})",
+                           normalized, re.I | re.M)
+    if not payment or len(transfers) != 2:
+        raise ValueError("Pago o transferencias financieras Mastercard incompletos")
+    operations.append(_operation(
+        order=1, line=normalized[:payment.start()].count("\n") + 1,
+        date=_date(payment.group(1)), description="SU PAGO", kind="PAGO",
+        holder="JOR", currency="ARS", amount=_cents(payment.group(2))))
+    for index, (date_raw, amount_raw) in enumerate(transfers):
+        currency = "ARS" if index == 0 else "USD"
+        operations.append(_operation(
+            order=len(operations) + 1,
+            line=next(i for i, row in enumerate(normalized.splitlines(), 1)
+                      if date_raw in row and "TRANSFER FINANC" in row and amount_raw in row),
+            date=_date(date_raw), description="TRANSFER FINANC. PESOS",
+            kind="TRANSFERENCIA_DEUDA", holder="JOR", currency=currency,
+            amount=_cents(amount_raw)))
+
+    detail_operations, declared = _parse_detail(normalized)
+    for row in detail_operations:
+        row["orden"] = len(operations) + 1
+        operations.append(row)
+
+    charge_specs = (("INTERESES DE FINANCIACION", "INTERES"),
+                    ("IMPUESTO DE SELLOS", "IMPUESTO"),
+                    ("I.V.A. 21,0%", "IMPUESTO"),
+                    ("PERCEPCION IVA DTO 354/18", "IMPUESTO"),
+                    ("PERCEP.AFIP RG 4815 30%", "IMPUESTO"))
+    for label, kind in charge_specs:
+        charge = re.search(rf"^{re.escape(label)}\s+({MONEY})(?:\s+({MONEY}))?", normalized, re.I | re.M)
+        if not charge:
+            raise ValueError(f"Cargo Mastercard faltante: {label}")
+        for index, currency in ((1, "ARS"), (2, "USD")):
+            if charge.group(index) is not None:
+                operations.append(_operation(
+                    order=len(operations) + 1,
+                    line=normalized[:charge.start()].count("\n") + 1,
+                    date=close_date, description=label, kind=kind, holder="JOR",
+                    currency=currency, amount=_cents(charge.group(index))))
+
+    previous_ars, previous_usd = _cents(previous.group(1)), _cents(previous.group(2))
+    total_ars, total_usd = _cents(total.group(1)), _cents(total.group(2))
+    movement_ars = sum(row["monto_ars_centavos"] for row in operations)
+    movement_usd = sum(row["monto_usd_centavos"] for row in operations)
+    expenses = [row for row in operations
+                if row["tipo_movimiento"] not in {"PAGO", "TRANSFERENCIA_DEUDA"}]
+    financing = _parse_financing(normalized)
+    fiscal_warning = bool(re.search(
+        r"IVA discriminado no puede computarse como credito fiscal", normalized, re.I))
+    summary = {
+        "fuente": "Mastercard Galicia", "titular_codigo": "JOR",
+        "numero_cuenta": member.group(1), "clasificar_automaticamente": False,
+        "numero_resumen": number.group(1), "periodo": close_date[:7],
+        "fecha_cierre": close_date, "fecha_vencimiento": due_date,
+        "fecha_cierre_anterior": date_values[0], "fecha_vencimiento_anterior": date_values[1],
+        "fecha_proximo_cierre": date_values[4], "fecha_proximo_vencimiento": date_values[5],
+        "cuenta_debito": None, "condicion_iva_impresa": status.group(1).strip(),
+        "iva_computable_segun_leyenda": not fiscal_warning,
+        "saldo_anterior_ars_centavos": previous_ars, "saldo_anterior_usd_centavos": previous_usd,
+        "saldo_actual_ars_centavos": total_ars, "saldo_actual_usd_centavos": total_usd,
+        "pago_minimo_ars_centavos": _cents(minimum.group(1)), "pago_minimo_anterior_ars_centavos": None,
+        "consumos_declarados_ars_centavos": _cents(purchases_total.group(1)),
+        "consumos_declarados_usd_centavos": _cents(purchases_total.group(2)),
+        "nuevos_cargos_ars_centavos": sum(row["monto_ars_centavos"] for row in expenses),
+        "nuevos_cargos_usd_centavos": sum(row["monto_usd_centavos"] for row in expenses),
+        "intereses_ars_centavos": sum(row["monto_ars_centavos"] for row in expenses
+                                      if row["tipo_movimiento"] == "INTERES"),
+        "impuestos_ars_centavos": sum(row["monto_ars_centavos"] for row in expenses
+                                      if row["tipo_movimiento"] == "IMPUESTO"),
+        "pagos_ars_centavos": sum(row["monto_ars_centavos"] for row in operations
+                                  if row["tipo_movimiento"] == "PAGO"),
+        "transferencia_deuda_ars_centavos": sum(row["monto_ars_centavos"] for row in operations
+                                                if row["tipo_movimiento"] == "TRANSFERENCIA_DEUDA"),
+        "transferencia_deuda_usd_centavos": sum(row["monto_usd_centavos"] for row in operations
+                                                if row["tipo_movimiento"] == "TRANSFERENCIA_DEUDA"),
+        "diferencia_ars_centavos": total_ars - previous_ars - movement_ars,
+        "diferencia_usd_centavos": total_usd - previous_usd - movement_usd,
+        "tna_ars_milesimas": 76700, "tem_ars_milesimas": 6317,
+        "tea_ars_milesimas": 110701, "cftea_ars_iva_milesimas": 144580,
+        "cantidad_operaciones": len(operations), "cantidad_consumos": len(expenses),
+    }
+    if declared["JOR_ARS"] + declared["JOA_ARS"] != summary["consumos_declarados_ars_centavos"]:
+        raise ValueError("Los subtotales ARS por tarjeta no coinciden con el consolidado")
+    if declared["JOR_USD"] + declared["JOA_USD"] != summary["consumos_declarados_usd_centavos"]:
+        raise ValueError("Los subtotales USD por tarjeta no coinciden con el consolidado")
+    # Una línea física puede contener dos importes (ARS y USD). Conservamos su
+    # ubicación documental y usamos el orden de operación como clave productiva.
+    for order, operation in enumerate(operations, 1):
+        operation["linea_documento"] = operation["linea_origen"]
+        operation["orden"] = order
+        operation["linea_origen"] = order
+    summary["conciliado"] = (summary["diferencia_ars_centavos"] == 0
+                             and summary["diferencia_usd_centavos"] == 0)
+    summary["documento_clave"] = (
+        f"MASTERCARD_GALICIA|{member.group(1)}|{number.group(1)}|{close_date}")
+    summary["hash_contenido_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return {"resumen": summary, "operaciones": operations, "consumos": expenses,
+            "subtotales_documentales": declared, "financiacion_ofrecida": financing}
+
+
+def _sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        for block in iter(lambda: source.read(64 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _extract_text(path: str) -> str:
+    with open(path, "rb") as source:
+        return "\n".join(page.extract_text() or "" for page in PyPDF2.PdfReader(source).pages)
+
+
+def procesar_archivo(file_path: str, force_reprocess: bool = False):
+    """Orquesta RAW, parser y persistencia; el archivado físico lo hace el master."""
+    if not os.path.isfile(file_path):
+        return False, {"motivo": "ARCHIVO_INEXISTENTE"}
+    digest = _sha256(file_path)
+    previous_raw = storage_bancos.obtener_staging_por_hash(digest)
+    staging_id = None
+    try:
+        text = _extract_text(file_path)
+        staging_id, should_process = storage_bancos.iniciar_staging_documento(
+            nombre_archivo=os.path.basename(file_path), hash_sha256=digest, modulo="gastos",
+            tipo_fuente="MASTERCARD_GALICIA", formato_raw="TEXT",
+            parser_version=PARSER_VERSION, contenido_raw=text, reprocesar=force_reprocess)
+        if not should_process:
+            return False, {"motivo": "HASH_EXISTENTE", "staging_id": staging_id}
+        parsed = parse_mastercard_galicia_text(text)
+        summary = parsed["resumen"]
+        persisted, detail = storage_gastos.guardar_resumen_tarjeta(
+            parsed, staging_id=staging_id, parser_version=PARSER_VERSION,
+            reconstruir=force_reprocess)
+        if not persisted:
+            canonical = detail["raw_canonico_id"]
+            if canonical != staging_id:
+                storage_bancos.marcar_staging_duplicado(
+                    staging_id, raw_canonico_id=canonical,
+                    filas_leidas=summary["cantidad_operaciones"])
+            return True, _info(summary, digest, duplicado=True, **detail)
+        return True, _info(summary, digest, duplicado=False, **detail)
+    except Exception as exc:
+        if staging_id is not None:
+            storage_bancos.finalizar_staging_documento(
+                staging_id, 0, error=exc, preservar_estado=bool(previous_raw))
+        logger.exception("Error procesando Mastercard Galicia")
+        return False, {"motivo": "ERROR_PARSER", "error": str(exc), "staging_id": staging_id}
+
+
+def _info(summary: dict, digest: str, **extra) -> dict:
+    info = {"modulo": "BANCOS", "anio": summary["periodo"][:4],
+            "mes": summary["periodo"][5:7], "entidad": "MASTERCARD_GALICIA",
+            "db_table": "gastos_tarjeta_resumenes",
+            "id_insertado": extra.get("resumen_id", 0), "hash_archivo": digest}
+    info.update(extra)
+    return info

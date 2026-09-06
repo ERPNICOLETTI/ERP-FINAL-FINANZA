@@ -1,0 +1,13 @@
+<td id="card-cat-cell-{{ mov.id }}" hx-target="this" hx-swap="outerHTML">
+    <select name="gasto_tipo_id" hx-put="/api/joa/tarjeta/movimientos/{{ mov.id }}/categoria" hx-trigger="change" autofocus
+            aria-label="Tipo de gasto del consumo"
+            style="max-width:260px;padding:7px 9px;border-radius:7px;background:#fff;color:#24292f;border:1px solid #0969da;font-size:.78rem;outline:none;box-shadow:0 0 0 3px rgba(9,105,218,.12);">
+        {% for group in tipos|groupby('cuenta_codigo') %}
+        <optgroup label="{{ group.list[0].cuenta_nombre }}">
+            {% for cat in group.list %}
+            <option value="{{ cat.id }}" {% if mov.gasto_tipo_id == cat.id %}selected{% endif %}>{{ cat.emoji or '•' }} {{ cat.nombre }}</option>
+            {% endfor %}
+        </optgroup>
+        {% endfor %}
+    </select>
+</td>

@@ -67,12 +67,18 @@ def detectar_parser_pdf(filepath):
 
     text_upper = text.upper()
     
-    if "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper or "RESUMEN MENSUAL DE LIQUIDACIONES" in text_upper:
+    if "RESUMEN MENSUAL DE LIQUIDACIONES" in text_upper and (
+        "PATAGONIA 365" in text_upper or "PATAGONIA365" in text_upper or "BANCO DEL CHUBUT" in text_upper
+    ):
+        return "PATAGONIA365_LIQ"
+    elif "PAYWAY" in text_upper or "LA POS" in text_upper or "LIQUIDACION DE PAGO" in text_upper or "RESUMEN MENSUAL DE LIQUIDACIONES" in text_upper:
         return "PAYWAY"
     elif "LIBRO IVA" in text_upper or "LIBRO DE IVA" in text_upper or "F2051" in text_upper:
         return "LIBRO_IVA"
     elif "HIPOTECARIO" in text_upper and "VISA" in text_upper:
         return "VISA_HIPOTECARIO"
+    elif "RESUMEN DE CUENTA CORRIENTE EN PESOS" in text_upper:
+        return "GALICIA_CC_PDF"
     elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "VISA" in text_upper:
         return "VISA_GALICIA"
     elif ("GALICIA" in text_upper or "30-50000173-5" in text_upper) and "MASTERCARD" in text_upper:
@@ -236,20 +242,24 @@ class ERPMaster:
                     elif f_upper.endswith(".CSV"):
                         detected_type = detectar_parser_csv(filepath)
 
+                    if f_upper.endswith('.ZIP') and 'COMPROBANTES_CONSULTA_CSV_RECIBIDOS' in f_upper:
+                        from modulo_compras import lector_arca_comprobantes
+                        success, info = lector_arca_comprobantes.procesar_archivo(filepath)
+
                     # 1. MODULO TARJETAS
-                    if detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
-                        from modulo_tarjetas.lectores import lector_payway_liq
-                        success, info = lector_payway_liq.procesar_archivo(filepath)
+                    elif detected_type == "PAYWAY" or ("PAYWAY" in f_upper and f_upper.endswith(".PDF")):
+                        from modulo_tarjetas.lectores import lector_resumen_payway
+                        success, info = lector_resumen_payway.procesar_archivo(filepath)
                     
                     elif detected_type == "PAYWAY_CSV" or ("MOVIMIENTOS" in f_upper and f_upper.endswith(".CSV")):
-                        from modulo_tarjetas.lectores import lector_payway_csv
-                        success, info = lector_payway_csv.procesar_archivo(filepath)
+                        from modulo_tarjetas.lectores import lector_movimientos_payway
+                        success, info = lector_movimientos_payway.procesar_archivo(filepath)
                     
                     elif detected_type == "NARANJA" or ("NARANJA" in f_upper and f_upper.endswith(".XLSX")):
                         from modulo_tarjetas.lectores import lector_naranja_xlsx
                         success, info = lector_naranja_xlsx.procesar_archivo(filepath)
                     
-                    elif detected_type == "PATAGONIA" or ("LIQMENSAL" in f_upper or "PATAGONIA" in f_upper):
+                    elif detected_type in ("PATAGONIA", "PATAGONIA365_LIQ") or "LIQMENSAL" in f_upper:
                         from modulo_tarjetas.lectores import lector_patagonia
                         success, info = lector_patagonia.procesar_archivo(filepath)
 
@@ -274,6 +284,10 @@ class ERPMaster:
                     elif detected_type == "GALICIA" or ("GALICIA" in f_upper and f_upper.endswith((".XLSX", ".XLS"))):
                         from modulo_bancos.lectores import lector_galicia
                         success, info = lector_galicia.procesar_archivo(filepath)
+
+                    elif detected_type == "GALICIA_CC_PDF":
+                        from modulo_bancos.lectores import lector_galicia_cuenta_corriente
+                        success, info = lector_galicia_cuenta_corriente.procesar_archivo(filepath)
                         
                     elif detected_type == "MERCADOPAGO" or ("SETTLEMENT" in f_upper and f_upper.endswith(".CSV")):
                         from modulo_bancos.lectores import lector_mercadopago
@@ -310,7 +324,7 @@ class ERPMaster:
                     elif detected_type == "PATAGONIA365_PDF" or ("P365" in f_upper and f_upper.endswith(".PDF")):
                         from modulo_bancos.lectores import lector_patagonia_pdf
                         success, info = lector_patagonia_pdf.procesar_archivo(filepath)
-                    
+
                     else:
                         print(f"❓ [MASTER] Sin parser compatible para: {f}")
                         continue
@@ -324,12 +338,20 @@ class ERPMaster:
                             mes=info['mes'], 
                             entidad=info['entidad'],
                             use_vault=False,  # Los reportes masivos van al Histórico (Crudos)
-                            overwrite=True    # Evitamos sufijos en reportes masivos
+                            overwrite=False   # Los crudos son inmutables; mismo nombre/contenido distinto conserva ambos
                         )
                         
                         if new_path:
                             # Actualizar puntero físico en la tabla correspondiente
-                            if info['db_table'] == 'liquidaciones_tarjetas':
+                            if info['db_table'] == 'compras_calim_ingestas':
+                                compras.update_calim_path(info.get('hash_archivo', ''), new_path)
+                            elif info['db_table'] == 'compras_arca_ingestas':
+                                compras.update_arca_zip_path(info.get('hash_archivo', ''), new_path)
+                            elif info['db_table'] in ('tarjetas_payway_resumenes', 'tarjetas_payway_movimientos'):
+                                tarjetas.update_payway_path(info.get('hash_archivo', ''), new_path)
+                            elif info['db_table'] == 'tarjetas_patagonia_resumenes':
+                                tarjetas.update_patagonia_path(info.get('hash_archivo', ''), new_path)
+                            elif info['db_table'] == 'liquidaciones_tarjetas':
                                 tarjetas.update_record_path(info.get('id_insertado', 0), new_path)
                             elif info['db_table'] == 'facturas':
                                 compras.update_record_path(info.get('id_insertado', 0), new_path)
@@ -338,6 +360,16 @@ class ERPMaster:
                             elif info['db_table'] == 'bancos_movimientos':
                                 from modulo_bancos import storage_bancos
                                 storage_bancos.update_record_path(info.get('id_insertado', 0), new_path)
+                            elif info['db_table'] == 'gastos_tarjeta_resumenes':
+                                from modulo_bancos import storage_bancos
+                                storage_bancos.registrar_archivo_tarjeta(
+                                    info.get('hash_archivo', ''), info.get('entidad', 'TARJETA'), new_path,
+                                    info.get('staging_id'))
+                            elif info['db_table'] == 'bancos_extractos_resumenes':
+                                from modulo_bancos import storage_bancos
+                                storage_bancos.registrar_archivo_bancario(
+                                    info.get('hash_archivo', ''), info.get('entidad', 'BANCO'), new_path,
+                                    info.get('staging_id'))
                             
                             print(f"✅ ÉXITO: {f} archivado jerárquicamente en {new_path}")
                     else:

@@ -1,5 +1,5 @@
 # 🧬 NEURONA: MÓDULO GASTOS (Libro Diario & Cuentas) 🏛️🧠
-**Versión 6.1.0 — Optimizado y Consolidado**
+**Versión 7.0.0 — Resúmenes Visa conciliados**
 
 Este módulo gestiona la asignación manual de consumos diarios e imputaciones a titulares o esferas de imputación financiera.
 
@@ -29,7 +29,13 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
 ### Tabla `gastos_registros`
 -   El libro diario de transacciones manuales e importadas.
 -   **Columna `fuente`:** Almacena el origen de la transacción (`Manual`, `Visa Hipotecario`, `Visa Galicia`, `Mastercard Galicia`, `Tarjeta Naranja`, `Patagonia 365`).
--   Columnas Core: `id` (INTEGER PK), `gasto_tipo_id` (INTEGER FK), `monto` (REAL), `fecha` (TEXT - Período de facturación), `descripcion` (TEXT), `fuente` (TEXT DEFAULT 'Manual'), `fecha_compra` (TEXT - Fecha de consumo real, por defecto igual a `fecha`).
+-   Columnas Core: `id` (INTEGER PK), `gasto_tipo_id` (INTEGER FK), `monto` (REAL de compatibilidad), `fecha` (TEXT - cierre del resumen), `descripcion`, `fuente`, `fecha_compra`, `resumen_id`, `tipo_movimiento` y `comprobante`.
+-   Importes contables nuevos: `monto_centavos`, `monto_original_centavos` y `tipo_cambio_milesimas` son enteros. Las columnas REAL se conservan sólo por compatibilidad con las demás tarjetas y vistas históricas.
+
+### Tabla `gastos_tarjeta_resumenes`
+-   Una fila por liquidación comercial, identificada de forma única por `documento_clave` (`fuente + cuenta + número de resumen + fecha de cierre`).
+-   Guarda en centavos enteros saldos anterior/actual ARS y USD, pago mínimo, consumos, intereses, impuestos, pagos, transferencia de deuda y diferencias de conciliación.
+-   `raw_ingesta_id` vincula la liquidación con su RAW canónico y es único. Un PDF físicamente diferente del mismo resumen queda auditado como `DUPLICADO`, sin recrear consumos.
 
 ---
 
@@ -72,3 +78,12 @@ Este módulo gestiona la asignación manual de consumos diarios e imputaciones a
      ```
    * Esto previene que se almacenen descripciones como `KMERPAGO*ESCO2605` en lugar de `MERPAGO*ESCO2605`, asegurando un correcto funcionamiento de la deduplicación por comparación de descripciones normalizadas.
 
+---
+
+## Lector Visa Hipotecario (v7.0.0)
+
+- El parser puro reconoce importes firmados: consumos, reintegros, pagos, transferencia de deuda, intereses e impuestos. Ningún PDF pasa a producción si la ecuación ARS/USD no concilia contra el saldo oficial.
+- Los pagos y la transferencia de deuda viven en la cabecera del resumen; sólo consumos y reintegros alimentan `gastos_registros`.
+- El origen permanece aislado en JOA. La imputación manual admite categorías `JOA`, `COMUN` y `JOR`, y siempre se conserva durante un reproceso.
+- Los prefijos de comprobante `K/*`, referencias largas y espacios de maquetación se normalizan para reaplicar la memoria de categoría sin mezclar comercios.
+- La vista JOA selecciona una liquidación real por `resumen_id` y muestra por separado saldo a pagar ARS, saldo USD, pago mínimo y consumos netos.

@@ -1,8 +1,21 @@
-<td id="cat-cell-{{id}}" hx-target="this" hx-swap="outerHTML">
-    <select name="categoria" hx-put="/api/bancos/movimientos/{{ id }}/categoria" hx-trigger="change" autofocus style="padding: 4px; border-radius: 4px; background: #ffffff; color: #24292f; border: 1px solid rgba(0,0,0,0.15); font-size: 0.8rem; outline: none; box-shadow: 0 0 0 2px var(--accent-color, #0969da);">
-        <option value="">Seleccionar...</option>
-        {% for cat in categorias %}
-        <option value="{{ cat.nombre }}">{{ cat.nombre }} {{ cat.emoji }}</option>
+<td id="cat-cell-{{mov.id}}" hx-target="this" hx-swap="outerHTML">
+    <select name="categoria_ref" hx-put="/api/bancos/movimientos/{{ mov.id }}/categoria" hx-trigger="change" autofocus
+            aria-label="Categoría del movimiento"
+            style="max-width:260px;padding:7px 9px;border-radius:7px;background:#fff;color:#24292f;border:1px solid #0969da;font-size:.78rem;outline:none;box-shadow:0 0 0 3px rgba(9,105,218,.12);">
+        <option value="" disabled {% if not mov.categoria %}selected{% endif %}>Elegir categoría...</option>
+        {% for group in tipos|groupby('cuenta_codigo') %}
+        <optgroup label="{{ group.list[0].cuenta_nombre }}">
+            {% for cat in group.list %}
+            <option value="tipo:{{ cat.id }}" {% if mov.gasto_tipo_id == cat.id %}selected{% endif %}>{{ cat.emoji or '•' }} {{ cat.nombre }}</option>
+            {% endfor %}
+        </optgroup>
         {% endfor %}
+        {% if maestras %}
+        <optgroup label="Categorías bancarias">
+            {% for cat in maestras %}
+            <option value="maestra:{{ cat.nombre }}" {% if not mov.gasto_tipo_id and mov.categoria == cat.nombre %}selected{% endif %}>{{ cat.emoji or '•' }} {{ cat.nombre }}</option>
+            {% endfor %}
+        </optgroup>
+        {% endif %}
     </select>
 </td>

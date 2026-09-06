@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<crashreport version="0.95">
+	<guid>56a03f0d-a05c-435c-ae23-673d41ad8ca1</guid>
+	<name>Grim Dawn</name>
+	<version>v1.3.0.5 (x64)</version>
+	<thread>8804</thread>
+	<pointers>1080724275680u</pointers>
+	<content>
+		<file name="crash.xml" description="Crash Description"/>
+		<file name="minidump.dmp" description="Crash Dump"/>
+		<file name="log.html" description="Included File"/>
+	</content>
+	<properties>
+		<property name="os_name" value="windows"/>
+		<property name="os_platformid" value="2"/>
+		<property name="os_version" value="10.0"/>
+		<property name="os_producttype" value="1"/>
+		<property name="os_servicepack" value="0.0"/>
+		<property name="os_bits" value="32"/>
+		<property name="distribution" value="steam"/>
+		<property name="userid" value="F9C1FC698AA3D4FB4F2D857A44B47BEB"/>
+		<property name="mem_load" value="46"/>
+		<property name="mem_totalphys" value="17113247744"/>
+		<property name="mem_availablephys" value="9130344448"/>
+		<property name="mem_totalpagefile" value="25434746880"/>
+		<property name="mem_availablepagefile" value="12594601984"/>
+		<property name="mem_totalvirtual" value="140737488224256"/>
+		<property name="mem_availablevirtual" value="140729186283520"/>
+	</properties>
+</crashreport>
