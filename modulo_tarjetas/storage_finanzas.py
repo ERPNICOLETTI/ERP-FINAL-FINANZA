@@ -12,6 +12,7 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
     
     # Adjuntar base de datos histórica del local
     if os.path.exists(ADM_GLOBAL_PATH):
@@ -47,11 +48,12 @@ def obtener_reporte_conciliacion(anio: str = None, mes: str = None) -> list:
             d.NroDocumento,
             d.PagoTarjeta as monto_venta,
             d.NombreClienteEventual as cliente,
-            -- Cruzar con Liquidaciones detalladas de Payway/Naranja (Monto Neto esperado)
-            ld.monto_neto as monto_liquidado,
-            ld.descripcion as lote_descripcion,
-            l.marca as tarjeta_marca,
-            l.fuente as liquidacion_fuente,
+            -- El cupón presentado es la evidencia individual; el resumen diario
+            -- normalizado aporta el neto que debe aparecer en el banco.
+            m.bruto_centavos / 100.0 as monto_liquidado,
+            'Lote ' || m.lote || ' / cupón ' || m.cupon as lote_descripcion,
+            m.marca as tarjeta_marca,
+            CASE WHEN m.id IS NOT NULL THEN 'PAYWAY' END as liquidacion_fuente,
             -- Cruzar con Acreditaciones de Bancos
             bm.importe_total_dia as monto_acreditado,
             bm.fecha_iso as fecha_acreditacion,
@@ -59,12 +61,17 @@ def obtener_reporte_conciliacion(anio: str = None, mes: str = None) -> list:
             bm.cuenta as cuenta_destino,
             bm.descripcion_banco as banco_descripcion
         FROM adm_local.Documentos d
-        -- Unir con los detalles de liquidación (por monto bruto aproximado y fecha cercana)
-        LEFT JOIN main.tarjetas_liquidaciones_detalles ld ON (
-            abs(ld.monto_bruto - d.PagoTarjeta) < 1.0
-            AND abs(julianday(ld.fecha) - julianday(strftime('%Y-%m-%d', d.FechaDocumento))) <= 3
+        LEFT JOIN main.tarjetas_payway_movimientos m ON (
+            abs((m.bruto_centavos / 100.0) - d.PagoTarjeta) < 0.01
+            AND abs(julianday(m.fecha_compra) - julianday(strftime('%Y-%m-%d', d.FechaDocumento))) <= 3
         )
-        LEFT JOIN main.tarjetas_liquidaciones l ON ld.liquidacion_id = l.id
+        LEFT JOIN main.vw_payway_conciliacion_diaria v ON (
+            v.fecha_pago=m.fecha_pago
+            AND v.establecimiento=ltrim(m.establecimiento, '0')
+            AND v.marca=CASE WHEN upper(m.marca) LIKE '%VISA%' THEN 'VISA'
+                             WHEN upper(m.marca) LIKE '%MASTER%' THEN 'MASTERCARD'
+                             ELSE upper(m.marca) END
+        )
         -- Unir con la sumatoria agrupada de depósitos de tarjetas por día en banco
         LEFT JOIN (
             SELECT 
@@ -84,9 +91,11 @@ def obtener_reporte_conciliacion(anio: str = None, mes: str = None) -> list:
             GROUP BY fecha_iso, banco, cuenta
         ) bm ON (
             -- Comparación de fecha cercana de cobro (máximo 4 días hábiles de clearing)
-            abs(julianday(bm.fecha_iso) - julianday(ld.fecha)) <= 4
+            abs(julianday(bm.fecha_iso) - julianday(v.fecha_pago)) <= 4
             -- Y que el importe consolidado coincida con tolerancia del 2% por Sircreb/CFT
-            AND (ld.monto_neto > 0 AND abs(bm.importe_total_dia - ld.monto_neto) / ld.monto_neto <= 0.02)
+            AND (v.neto_centavos > 0
+                 AND abs(bm.importe_total_dia - v.neto_centavos / 100.0)
+                     / (v.neto_centavos / 100.0) <= 0.02)
         )
         WHERE d.PagoTarjeta > 0 
           AND d.DocAnulado = 0
@@ -180,14 +189,14 @@ def obtener_kpis_finanzas(anio: str = None, mes: str = None) -> dict:
     ventas_tarjetas = r_ventas['tarjetas'] or 0.0
     
     # 2. Total Retenciones y Aranceles en Liquidaciones de Payway
-    q_liq = "SELECT sum(costo_arancel + costo_financiero + iva_21 + iva_105 + retenciones) as costos FROM main.tarjetas_liquidaciones"
+    q_liq = "SELECT SUM(descuentos_centavos) / 100.0 AS costos FROM main.tarjetas_payway_resumenes"
     params_liq = []
     if anio and mes:
         q_liq += " WHERE periodo = ?"
         params_liq.append(f"{anio}-{mes}")
     elif anio:
-        q_liq += " WHERE strftime('%Y', fecha_liquidacion) = ?"
-        params_liq.append(anio)
+        q_liq += " WHERE periodo LIKE ?"
+        params_liq.append(f"{anio}%")
         
     r_liq = conn.execute(q_liq, params_liq).fetchone()
     costos_liq = r_liq['costos'] or 0.0
@@ -209,8 +218,7 @@ def obtener_kpis_finanzas(anio: str = None, mes: str = None) -> dict:
 
 def obtener_auditoria_clearing(anio: str, mes: str) -> dict:
     """Retorna los matches consolidados, depósitos huérfanos y liquidaciones huérfanas de un mes."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_connection()
     
     periodo_tarjetas = f"{anio}-{mes}" if mes else anio
     mes_banco = f"/{mes}/{anio}" if mes else f"/{anio}"
@@ -218,22 +226,28 @@ def obtener_auditoria_clearing(anio: str, mes: str) -> dict:
     # 1. Obtener todas las liquidaciones detalladas (diarias) del período
     if mes:
         query_liq = """
-            SELECT ld.fecha, ld.monto_bruto, ld.monto_neto, l.marca, ld.descripcion as lote_desc
-            FROM main.tarjetas_liquidaciones_detalles ld
-            JOIN main.tarjetas_liquidaciones l ON ld.liquidacion_id = l.id
-            WHERE l.fuente = 'PAYWAY'
-              AND l.periodo = ?
-            ORDER BY ld.fecha ASC
+            SELECT d.fecha_pago AS fecha,
+                   d.bruto_centavos / 100.0 AS monto_bruto,
+                   d.neto_centavos / 100.0 AS monto_neto,
+                   r.marca,
+                   'Resumen ' || r.numero_resumen AS lote_desc
+            FROM main.tarjetas_payway_resumen_dias d
+            JOIN main.tarjetas_payway_resumenes r ON d.resumen_id = r.id
+            WHERE r.periodo = ?
+            ORDER BY d.fecha_pago ASC
         """
         liquidaciones = conn.execute(query_liq, (periodo_tarjetas,)).fetchall()
     else:
         query_liq = """
-            SELECT ld.fecha, ld.monto_bruto, ld.monto_neto, l.marca, ld.descripcion as lote_desc
-            FROM main.tarjetas_liquidaciones_detalles ld
-            JOIN main.tarjetas_liquidaciones l ON ld.liquidacion_id = l.id
-            WHERE l.fuente = 'PAYWAY'
-              AND l.periodo LIKE ?
-            ORDER BY ld.fecha ASC
+            SELECT d.fecha_pago AS fecha,
+                   d.bruto_centavos / 100.0 AS monto_bruto,
+                   d.neto_centavos / 100.0 AS monto_neto,
+                   r.marca,
+                   'Resumen ' || r.numero_resumen AS lote_desc
+            FROM main.tarjetas_payway_resumen_dias d
+            JOIN main.tarjetas_payway_resumenes r ON d.resumen_id = r.id
+            WHERE r.periodo LIKE ?
+            ORDER BY d.fecha_pago ASC
         """
         liquidaciones = conn.execute(query_liq, (f"{anio}-%",)).fetchall()
     
@@ -393,4 +407,3 @@ def obtener_auditoria_clearing(anio: str, mes: str) -> dict:
         "liquidaciones_huerfanas": liquidaciones_huerfanas,
         "depositos_huerfanos": depósitos_huerfanos
     }
-

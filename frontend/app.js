@@ -9,6 +9,19 @@ const app = {
     currentFilter: 'all',
     selectedFactura: null,
     sidebarFile: null,
+    matchRequest: 0,
+    saving: false,
+    escape(value) {
+        const node = document.createElement('span');
+        node.textContent = value ?? '';
+        return node.innerHTML;
+    },
+    fiscalLabel(f) {
+        const labels = {CONCILIADO_ARCA_CALIM: 'ARCA y CALIM coinciden',
+            DIFERENCIA_ARCA_CALIM: 'Diferencia ARCA / CALIM', SOLO_CALIM: 'Sólo CALIM',
+            SOLO_AFIP: 'Registrada en ARCA / AFIP', SALA_ESPERA: 'Pendiente CALIM'};
+        return labels[f.calim_estado || f.status] || f.origen || 'Por revisar';
+    },
     
     currentAnio: new Date().getFullYear().toString(),
     currentMes: String(new Date().getMonth() + 1).padStart(2, '0'),
@@ -78,7 +91,7 @@ const app = {
     loadInboxFile() {
         if (this.inboxFiles.length === 0) return;
         const filename = this.inboxFiles[this.inboxIndex];
-        const url = `/inbox/${filename}`;
+        const url = `/inbox/${encodeURIComponent(filename)}`;
         
         this.sidebarFile = null; // Anulamos bypass manual
         
@@ -105,7 +118,7 @@ const app = {
             embed.style.width = '100%';
             embed.style.height = '100%';
             previewContainer.appendChild(embed);
-        } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+        } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
             const img = document.createElement('img');
             img.src = url;
             img.id = 'zoomable-img';
@@ -180,6 +193,10 @@ const app = {
             let debounceTimer;
             numInput.oninput = (e) => {
                 const q = e.target.value;
+                this.matchRequest++;
+                this.selectedFactura = null;
+                document.getElementById('match-card').classList.add('hidden');
+                document.getElementById('calim-card').classList.add('hidden');
                 clearTimeout(debounceTimer);
                 if (q.length >= 3) {
                     debounceTimer = setTimeout(() => this.performSmartMatch(q), 400);
@@ -194,12 +211,7 @@ const app = {
         if (proSearch) {
             proSearch.oninput = (e) => {
                 const q = e.target.value.toLowerCase();
-                this.allFacturas = this.backupFacturas.filter(f => 
-                    f.proveedor.toLowerCase().includes(q) || 
-                    f.cuit_proveedor?.includes(q) || 
-                    f.numero_comprobante?.includes(q)
-                );
-                this.renderFacturas();
+                // La tabla y sus filtros los renderiza HTMX.
             };
         }
 
@@ -208,8 +220,7 @@ const app = {
             pill.onclick = () => {
                 document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
                 pill.classList.add('active');
-                this.currentFilter = pill.dataset.filter;
-                this.renderFacturas();
+                this.currentFilter = pill.querySelector('input')?.value || 'all';
             };
         });
 
@@ -250,15 +261,17 @@ const app = {
     smartMatchResults: [],
 
     async performSmartMatch(q) {
+        const request = ++this.matchRequest;
         try {
-            const res = await fetch(`/api/compras/search?q=${q}`);
+            const res = await fetch(`/api/compras/search?q=${encodeURIComponent(q)}`);
             const data = await res.json();
+            if (request !== this.matchRequest) return;
             
             if (data.results && data.results.length > 0) {
                 this.smartMatchResults = data.results;
                 this.renderMatchOptions();
                 // Pre-seleccionar la primera opción de forma automática
-                this.selectMatchOption(data.results[0].id);
+                if (data.results.length === 1) this.selectMatchOption(data.results[0].id);
                 
                 document.getElementById('match-card').classList.remove('hidden');
                 document.getElementById('calim-card').classList.add('hidden');
@@ -267,6 +280,7 @@ const app = {
             }
         } catch (e) {
             console.error("Error en Smart Match", e);
+            document.getElementById('sidebar-status').textContent = 'No se pudo consultar. Reintentá la búsqueda.';
         }
     },
 
@@ -275,14 +289,16 @@ const app = {
         if (!listContainer) return;
         
         listContainer.innerHTML = this.smartMatchResults.map(f => {
-            const badgeClass = f.origen.toLowerCase() === 'calim' ? 'calim' : '';
+            const badgeClass = String(f.origen || '').toLowerCase().includes('calim') ? 'calim' : '';
+            const fiscal = this.fiscalLabel(f);
             return `
                 <div id="match-opt-${f.id}" class="match-option" onclick="app.selectMatchOption(${f.id})" style="border: 2px solid rgba(0,0,0,0.15); border-radius: 10px; padding: 12px; cursor: pointer; transition: 0.2s; background: #fff;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center;">
-                        <span class="badge ${badgeClass}" style="font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${f.origen}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">${f.fecha}</span>
+                        <span class="badge ${badgeClass}" style="font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${this.escape(fiscal)}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">${this.escape(f.fecha)}</span>
                     </div>
-                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">${f.proveedor}</div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">${this.escape(f.proveedor)}</div>
+                    <div>CUIT ${this.escape(f.cuit_proveedor)} · ${this.escape(f.punto_venta)}-${this.escape(f.numero_comprobante)}</div>
                     <div style="font-size: 0.85rem; color: var(--accent-color); font-weight: 700; font-family: monospace;">$ ${Number(f.total).toLocaleString()}</div>
                 </div>
             `;
@@ -321,6 +337,7 @@ const app = {
     },
 
     clearMatch() {
+        this.matchRequest++;
         this.selectedFactura = null;
         this.smartMatchResults = [];
         document.getElementById('match-card').classList.add('hidden');
@@ -335,6 +352,7 @@ const app = {
     },
 
     async confirmarVinculacion() {
+        if (this.saving) return;
         if (!this.selectedFactura) {
             alert("Sube la foto primero y asegúrate de que el sistema encuentre el número de factura.");
             return;
@@ -348,12 +366,13 @@ const app = {
 
         const statusLabel = document.getElementById('sidebar-status');
         statusLabel.style.color = 'var(--accent-color)';
-        statusLabel.textContent = '💾 Archivado nominal y limpieza de origen...';
+        statusLabel.textContent = '💾 Conservando y vinculando el comprobante...';
         
         const formData = new FormData();
         if (this.sidebarFile) formData.append('file', this.sidebarFile);
         else formData.append('inbox_filename', this.inboxFiles[this.inboxIndex]);
         
+        this.saving = true;
         try {
             const res = await fetch(`/api/compras/vincular?id_factura=${this.selectedFactura.id}`, {
                 method: 'POST',
@@ -363,7 +382,7 @@ const app = {
             const result = await res.json();
             if (result.status === 'success') {
                 statusLabel.style.color = 'var(--success)';
-                statusLabel.textContent = '✅ Archivado y eliminado de origen.';
+                statusLabel.textContent = '✅ ' + result.message;
                 
                 // --- LIMPIEZA TOTAL TRAS ÉXITO ---
                 this.sidebarFile = null;
@@ -382,10 +401,13 @@ const app = {
             }
         } catch (e) {
             statusLabel.textContent = '❌ Error de conexión';
+        } finally {
+            this.saving = false;
         }
     },
 
     async archivarPendiente() {
+        if (this.saving) return;
         const proveedor = document.getElementById('pending-proveedor').value.trim();
         const num = document.getElementById('edit-full-number').value.trim();
         const isInboxMode = (this.inboxFiles.length > 0 && !this.sidebarFile);
@@ -405,6 +427,7 @@ const app = {
         formData.append('proveedor_nombre', proveedor);
         formData.append('numero_factura', num);
         
+        this.saving = true;
         try {
             const res = await fetch(`/api/compras/vincular`, { method: 'POST', body: formData });
             const result = await res.json();
@@ -424,6 +447,7 @@ const app = {
                 statusLabel.textContent = '❌ Error: ' + result.message;
             }
         } catch(e) { statusLabel.textContent = '❌ Error'; }
+        finally { this.saving = false; }
     },
 
     async fetchFacturas() {
@@ -450,9 +474,10 @@ const app = {
         const pending = this.backupFacturas.filter(f => !f.tiene_foto).length;
         const completed = total - pending;
 
-        document.getElementById('count-all').textContent = total;
-        document.getElementById('count-pending').textContent = pending;
-        document.getElementById('count-completed').textContent = completed;
+        for (const [id, value] of [['count-all',total],['count-pending',pending],['count-completed',completed]]) {
+            const node = document.getElementById(id);
+            if (node) node.textContent = value;
+        }
     },
 
     renderFacturas() {
@@ -528,15 +553,16 @@ const app = {
         btn.disabled = true;
 
         try {
-            const response = await fetch('/api/process', { method: 'POST' });
+            const response = await fetch('/api/compras/inbox/list');
             if (response.ok) {
                 status.textContent = '✅ Ecosistema al día';
                 this.fetchFacturas();
+                this.fetchInbox();
             }
         } catch (e) {
             status.textContent = '❌ Error';
         } finally {
-            btn.textContent = '⚡ Sincronizar Ecosistema ⚡';
+            btn.textContent = 'Actualizar compras y buzón';
             btn.disabled = false;
         }
     },
@@ -574,7 +600,9 @@ const app = {
             } else {
                 if (statusLabel) {
                     statusLabel.style.color = 'var(--danger)';
-                    statusLabel.textContent = `❌ Error: ${result.message}`;
+                    const errors = (result.resultados || []).filter(r => r.status === 'error').map(r => `${r.archivo}: ${r.error}`).join(' · ');
+                    statusLabel.textContent = `${result.message} ${errors}`;
+                    this.fetchFacturas();
                 }
             }
         } catch (e) {

@@ -195,6 +195,8 @@ Según corresponda:
 
 ### Compras / IVA
 
+- Revisión visual 2026-09-06: flujo manual PDF/foto → número/CAE → selección → bóveda preservado. `modulo_compras/evidencias.py` conserva originales y versiones; `storage_compras.vincular_evidencia` registra RAW exacto y `compras_evidencias` sin alterar conciliación fiscal. Ningún adjunto existente se sobrescribe. Importación web CSV/ZIP ARCA y XLSX CALIM usa directamente los lectores actuales y reporta por archivo. Documentación detallada en neurona Compras. Sala de Espera sigue pendiente de conciliación asistida posterior.
+
 - ELT de comprobantes recibidos ARCA desde ZIP/CSV con RAW y tablas finales.
 - Lector CALIM XLSX corregido: celdas numéricas interpretadas como centavos y CUIT extraído del proveedor.
 - Última carga: 9 libros, 107 filas; 88 conciliadas con ARCA, 19 `SOLO_CALIM`, 0 diferencias. Cuatro libros vacíos.
@@ -230,6 +232,17 @@ Según corresponda:
 - Cuenta Corriente Galicia PDF quedó en RAW 260 y tabla `bancos_extractos_resumenes`, con 33 movimientos en `bancos_movimientos`. Período 31/07–28/08: saldo inicial ARS -4.901.257,69 + créditos ARS 7.261.000,00 − débitos ARS 5.884.475,69 = saldo final ARS -3.524.733,38. Intereses ARS 475.527,28; IVA ARS 99.860,73; sellos ARS 6.484,46; conciliación corrida y global cero.
 - La Cuenta Corriente también figura `Consumidor Final` pese al CUIT de JOR y prohíbe computar el IVA. El destino comercial de la deuda no corrige un comprobante fiscal mal emitido: bloquear el IVA hasta regularizar la condición con Galicia.
 - Pendiente del mismo frente: caja de ahorro Galicia. No emitir diagnóstico consolidado hasta ingerir y conciliar los cuatro documentos.
+
+### Saneamiento integral de DB — 2026-09-06
+
+- Backup íntegro previo: `backups/erp_nicoletti_pre_saneamiento_20260906_192151.db`.
+- `PRAGMA integrity_check=ok`, `foreign_key_check=0` y hashes RAW sin duplicados. Se agregó unicidad de esquema para `core_staging_raw.hash_sha256`.
+- Se corrigieron 498 movimientos Galicia de RAW inexistente 66 a RAW 68, tras comprobar que todas sus descripciones pertenecen al contenido de ese RAW.
+- Se archivaron de forma recuperable en `core_saneamiento_archivo` 16 cabeceras Payway legacy, 275 detalles legacy/huérfanos y un log sin RAW padre. No se borró evidencia.
+- Todos los movimientos bancarios tienen fecha ISO e importes en centavos. Las rutas antiguas reparables quedaron normalizadas.
+- Resúmenes, cupones, KPI, clearing e índice FTS consultan las tablas Payway normalizadas. El índice global fue reconstruido con 2.952 registros.
+- Deuda histórica no inventariable: 197 facturas legacy no poseen RAW y tres referencias PDF de Severino no tienen archivo/hash local. Conservar señaladas; no fabricar linaje.
+- Script repetible del saneamiento: `scripts/sanear_db_20260906.py`.
 
 ## 11. Relevo entre IAs
 

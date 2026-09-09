@@ -54,3 +54,10 @@ Esta fuente es una liquidación del adquirente por ventas del comercio LDK. No e
 - El archivo original se archiva en `crudos_tarjetas/PATAGONIA365_LIQUIDACIONES_VENTAS/[anio]/[mes]` y la ruta se actualiza por hash.
 
 Control agosto 2026: resumen `00330064`, 8 liquidaciones, bruto ARS 1.142.530,00, arancel ARS 34.275,90, costo financiero ARS 75.813,40, IVA RI ARS 15.158,35 y neto ARS 1.017.282,35; diferencia cero.
+
+## Saneamiento de tablas legacy (2026-09-06)
+
+- Las 16 cabeceras Payway duplicadas y sus 275 detalles activos/huérfanos se retiraron de las tablas legacy. Cada fila quedó recuperable como JSON en `core_saneamiento_archivo`; no se perdió evidencia.
+- Las consultas de resumen, cupón, KPI, clearing e índice global usan `tarjetas_payway_resumenes`, `tarjetas_payway_resumen_dias`, `tarjetas_payway_resumen_conceptos` y `tarjetas_payway_movimientos`.
+- `tarjetas_liquidaciones` sigue disponible únicamente para fuentes legacy distintas de Payway, como el lector Naranja XLSX y la compatibilidad Patagonia 365.
+- Las 178 rutas del histórico `tarjetas_payway` se corrigieron al CSV físico cuyo SHA-256 coincide. La tabla se conserva como archivo histórico, pero no es fuente de KPIs ni conciliación nueva.

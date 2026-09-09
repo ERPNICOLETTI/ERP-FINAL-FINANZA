@@ -35,6 +35,71 @@ def get_db_connection():
     return conn
 
 
+def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='', pendiente=False):
+    """RAW y relación visual atómicos; originales y derivados append-only."""
+    import base64
+    import hashlib
+    from datetime import date
+    from . import evidencias
+    ext = evidencias.validate(content, filename)
+    digest = hashlib.sha256(content).hexdigest()
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('''CREATE TABLE IF NOT EXISTS compras_evidencias (
+            id INTEGER PRIMARY KEY, factura_id INTEGER NOT NULL REFERENCES compras_facturas(id),
+            raw_ingesta_id INTEGER NOT NULL REFERENCES core_staging_raw(id),
+            hash_sha256 TEXT NOT NULL, nombre_original TEXT NOT NULL,
+            path_original TEXT NOT NULL, path_visual TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(factura_id, hash_sha256))''')
+        if pendiente:
+            if not proveedor.strip() or not numero.strip():
+                raise ValueError('Completá proveedor y número.')
+            existing = conn.execute('''SELECT f.* FROM compras_facturas f
+                JOIN compras_evidencias e ON e.factura_id=f.id
+                WHERE e.hash_sha256=? AND f.origen='PENDIENTE_CALIM' ''', (digest,)).fetchone()
+            if existing:
+                conn.rollback()
+                return {'status': 'success', 'message': 'Este documento ya está en Sala de Espera.', 'id_factura': existing['id']}
+            cursor = conn.execute('''INSERT INTO compras_facturas
+                (proveedor, numero_comprobante, fecha, tipo_operacion, tipo_comprobante, origen, status)
+                VALUES (?, ?, ?, 'COMPRA', '88', 'PENDIENTE_CALIM', 'SALA_ESPERA')''',
+                (proveedor.strip().upper(), numero.strip(), date.today().isoformat()))
+            factura_id = cursor.lastrowid
+        row = conn.execute('SELECT * FROM compras_facturas WHERE id=?', (factura_id,)).fetchone()
+        if not row or row['status'] == 'DUPLICADO_LEGACY_CALIM':
+            raise ValueError('Seleccioná una factura activa.')
+        existing = conn.execute('SELECT id FROM compras_evidencias WHERE factura_id=? AND hash_sha256=?', (factura_id, digest)).fetchone()
+        if existing:
+            conn.rollback()
+            return {'status': 'success', 'message': 'El adjunto ya estaba vinculado; no se duplicaron páginas.', 'id_factura': factura_id}
+        original = evidencias.immutable_write(evidencias.ROOT / 'modulo_compras/crudos_compras/EVIDENCIAS' / digest[:2] / (digest + ext), content)
+        raw_id = _stage_raw(conn, name=filename, digest=digest, source_type='COMPRA_EVIDENCIA',
+            raw_format='JSON_BASE64', parser_version='evidencia/1.0', rows=1,
+            content=json.dumps({'nombre_original': filename, 'path_original': original.as_posix(),
+                'sha256': digest, 'contenido_base64': base64.b64encode(content).decode('ascii')}))
+        previous = evidencias.resolve_visual(row['path_archivo'])
+        if previous and not previous.is_file():
+            raise ValueError('El adjunto anterior no está disponible: revisá su ruta antes de agregar páginas.')
+        if previous and hashlib.sha256(previous.read_bytes()).hexdigest() == digest:
+            visual = previous.as_posix()
+        else:
+            visual = evidencias.publish(dict(row), content, ext, previous)
+        conn.execute('''INSERT INTO compras_evidencias
+            (factura_id,raw_ingesta_id,hash_sha256,nombre_original,path_original,path_visual)
+            VALUES (?,?,?,?,?,?)''', (factura_id,raw_id,digest,filename,original.as_posix(),visual))
+        # El archivo no cambia el estado fiscal ni el linaje de ARCA/CALIM.
+        conn.execute('UPDATE compras_facturas SET tiene_foto=1,path_archivo=? WHERE id=?', (visual,factura_id))
+        conn.commit()
+        return {'status': 'success', 'message': 'Archivo conservado y vinculado.', 'id_factura': factura_id}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _ensure_column(conn, table, column, definition):
     columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in columns:
@@ -579,7 +644,7 @@ def get_all_compras_facturas(anio=None, mes=None):
         query = '''
             SELECT id, fecha, tipo_comprobante, punto_venta, numero_comprobante, 
                    proveedor, cuit_proveedor, neto, iva21, total, status, 
-                   tiene_foto, path_archivo, origen, meta_json
+                   tiene_foto, path_archivo, origen, meta_json, calim_estado, calim_raw_ingesta_id
             FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA'
               AND COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
@@ -684,7 +749,8 @@ def smart_search_invoice(query):
         text_pattern = f"%{raw_q}%"
         
         rows = conn.execute("""
-            SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen 
+            SELECT id, proveedor, cuit_proveedor, fecha, punto_venta, numero_comprobante, total, origen,
+                   calim_estado, calim_raw_ingesta_id, status, path_archivo, tiene_foto, cae
             FROM compras_facturas 
             WHERE tipo_operacion = 'COMPRA' 
               AND COALESCE(status, '') <> 'DUPLICADO_LEGACY_CALIM'
@@ -694,10 +760,11 @@ def smart_search_invoice(query):
                   (CAST(CAST(numero_comprobante AS INTEGER) AS TEXT)) LIKE ? OR
                   proveedor LIKE ? OR
                   cuit_proveedor LIKE ? OR
+                  cae LIKE ? OR
                   meta_json LIKE ?
               )
             ORDER BY fecha DESC LIMIT 5
-        """, (search_pattern, search_pattern, search_pattern, text_pattern, text_pattern, text_pattern)).fetchall()
+        """, (search_pattern, search_pattern, search_pattern, text_pattern, text_pattern, text_pattern, text_pattern)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

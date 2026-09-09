@@ -1,7 +1,9 @@
 {% for f in facturas %}
 <tr class="fade-in" onclick="app.loadToIngesta({{ f.id }})" style="cursor: pointer;">
     <td>
-        {% if f.tiene_foto or f.path_archivo %}
+        {% if f.status == 'SALA_ESPERA' %}
+            <span class="badge">⏳ Pendiente CALIM</span>
+        {% elif f.archivo_disponible %}
             <span class="badge" style="background: rgba(34,197,94,0.1); color: #22c55e;">🟢 Archivada</span>
         {% else %}
             <span class="badge" style="background: rgba(239,68,68,0.1); color: #ef4444;">🔴 Pendiente</span>
@@ -10,6 +12,7 @@
     <td style="color: var(--text-muted);">{{ f.fecha }}</td>
     <td style="font-weight: 500; color: var(--text-main);">
         {{ f.proveedor }}
+        <div style="font-size: 0.75rem;">{% if f.calim_estado == 'CONCILIADO_ARCA_CALIM' %}ARCA y CALIM coinciden{% elif f.calim_estado == 'DIFERENCIA_ARCA_CALIM' %}⚠️ Diferencia ARCA / CALIM{% elif f.calim_estado == 'SOLO_CALIM' %}Sólo CALIM{% else %}{{ f.origen }}{% endif %}</div>
         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">CUIT: {{ f.cuit_proveedor }}</div>
     </td>
     <td style="color: var(--text-main);">
@@ -21,8 +24,8 @@
     </td>
     <td style="font-weight: 600; color: var(--accent-color); font-family: monospace;">$ {{ "{:,.2f}".format(f.total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
     <td>
-        {% if f.tiene_foto or f.path_archivo %}
-            <a href="/archivos/compras/{{ f.path_archivo }}" target="_blank" class="btn-icon" style="text-decoration: none; font-size: 0.95rem; font-weight: 600;" title="Ver Evidencia">📄 Ver</a>
+        {% if f.archivo_disponible %}
+            <a href="{{ f.archivo_url }}" onclick="event.stopPropagation()" target="_blank" class="btn-icon" style="text-decoration: none; font-size: 0.95rem; font-weight: 600;" title="Ver Evidencia">📄 Ver</a>
         {% else %}
             <button class="btn-icon" style="color: #ef4444; font-size: 0.95rem; font-weight: 600;" title="Falta Evidencia" onclick="alert('Usa el panel izquierdo para subir la foto')">⚠️ Subir</button>
         {% endif %}

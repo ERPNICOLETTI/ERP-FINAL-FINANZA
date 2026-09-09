@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style_compras.css?v=6.0.6">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- HTMX: El motor de UI sin JavaScript 🚀 -->
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="htmx.min.js"></script>
     <script src="table_sort.js"></script>
 </head>
 <body>
@@ -21,10 +21,10 @@
             </div>
             
             <div class="header-actions">
-                <input type="file" id="bulk-file-input" multiple accept=".csv,.xlsx,.xls,.pdf" style="display: none;" onchange="app.importarMultiplesArchivos(event)">
+                <input type="file" id="bulk-file-input" multiple accept=".csv,.xlsx,.zip" style="display: none;" onchange="app.importarMultiplesArchivos(event)">
                 <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
-                <button class="btn-sync" onclick="document.getElementById('bulk-file-input').click()" style="background: var(--success); color: white; border-color: var(--success); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">📥 Importar AFIP/Calim</button>
-                <button id="btn-process" class="btn-sync">⚡ Sincronizar Ecosistema ⚡</button>
+                <button class="btn-sync" onclick="document.getElementById('bulk-file-input').click()" style="background: var(--success); color: white; border-color: var(--success); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">📥 Importar ARCA / CALIM</button>
+                <button id="btn-process" class="btn-sync">Actualizar compras y buzón</button>
             </div>
         </header>
 
@@ -194,6 +194,6 @@
                 }
             </script>
         </main>
-    <script src="app.js?v=2.0.0"></script>
+    <script src="app.js?v=7.1.0"></script>
 </body>
 </html>

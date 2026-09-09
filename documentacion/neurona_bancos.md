@@ -93,3 +93,9 @@ La lógica de categorización se autogestiona en caliente desde la base de datos
 - Período 31/07/2026–28/08/2026, cuenta `0005537-6 256-9`: saldo inicial ARS -4.901.257,69; créditos ARS 7.261.000,00; débitos ARS -5.884.475,69; saldo final ARS -3.524.733,38; diferencia cero.
 - Saldos deudores de julio: intereses ARS 475.527,28, IVA ARS 99.860,73 y sellos ARS 6.484,46; el total ARS 581.872,47 concilia exactamente. Impuesto Ley 25.413 del período: ARS 35.096,26.
 - La cuenta imprime CUIT `27-32954997-1` pero condición `Consumidor Final` y advierte que el IVA no puede computarse como crédito fiscal. Aunque el origen económico sea comercial, bloquear la sugerencia de crédito fiscal hasta que Galicia corrija la condición y emita respaldo válido.
+
+## Saneamiento legacy de producción (2026-09-06)
+
+- Se reparó el linaje de 498 movimientos de Caja de Ahorro Galicia: apuntaban al RAW inexistente 66 y ahora referencian el RAW 68, validado contra las descripciones del extracto de 500 líneas.
+- Los 2.298 importes y 2.269 saldos legacy pendientes se materializaron en centavos; las 1.948 fechas `DD/MM/YYYY` se normalizaron a ISO. Ya no quedan movimientos bancarios sin centavos ni con fecha no canónica.
+- Las 73 rutas de resúmenes mensuales se normalizaron con `/`. Los movimientos gemelos no se deduplicaron.

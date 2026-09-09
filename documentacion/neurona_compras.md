@@ -57,3 +57,13 @@ El operario procesa las facturas en papel/PDF soltándolas en el visor:
 - Los registros redundantes del importador CALIM anterior no se borran: quedan auditables como `DUPLICADO_LEGACY_CALIM` y se excluyen de listados, búsquedas y totales operativos.
 - `importador_calim.py` permanece como wrapper de compatibilidad, sin una segunda implementación del parser.
 - En las facturas manuales de liquidaciones del Banco del Chubut, Joaquín usa el primer bloque del número (`00005-00002026`) para codificar el mes imputado: `00005` = mayo, `00006` = junio. No interpretarlo como punto de venta fiscal; conservar también la fecha informada por CALIM.
+
+## Flujo visual seguro de Compras (2026-09-06)
+
+- Se mantiene carga PDF/foto → número manual/CAE → selección de factura → archivo en bóveda. La selección muestra proveedor, CUIT, número, importe y estado ARCA/CALIM; si hay varias opciones no elige automáticamente.
+- `evidencias.py` valida archivos, conserva originales por SHA-256 y genera nuevos derivados con nombre por fecha/número/hash. Nunca sobrescribe ni elimina adjuntos anteriores. Las rutas relativas históricas y absolutas se resuelven contra la bóveda.
+- `storage_compras.vincular_evidencia` guarda el contenido exacto en RAW JSON/base64 y registra `compras_evidencias` en la misma transacción que el vínculo. La tabla se crea aditivamente en la primera vinculación. No modifica los importes, el estado fiscal ni el RAW ARCA/CALIM de la factura.
+- Repetir un adjunto no duplica páginas. Sala de Espera conserva proveedor/número manuales y no inventa CUIT; su conciliación posterior requiere revisión, no se promete fusión automática.
+- `/api/compras/importar-multiples` utiliza directamente `lector_arca_comprobantes` para CSV/ZIP y `lector_calim_compras` para XLSX. Conserva las cargas en `crudos_compras/IMPORTACIONES_WEB/[SHA256]/[nombre]`, informa resultados por archivo y no procesa otros buzones.
+- Botón Actualizar refresca Compras/buzón; no ejecuta el master global. Tabla controlada por HTMX; visor y selección por `app.js`. Adjuntos se sirven por ID con validación de ruta y existencia.
+- Verificación: pruebas de API en DB temporal, preservación del PDF previo, idempotencia, rechazo de archivos inválidos/rutas fuera del buzón e importadores correctos. Facturas/bóveda productivas no se migraron ni se eliminaron en esta revisión.

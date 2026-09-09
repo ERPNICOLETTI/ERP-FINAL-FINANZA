@@ -1,251 +1,122 @@
-from fastapi import APIRouter, Request, Form, Query, UploadFile, File
-import os
-import shutil
-from datetime import datetime
-
-from erp_api.helpers import templates, FacturaUpdate, merge_files_to_pdf
-import modulo_compras.storage_compras as storage
-from core_sistema import archiver_service
+from fastapi import APIRouter, Request, Form, Query, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
+import hashlib
+import logging
+from erp_api.helpers import templates, FacturaUpdate
+from modulo_compras import storage_compras as storage, evidencias
 
 router = APIRouter()
+WORKSPACE = Path(__file__).resolve().parents[1]
+logger = logging.getLogger(__name__)
 
-# Solve WORKSPACE locally to match the root path
-WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-@router.get("/api/facturas")
-async def list_facturas(request: Request, anio: str = None, mes: str = None, estado: str = "all", q: str = None):
-    """Listado de facturas con soporte HTMX y Jinja2."""
-    data = storage.get_all_compras_facturas(anio, mes)
-    
-    procesados = []
-    for f in data:
-        if q:
-            term = q.lower()
-            if term not in str(f.get('proveedor', '')).lower() and \
-               term not in str(f.get('cuit_proveedor', '')).lower() and \
-               term not in str(f.get('numero_comprobante', '')).lower():
-                continue
-                
-        tiene_foto = bool(f.get('tiene_foto') or f.get('path_archivo'))
-        if estado == "pending" and tiene_foto: continue
-        if estado == "completed" and not tiene_foto: continue
-        
-        procesados.append(f)
-        
-    if request.headers.get("HX-Request"):
-        return templates.TemplateResponse(request=request, name="tabla_compras.html", context={"request": request, "facturas": procesados})
-    
-    return procesados
+def inbox_path(name):
+    root = (WORKSPACE / 'modulo_compras/inbox_compras').resolve()
+    path = (root / name).resolve()
+    if path.parent != root:
+        raise ValueError('Nombre de archivo de buzón inválido.')
+    return path
 
-@router.post("/api/facturas/update/{fid}")
+
+def visual_state(f):
+    try:
+        path = evidencias.resolve_visual(f.get('path_archivo'))
+        exists = bool(path and path.is_file())
+    except ValueError:
+        exists = False
+    f['archivo_disponible'] = exists
+    f['archivo_url'] = f"/api/compras/archivo/{f['id']}" if exists else None
+    return f
+
+
+@router.get('/api/facturas')
+async def list_facturas(request: Request, anio: str = None, mes: str = None, estado: str = 'all', q: str = None):
+    rows = []
+    for f in storage.get_all_compras_facturas(anio, mes):
+        visual_state(f)
+        if q and not any(q.lower() in str(f.get(k) or '').lower() for k in ('proveedor','cuit_proveedor','numero_comprobante')):
+            continue
+        if estado == 'pending' and f['archivo_disponible']: continue
+        if estado == 'completed' and not f['archivo_disponible']: continue
+        rows.append(f)
+    if request.headers.get('HX-Request'):
+        return templates.TemplateResponse(request=request, name='tabla_compras.html', context={'request':request,'facturas':rows})
+    return rows
+
+
+@router.get('/api/compras/archivo/{fid}')
+async def archivo(fid: int):
+    f = storage.get_factura_by_id(fid)
+    if not f: raise HTTPException(404, 'Factura no encontrada')
+    try: path = evidencias.resolve_visual(f.get('path_archivo'))
+    except ValueError: raise HTTPException(404, 'Adjunto fuera de la bóveda')
+    if not path or not path.is_file(): raise HTTPException(404, 'Adjunto no disponible')
+    return FileResponse(path)
+
+
+@router.post('/api/facturas/update/{fid}')
 async def update_factura(fid: int, req: FacturaUpdate):
-    """Actualiza campos específicos de una factura (Confirmación de Padding)."""
-    fields = {k: v for k, v in req.dict().items() if v is not None}
-    if not fields: return {"status": "ignored"}
-    success = storage.update_factura_fields(fid, fields)
-    return {"status": "success" if success else "error"}
+    fields = {k:v for k,v in req.dict().items() if v is not None}
+    if not fields: return {'status':'ignored'}
+    return {'status':'success' if storage.update_factura_fields(fid,fields) else 'error'}
 
-@router.get("/api/compras/search")
+
+@router.get('/api/compras/search')
 async def search_compras_match(q: str):
-    """Búsqueda elástica para feedback atómico (v4.8)."""
-    if not q or len(q) < 3: return {"status": "too_short"}
-    results = storage.smart_search_invoice(q)
-    return {"results": results}
+    return {'results':storage.smart_search_invoice(q) if len(q.strip()) >= 3 else []}
 
-@router.post("/api/compras/importar-multiples")
-async def importar_multiples(files: list[UploadFile] = File(...)):
-    """Sube múltiples archivos directamente al Inbox y los ingesta en la DB."""
-    try:
-        from erp_master import ERPMaster
-        inbox_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
-        os.makedirs(inbox_dir, exist_ok=True)
-        
-        saved_files = 0
-        for f in files:
-            if not f.filename: continue
-            temp_path = os.path.join(inbox_dir, f.filename)
-            with open(temp_path, "wb") as buffer:
-                shutil.copyfileobj(f.file, buffer)
-            saved_files += 1
-            
-        # Instanciar master y procesar de forma automatizada
-        master = ERPMaster(WORKSPACE)
-        master.ingest_inbox()
-        
-        return {
-            "status": "success", 
-            "message": f"Se procesaron {saved_files} archivos exitosamente."
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
-@router.get("/api/compras/inbox/list")
+@router.post('/api/compras/importar-multiples')
+def importar_multiples(files: list[UploadFile] = File(...)):
+    """El mismo lector ARCA/CALIM actualizado, sólo para los archivos seleccionados."""
+    from modulo_compras import lector_arca_comprobantes, lector_calim_compras
+    results = []
+    for upload in files:
+        name = Path((upload.filename or '').replace('\\','/')).name
+        try:
+            ext = Path(name).suffix.lower()
+            if ext not in {'.csv','.zip','.xlsx'}:
+                raise ValueError('ARCA: CSV/ZIP; CALIM: XLSX. Los PDF/fotos van al visor.')
+            content = upload.file.read()
+            if not content: raise ValueError('El archivo está vacío.')
+            digest = hashlib.sha256(content).hexdigest()
+            path = evidencias.immutable_write(WORKSPACE / 'modulo_compras/crudos_compras/IMPORTACIONES_WEB' / digest / name, content)
+            reader = lector_calim_compras if ext == '.xlsx' else lector_arca_comprobantes
+            success, info = reader.procesar_archivo(str(path))
+            results.append({'archivo':name,'status':'success' if success else 'error', **info})
+        except Exception as exc:
+            logger.exception('Importación de Compras fallida: %s', name)
+            results.append({'archivo':name,'status':'error','error':str(exc)})
+    ok = sum(r['status']=='success' for r in results)
+    return {'status':'success' if ok == len(results) and results else 'partial' if ok else 'error',
+        'message':f'{ok} de {len(results)} archivos procesados.', 'resultados':results}
+
+
+@router.get('/api/compras/inbox/list')
 async def list_inbox_files():
-    """Devuelve la lista de archivos pendientes en el Inbox (v4.9)."""
-    inbox_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
-    os.makedirs(inbox_dir, exist_ok=True)
-    files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f)) and f.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg'))]
-    return {"files": files}
+    root = WORKSPACE / 'modulo_compras/inbox_compras'
+    return {'files':sorted(p.name for p in root.iterdir() if p.is_file() and p.suffix.lower() in evidencias.EXTENSIONS) if root.exists() else []}
 
-@router.post("/api/compras/vincular")
-async def vincular_archivo_factura(
-    id_factura: int = Query(0), 
-    file: UploadFile = File(None),
-    inbox_filename: str = Form(None),
-    is_pending_calim: str = Form("false"),
-    proveedor_nombre: str = Form(""),
-    numero_factura: str = Form("")
-):
-    """Vincula físicamente un archivo a una factura, o archiva en espera (v4.9)."""
+
+@router.post('/api/compras/vincular')
+def vincular_archivo_factura(id_factura: int = Query(0), file: UploadFile = File(None),
+    inbox_filename: str = Form(None), is_pending_calim: str = Form('false'),
+    proveedor_nombre: str = Form(''), numero_factura: str = Form('')):
     try:
-        temp_dir = os.path.join(WORKSPACE, "modulo_compras", "inbox_compras")
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        # --- MODO 1: Excepción (Pendiente CALIM) ---
-        if is_pending_calim.lower() == "true":
-            if not inbox_filename and not file:
-                return {"status": "error", "message": "No hay archivo para Sala de Espera"}
-                
-            cuit = "00000000000"
-            proveedor = proveedor_nombre.strip().upper() if proveedor_nombre else "PENDIENTE_CALIM"
-            fecha = datetime.now().strftime("%Y-%m-%d")
-            pv = "XX"
-            num = numero_factura.strip() if numero_factura else str(int(datetime.now().timestamp()))
-            
-            if inbox_filename:
-                temp_path = os.path.join(temp_dir, inbox_filename)
-                _, ext = os.path.splitext(inbox_filename)
-                if not os.path.exists(temp_path): return {"status": "error"}
-            else:
-                _, ext = os.path.splitext(file.filename)
-                temp_path = os.path.join(temp_dir, f"temp_upload_calim_{num}{ext}")
-                with open(temp_path, "wb") as buffer:
-                    shutil.copyfileobj(file.file, buffer)
-            
-            entidad_vault = f"{cuit} - PENDIENTES CALIM"
-            final_path = archiver_service.archivar_documento(
-                temp_path, "compras", fecha[:4], fecha[5:7], entidad_vault, use_vault=True, overwrite=True, subcategoria="Facturas"
-            ).replace('\\', '/')
-            
-            if final_path and os.path.exists(final_path):
-                prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
-                target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
-                final_dir = os.path.dirname(final_path).replace('\\', '/')
-                new_final_path = f"{final_dir}/{target_name}"
-                
-                if os.path.exists(new_final_path): os.remove(new_final_path)
-                os.rename(final_path, new_final_path)
-                final_path = new_final_path.replace('\\', '/')
-                
-                storage.save_factura({
-                    "cuit_proveedor": cuit,
-                    "proveedor": proveedor,
-                    "punto_venta": pv,
-                    "numero_comprobante": num,
-                    "fecha": fecha,
-                    "tipo_operacion": "COMPRA",
-                    "tipo_comprobante": "88",
-                    "origen": "PENDIENTE_CALIM",
-                    "status": "SALA_ESPERA",
-                    "tiene_foto": 1,
-                    "path_archivo": final_path
-                })
-            
-            # Limpiar archivo origen del inbox / temporal
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-            
-            return {"status": "success", "message": "Enviado a Sala de Espera CALIM"}
-
-        # --- MODO 2: Normal ---
-        f_data = storage.get_factura_by_id(id_factura)
-        if not f_data: return {"status": "error", "message": "Factura no encontrada"}
-        
-        cuit = f_data.get('cuit_proveedor')
-        proveedor = f_data.get('proveedor') or 'DESCONOCIDO'
-        fecha = f_data.get('fecha') or '2026-01-01'
-        pv = f_data.get('punto_venta') or '00000'
-        num = f_data.get('numero_comprobante') or '00000000'
-        
+        source = None
         if inbox_filename:
-            temp_path = os.path.join(temp_dir, inbox_filename)
-            _, ext = os.path.splitext(inbox_filename)
-            if not os.path.exists(temp_path): return {"status": "error", "message": "Archivo de inbox perdido"}
+            source = inbox_path(inbox_filename)
+            content, name = source.read_bytes(), source.name
+        elif file:
+            content, name = file.file.read(), Path((file.filename or '').replace('\\','/')).name
         else:
-            _, ext = os.path.splitext(file.filename)
-            temp_path = os.path.join(temp_dir, f"temp_upload_{id_factura}{ext}")
-            with open(temp_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-
-        tiene_foto = bool(f_data.get('tiene_foto', 0))
-        old_path = f_data.get('path_archivo', '')
-        
-        if tiene_foto and old_path and os.path.exists(old_path):
-            prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
-            target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}.pdf"
-            
-            final_dir = os.path.dirname(old_path).replace('\\', '/')
-            new_final_path = f"{final_dir}/{target_name}"
-            
-            merge_files_to_pdf(old_path, temp_path, new_final_path)
-            
-            if os.path.exists(temp_path): os.remove(temp_path)
-            if old_path != new_final_path and os.path.exists(old_path):
-                os.remove(old_path)
-                
-            final_path = new_final_path.replace('\\', '/')
-            
-        else:
-            entidad_vault = f"{cuit} - {proveedor}" if cuit else proveedor
-            final_path = archiver_service.archivar_documento(
-                temp_path, 
-                "compras", 
-                fecha[:4], 
-                fecha[5:7], 
-                entidad_vault,
-                use_vault=True,
-                overwrite=True,
-                subcategoria="Facturas"
-            ).replace('\\', '/')
-
-            if final_path and os.path.exists(final_path):
-                prov_clean = "".join([c if c.isalnum() else "_" for c in proveedor]).strip("_")
-                target_name = f"{fecha}_{prov_clean}_Factura_{pv}-{num}{ext.lower()}"
-                
-                final_dir = os.path.dirname(final_path)
-                new_final_path = os.path.join(final_dir, target_name)
-                
-                if os.path.exists(new_final_path): os.remove(new_final_path)
-                os.rename(final_path, new_final_path)
-                final_path = new_final_path
-            
-        if final_path:
-            base_archive = os.path.join(WORKSPACE, "modulo_compras", "archivos_compras")
-            rel_path = os.path.relpath(final_path, base_archive).replace('\\', '/')
-            
-            storage.update_factura_fields(id_factura, {
-                "path_archivo": rel_path,
-                "tiene_foto": 1,
-                "status": "ARCHIVADO"
-            })
-            
-            # Limpiar archivo origen del inbox / temporal
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-            
-            return {
-                "status": "success", 
-                "message": "Archivo vinculado y archivado por CUIT",
-                "rel_path": rel_path
-            }
-        
-        return {"status": "error", "message": "Fallo al archivar documento físicamente"}
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+            raise ValueError('Cargá un archivo primero.')
+        result = storage.vincular_evidencia(content,name,id_factura,proveedor_nombre,numero_factura,is_pending_calim.lower()=='true')
+        if source:
+            if hashlib.sha256(source.read_bytes()).digest() == hashlib.sha256(content).digest():
+                source.unlink()
+        return result
+    except Exception as exc:
+        logger.exception('No se pudo vincular el comprobante')
+        return {'status':'error','message':str(exc)}

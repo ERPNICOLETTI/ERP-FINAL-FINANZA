@@ -14,6 +14,8 @@ DB_PATH = os.path.join(BASE_DIR, 'erp_nicoletti.db')
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -118,28 +120,37 @@ def update_search_index():
 
             SELECT 'Factura', id,
                    COALESCE(punto_venta, '') || '-' || COALESCE(numero_comprobante, '') || ' ' || COALESCE(proveedor, ''),
-                   monto_total, fecha,
+                   COALESCE(total_centavos / 100.0, total), fecha,
                    COALESCE(tipo_comprobante, '') || ' CUIT:' || COALESCE(cuit_proveedor, ''),
-                   COALESCE(metadata_cruda, '')
+                   COALESCE(meta_json, '')
             FROM compras_facturas
 
             UNION ALL
 
-            SELECT 'Liquidacion', id,
-                   COALESCE(fuente, '') || ' ' || COALESCE(marca, ''),
-                   total_bruto, fecha_liquidacion,
-                   'Periodo: ' || COALESCE(periodo, '') || ' Neto: ' || COALESCE(CAST(total_neto AS TEXT), ''),
-                   COALESCE(metadata_cruda, '')
-            FROM tarjetas_liquidaciones
+            SELECT 'Liquidacion Payway', id,
+                   'PAYWAY ' || COALESCE(marca, '') || ' ' || COALESCE(pagador_nombre, ''),
+                   bruto_centavos / 100.0, fecha_emision,
+                   'Periodo: ' || periodo || ' Neto: ' || CAST(neto_centavos / 100.0 AS TEXT),
+                   'Resumen ' || numero_resumen || ' Establecimiento ' || establecimiento
+            FROM tarjetas_payway_resumenes
 
             UNION ALL
 
             SELECT 'Cupon', id,
-                   COALESCE(fuente, '') || ' Lote:' || COALESCE(lote, '') || ' Cupon:' || COALESCE(cupon, ''),
-                   monto_bruto, fecha_compra,
-                   COALESCE(marca, ''),
-                   COALESCE(metadata_cruda, '')
-            FROM tarjetas_payway
+                   'PAYWAY Lote:' || COALESCE(lote, '') || ' Cupon:' || COALESCE(cupon, ''),
+                   bruto_centavos / 100.0, fecha_compra,
+                   COALESCE(marca, '') || ' ' || COALESCE(establecimiento, ''),
+                   COALESCE(detalle, '')
+            FROM tarjetas_payway_movimientos
+
+            UNION ALL
+
+            SELECT 'Liquidacion Patagonia 365', id,
+                   'PATAGONIA 365 ' || numero_resumen,
+                   bruto_centavos / 100.0, periodo || '-01',
+                   'Neto: ' || CAST(neto_centavos / 100.0 AS TEXT),
+                   COALESCE(comercio, '')
+            FROM tarjetas_patagonia_resumenes
 
             UNION ALL
 

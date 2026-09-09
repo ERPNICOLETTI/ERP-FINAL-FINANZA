@@ -610,26 +610,32 @@ def update_record_path(record_id, new_path, table="tarjetas_payway"):
 
 
 def get_resumen_tarjetas(anio=None):
-    """Estadísticas consolidadas v4.0."""
+    """Estadísticas desde las tablas normalizadas; nunca desde Payway legacy."""
     conn = get_db_connection()
     cur = conn.cursor()
     params = [f"{anio}%"] if anio else []
     
-    # 1. Ventas por Posnet
-    q_ventas = "SELECT COUNT(*), SUM(monto_bruto) FROM tarjetas_payway"
+    q_ventas = "SELECT COUNT(*), SUM(bruto_centavos) / 100.0 FROM tarjetas_payway_movimientos"
     if anio: q_ventas += " WHERE fecha_compra LIKE ?"
     res_v = cur.execute(q_ventas, params).fetchone()
 
-    # 2. Liquidaciones Consolidadas
-    q_liq = """
-        SELECT fuente, tipo, COUNT(*), SUM(total_bruto), SUM(total_neto), 
-               SUM(costo_arancel + costo_financiero + retenciones + iva_21 + iva_105) 
-        FROM tarjetas_liquidaciones
-    """
-    if anio: q_liq += " WHERE (fecha_liquidacion LIKE ? OR periodo LIKE ?)"
-    
-    p_liq = [f"{anio}%", f"{anio}%"] if anio else []
-    res_l = cur.execute(q_liq + " GROUP BY fuente, tipo", p_liq).fetchall()
+    period_where = " WHERE periodo LIKE ?" if anio else ""
+    period_params = [f"{anio}%"] if anio else []
+    payway = cur.execute(f"""
+        SELECT 'PAYWAY', 'MENSUAL', COUNT(*),
+               COALESCE(SUM(bruto_centavos), 0) / 100.0,
+               COALESCE(SUM(neto_centavos), 0) / 100.0,
+               COALESCE(SUM(descuentos_centavos), 0) / 100.0
+        FROM tarjetas_payway_resumenes{period_where}
+    """, period_params).fetchone()
+    patagonia = cur.execute(f"""
+        SELECT 'PATAGONIA365', 'MENSUAL', COUNT(*),
+               COALESCE(SUM(bruto_centavos), 0) / 100.0,
+               COALESCE(SUM(neto_centavos), 0) / 100.0,
+               COALESCE(SUM(bruto_centavos-neto_centavos), 0) / 100.0
+        FROM tarjetas_patagonia_resumenes{period_where}
+    """, period_params).fetchone()
+    res_l = [row for row in (payway, patagonia) if row[2]]
     
     conn.close()
     
@@ -645,12 +651,13 @@ def get_resumen_tarjetas(anio=None):
 
 
 def get_cupon_detalle(cupon_id):
-    """Busca detalle de un cupón v4.0."""
+    """Busca detalle en la tabla Payway normalizada."""
     conn = get_db_connection()
     cur = conn.cursor()
     q_pad = str(cupon_id).zfill(8)
     row = cur.execute("""
-        SELECT * FROM tarjetas_payway 
+        SELECT *, bruto_centavos / 100.0 AS monto_bruto
+        FROM tarjetas_payway_movimientos
         WHERE cupon = ? OR cupon LIKE ? OR id = ?
     """, (q_pad, f"%{cupon_id}", cupon_id)).fetchone()
     conn.close()
