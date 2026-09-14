@@ -21,6 +21,7 @@
             </div>
             
             <div class="header-actions">
+                <a href="/compras/ocr" class="btn-sync" style="text-decoration:none">Escaneos · revisión y archivo</a>
                 <input type="file" id="bulk-file-input" multiple accept=".csv,.xlsx,.zip" style="display: none;" onchange="app.importarMultiplesArchivos(event)">
                 <a href="index.html" class="btn-sync" style="background:#fff; border-color: rgba(0,0,0,0.15); color: #24292f; text-decoration:none; display: inline-flex; align-items: center; gap: 8px;">◀️ Volver al Dashboard</a>
                 <button class="btn-sync" onclick="document.getElementById('bulk-file-input').click()" style="background: var(--success); color: white; border-color: var(--success); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">📥 Importar ARCA / CALIM</button>

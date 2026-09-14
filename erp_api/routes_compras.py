@@ -5,10 +5,81 @@ import hashlib
 import logging
 from erp_api.helpers import templates, FacturaUpdate
 from modulo_compras import storage_compras as storage, evidencias
+from modulo_compras import storage_compras_scan as scan_storage, lector_facturas_scan
+from pydantic import BaseModel, Field, StrictInt
 
 router = APIRouter()
 WORKSPACE = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
+
+
+@router.get('/api/compras/ocr')
+def list_ocr():
+    return storage.listar_scans()
+
+
+@router.get('/api/compras/ocr/bandeja')
+def scan_bandeja():
+    return scan_storage.bandeja()
+
+
+@router.post('/api/compras/ocr/cargar')
+def scan_cargar(file: UploadFile = File(...)):
+    try:
+        name = Path((file.filename or '').replace('\\','/')).name
+        content = file.file.read(25*1024*1024+1)
+        if len(content)>25*1024*1024:
+            raise ValueError('Máximo 25 MB por archivo.')
+        return lector_facturas_scan.procesar_contenido(content,name)
+    except Exception as exc:
+        logger.exception('Carga OCR fallida')
+        raise HTTPException(400,str(exc))
+
+
+@router.post('/api/compras/ocr/{scan_id}/reintentar')
+def scan_reintentar(scan_id: int):
+    try:
+        scan, content, _ = scan_storage.original(scan_id)
+        return lector_facturas_scan.procesar_contenido(content,scan['nombre_original'])
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+
+class ScanRevision(BaseModel):
+    paginas: list[StrictInt] = Field(min_length=1,max_length=100)
+    accion: str
+    factura_id: StrictInt = 0
+    nota: str = Field(min_length=1,max_length=2000)
+    datos: dict = Field(default_factory=dict)
+    permitir_adjunto: bool = False
+
+
+@router.post('/api/compras/ocr/{scan_id}/revisar')
+def scan_revisar(scan_id: int, revision: ScanRevision):
+    try:
+        return scan_storage.revisar(scan_id,**revision.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+
+@router.get('/api/compras/ocr/{scan_id}/historial')
+def scan_historial(scan_id: int):
+    return scan_storage.historial(scan_id)
+
+
+@router.get('/compras/ocr')
+def review_ocr(request: Request):
+    return templates.TemplateResponse(request=request, name='compras_ocr.html', context={})
+
+
+@router.get('/api/compras/ocr/{scan_id}/original')
+def original_ocr(scan_id: int):
+    value = storage.scan_original(scan_id)
+    root = (WORKSPACE / 'modulo_compras/crudos_compras/EVIDENCIAS').resolve()
+    path = Path(value).resolve() if value else root
+    if not value or not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(404, 'Original no disponible')
+    return FileResponse(path)
 
 
 def inbox_path(name):

@@ -7,3 +7,7 @@ requests
 pydantic
 jinja2
 python-multipart
+PyMuPDF
+pytesseract
+Pillow
+zxing-cpp==3.1.1

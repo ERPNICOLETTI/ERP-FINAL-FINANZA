@@ -73,3 +73,23 @@ def publish(factura, content, ext, previous=None):
     digest = hashlib.sha256(content).hexdigest()
     name = f"{date}_Factura_{clean(factura.get('punto_venta'))}-{clean(factura['numero_comprobante'])}_{digest[:20]}{ext}"
     return immutable_write(folder / name, content).as_posix()
+
+
+def seleccionar_paginas(content, ext, paginas):
+    """Derivado de páginas elegidas; no reemplaza el original ni agrupa por inferencia."""
+    if ext != '.pdf':
+        if paginas != [1]:
+            raise ValueError('Una imagen tiene una sola página.')
+        return content, ext
+    from PyPDF2 import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(content))
+    if any(p < 1 or p > len(reader.pages) for p in paginas):
+        raise ValueError('Página fuera del documento.')
+    if paginas == list(range(1,len(reader.pages)+1)):
+        return content, ext
+    writer = PdfWriter()
+    for p in paginas:
+        writer.add_page(reader.pages[p-1])
+    output = io.BytesIO()
+    writer.write(output)
+    return output.getvalue(), '.pdf'

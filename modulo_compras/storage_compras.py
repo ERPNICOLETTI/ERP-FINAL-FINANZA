@@ -35,7 +35,7 @@ def get_db_connection():
     return conn
 
 
-def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='', pendiente=False):
+def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='', pendiente=False, _conn=None):
     """RAW y relación visual atómicos; originales y derivados append-only."""
     import base64
     import hashlib
@@ -43,9 +43,10 @@ def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='',
     from . import evidencias
     ext = evidencias.validate(content, filename)
     digest = hashlib.sha256(content).hexdigest()
-    conn = get_db_connection()
+    conn = _conn or get_db_connection()
     try:
-        conn.execute('BEGIN IMMEDIATE')
+        if _conn is None:
+            conn.execute('BEGIN IMMEDIATE')
         conn.execute('''CREATE TABLE IF NOT EXISTS compras_evidencias (
             id INTEGER PRIMARY KEY, factura_id INTEGER NOT NULL REFERENCES compras_facturas(id),
             raw_ingesta_id INTEGER NOT NULL REFERENCES core_staging_raw(id),
@@ -60,7 +61,7 @@ def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='',
                 JOIN compras_evidencias e ON e.factura_id=f.id
                 WHERE e.hash_sha256=? AND f.origen='PENDIENTE_CALIM' ''', (digest,)).fetchone()
             if existing:
-                conn.rollback()
+                if _conn is None: conn.rollback()
                 return {'status': 'success', 'message': 'Este documento ya está en Sala de Espera.', 'id_factura': existing['id']}
             cursor = conn.execute('''INSERT INTO compras_facturas
                 (proveedor, numero_comprobante, fecha, tipo_operacion, tipo_comprobante, origen, status)
@@ -72,14 +73,17 @@ def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='',
             raise ValueError('Seleccioná una factura activa.')
         existing = conn.execute('SELECT id FROM compras_evidencias WHERE factura_id=? AND hash_sha256=?', (factura_id, digest)).fetchone()
         if existing:
-            conn.rollback()
+            if _conn is None: conn.rollback()
             return {'status': 'success', 'message': 'El adjunto ya estaba vinculado; no se duplicaron páginas.', 'id_factura': factura_id}
         original = evidencias.immutable_write(evidencias.ROOT / 'modulo_compras/crudos_compras/EVIDENCIAS' / digest[:2] / (digest + ext), content)
         raw_id = _stage_raw(conn, name=filename, digest=digest, source_type='COMPRA_EVIDENCIA',
             raw_format='JSON_BASE64', parser_version='evidencia/1.0', rows=1,
             content=json.dumps({'nombre_original': filename, 'path_original': original.as_posix(),
                 'sha256': digest, 'contenido_base64': base64.b64encode(content).decode('ascii')}))
-        previous = evidencias.resolve_visual(row['path_archivo'])
+        # Exporte legacy no es un adjunto visual; se conserva en el historial RAW.
+        from pathlib import Path
+        metadata_path = Path(str(row['path_archivo'] or '')).suffix.lower() in {'.zip','.csv','.xlsx','.xls'}
+        previous = None if metadata_path else evidencias.resolve_visual(row['path_archivo'])
         if previous and not previous.is_file():
             raise ValueError('El adjunto anterior no está disponible: revisá su ruta antes de agregar páginas.')
         if previous and hashlib.sha256(previous.read_bytes()).hexdigest() == digest:
@@ -91,11 +95,141 @@ def vincular_evidencia(content, filename, factura_id=0, proveedor='', numero='',
             VALUES (?,?,?,?,?,?)''', (factura_id,raw_id,digest,filename,original.as_posix(),visual))
         # El archivo no cambia el estado fiscal ni el linaje de ARCA/CALIM.
         conn.execute('UPDATE compras_facturas SET tiene_foto=1,path_archivo=? WHERE id=?', (visual,factura_id))
-        conn.commit()
+        if _conn is None: conn.commit()
         return {'status': 'success', 'message': 'Archivo conservado y vinculado.', 'id_factura': factura_id}
     except Exception:
         conn.rollback()
         raise
+    finally:
+        if _conn is None: conn.close()
+
+
+def registrar_scan(content, filename, version):
+    """Carga cruda antes del OCR; nunca crea una factura fiscal por inferencia."""
+    import hashlib
+    import base64
+    from . import evidencias
+    ext = evidencias.validate(content, filename)
+    digest = hashlib.sha256(content).hexdigest()
+    original = evidencias.immutable_write(evidencias.ROOT / 'modulo_compras/crudos_compras/EVIDENCIAS'
+        / digest[:2] / (digest + ext), content)
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS compras_scan_extracciones (
+                id INTEGER PRIMARY KEY, raw_ingesta_id INTEGER NOT NULL REFERENCES core_staging_raw(id),
+                hash_sha256 TEXT NOT NULL, version TEXT NOT NULL, path_original TEXT NOT NULL,
+                nombre_original TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'PENDIENTE',
+                resultado_json TEXT, error TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(hash_sha256,version))''')
+            raw = _stage_raw(conn, name=filename, digest=digest, source_type='COMPRA_SCAN',
+                raw_format='JSON_BASE64', parser_version='original/1.0', rows=0,
+                content=json.dumps({'sha256': digest, 'nombre_original': filename,
+                    'path_original': original.as_posix(),
+                    'contenido_base64': base64.b64encode(content).decode('ascii')}))
+            conn.execute('''INSERT OR IGNORE INTO compras_scan_extracciones
+                (raw_ingesta_id,hash_sha256,version,path_original,nombre_original) VALUES (?,?,?,?,?)''',
+                (raw,digest,version,original.as_posix(),filename))
+            row = conn.execute('SELECT id,raw_ingesta_id,estado FROM compras_scan_extracciones WHERE hash_sha256=? AND version=?',
+                (digest,version)).fetchone()
+            return dict(row)
+    finally:
+        conn.close()
+
+
+def finalizar_scan(scan_id, result, error=None):
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute('''UPDATE compras_scan_extracciones SET estado=?,resultado_json=?,error=?,
+                updated_at=CURRENT_TIMESTAMP WHERE id=? AND estado!='LEIDO' ''',
+                ('ERROR' if error else 'LEIDO', json.dumps(result,ensure_ascii=False) if result else None,error,scan_id))
+    finally:
+        conn.close()
+
+
+def listar_scans():
+    """Última versión por original; cruce estricto, sólo propuesto, con fuentes actuales."""
+    from decimal import Decimal
+    conn = get_db_connection()
+    try:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='compras_scan_extracciones'").fetchone():
+            return []
+        scans = conn.execute('''SELECT * FROM compras_scan_extracciones WHERE id IN
+            (SELECT max(id) FROM compras_scan_extracciones GROUP BY hash_sha256) ORDER BY id DESC''').fetchall()
+        invoices = [dict(row) for row in conn.execute("SELECT * FROM compras_facturas WHERE status IS NULL OR status!='DUPLICADO_LEGACY_CALIM'")]
+        output = []
+        for scan in scans:
+            item = dict(scan)
+            result = json.loads(item.pop('resultado_json') or '{}')
+            item['paginas'] = result.get('paginas', [])
+            for page in item['paginas']:
+                page['coincidencias'] = []
+                page['sugerencias'] = []
+                fields = page.get('campos',{}).get('texto',{})
+                cuits = {e['valor'] for e in fields.get('cuits',[])}
+                numbers = {tuple(e['valor']) for e in fields.get('numeros',[])}
+                auths = {e['valor'] for e in fields.get('autorizaciones',[])}
+                for invoice in invoices:
+                    pv, num = str(invoice['punto_venta'] or ''), str(invoice['numero_comprobante'] or '')
+                    by_number = pv.isdigit() and num.isdigit() and (int(pv),int(num)) in numbers
+                    by_cuit = str(invoice['cuit_proveedor']) in cuits
+                    by_auth = bool(invoice['cae']) and str(invoice['cae']) in auths
+                    if by_cuit and (by_number or by_auth):
+                        page['sugerencias'].append({'id':invoice['id'],'proveedor':invoice['proveedor'],
+                            'motivo':'CUIT + número' if by_number else 'CUIT + autorización',
+                            'estado':invoice['status'],'control':'REQUIERE_CONFIRMACION_VISUAL'})
+                for qr in page.get('campos',{}).get('qr',[]):
+                    for invoice in invoices:
+                        def number(value):
+                            return int(value) if str(value or '').isdigit() else None
+                        if (str(invoice['cuit_proveedor']),number(invoice['tipo_comprobante_codigo'] or invoice['tipo_comprobante']),
+                            number(invoice['punto_venta']),number(invoice['numero_comprobante'])) != (
+                            qr['cuit'],qr['tipo'],qr['punto_venta'],qr['numero']):
+                            continue
+                        total = invoice['calim_total_centavos'] if not invoice['raw_ingesta_id'] and invoice['calim_total_centavos'] is not None else invoice['total_centavos']
+                        if not total and invoice['total']:
+                            total = int((Decimal(str(invoice['total']))*100).to_integral_value())
+                        currency = {'PES':'ARS'}.get(qr['moneda'],qr['moneda'])
+                        agrees = (not page.get('campos',{}).get('advertencias') and len(page.get('campos',{}).get('qr',[]))==1
+                            and abs(total or 0)==qr['total_centavos'] and invoice['fecha']==qr['fecha']
+                            and currency=={'$':'ARS','PES':'ARS'}.get(invoice['moneda'],invoice['moneda']))
+                        page['coincidencias'].append({'id':invoice['id'],'proveedor':invoice['proveedor'],
+                            'estado':invoice['status'],'calim_estado':invoice['calim_estado'],
+                            'control': 'COINCIDE_CLAVE_FECHA_TOTAL' if agrees else 'DIFERENCIA_REVISAR'})
+                page.pop('palabras',None)
+            output.append(item)
+        references = {}
+        for item in output:
+            for page in item['paginas']:
+                candidates = page['coincidencias'] or page['sugerencias']
+                if len(candidates)==1:
+                    references.setdefault(candidates[0]['id'],[]).append((item['id'],page['pagina']))
+        for item in output:
+            for page in item['paginas']:
+                candidates = page['coincidencias'] or page['sugerencias']
+                related = references.get(candidates[0]['id'],[]) if len(candidates)==1 else []
+                page['posible_duplicado'] = len(related)>1
+                page['documentos_relacionados'] = related if len(related)>1 else []
+        return output
+    finally:
+        conn.close()
+
+
+def scans_para_reanalisis():
+    conn = get_db_connection()
+    try:
+        return [dict(r) for r in conn.execute('''SELECT * FROM compras_scan_extracciones WHERE id IN
+            (SELECT max(id) FROM compras_scan_extracciones WHERE estado='LEIDO' GROUP BY hash_sha256)''')]
+    finally:
+        conn.close()
+
+
+def scan_original(scan_id):
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT path_original FROM compras_scan_extracciones WHERE id=?',(scan_id,)).fetchone()
+        return row['path_original'] if row else None
     finally:
         conn.close()
 

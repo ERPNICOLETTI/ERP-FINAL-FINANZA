@@ -1,6 +1,20 @@
 # 🧬 NEURONA: MÓDULO COMPRAS (Fiscal & Facturación) 🧾🧠
 **Versión 7.0.0 — ELT ARCA + CALIM conciliado**
 
+## OCR de escaneos (2026-09-09, primera etapa)
+
+- Campos/2.1: identificadores QR enteros y acotados (sin truncar decimales), códigos malformados controlados, alertas de totales OCR divergentes, autorizaciones OCR/QR contradictorias y múltiples QR. Reanálisis verifica SHA-256 del original antes de reutilizar texto. Lote reanalizado sin nueva lectura ni cambios fiscales; 31 pruebas aprobadas. Esto mejora controles, no demuestra una mayor precisión del motor.
+
+- Avance 2026-09-09 campos/2.0: candidatos OCR de CUIT validado, numeración, autorización, fechas y total con evidencia/fuente; no se corrigen dígitos por parecido. Contradicciones de total OCR/QR bloquean coincidencia exacta. Cruce asistido CUIT+número o autorización: 11 páginas adicionales con propuesta; 13 QR exactas y 7 sin propuesta (no es medición de exactitud OCR). Posibles documentos repetidos se señalan sin borrar. `python -m modulo_compras.lector_facturas_scan --solo-campos` versiona el análisis reutilizando OCR; 28 originales conservados, sin nuevas facturas fiscales. Pruebas: 29 aprobadas. Pendiente evaluación PaddleOCR contra referencia visual y confirmación/vínculo por página; todavía no es un flujo empresarial completo.
+
+- CLI: `python -m modulo_compras.lector_facturas_scan "ruta PDF o carpeta"`. Reutiliza evidencias inmutables; RAW exacto antes de leer. No elimina entradas ni crea/modifica facturas fiscales.
+- `core_sistema/ocr_documentos.py`: Tesseract spa+eng instalado localmente y modelos en `core_sistema/tessdata`; PyMuPDF a 250 dpi, dos pasadas (PSM 3/11), texto por página, cajas/confianza de palabras y lectura QR offline con zxing-cpp. `ERP_TESSERACT` permite configurar ejecutable.
+- `facturas_scan_parser.py`: extrae candidatos QR, valida CUIT/fecha/centavos. QR no autentica el comprobante. Sin QR no se infiere total ni proveedor automáticamente.
+- `storage_compras`: `compras_scan_extracciones` por hash+versión, estados PENDIENTE/ERROR/LEIDO. Reintenta errores conservando original y RAW; LEIDO no equivale a verificado. Versiones previas se conservan.
+- `/compras/ocr`: revisión con originales y dos textos, propuestas contra clave fiscal + fecha + total + moneda. `$` legacy y `PES` se comparan como ARS. No se ejecutan enlaces QR. No hay confirmación automática ni carga web OCR todavía.
+- Lote real: 28 originales, 31 páginas, 13 páginas con coincidencia fiscal exacta; 18 por revisar. Ninguna factura fiscal ni adjunto previo se modificó. RAW 261–288.
+- Próximo: campos sin QR, contradicciones OCR/QR, orientación, revisión de cada factura y enlace seguro por página. No usar master global: conversor legacy no fue sustituido y limita lectura OCR a tres páginas.
+
 Este módulo controla las compras comerciales de la tienda (facturas, notas de crédito/débito y libro IVA), vinculándolas con sus respectivas evidencias digitales y físicas.
 
 ---
